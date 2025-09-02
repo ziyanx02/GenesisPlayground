@@ -1,7 +1,44 @@
 repos:
-- repo: https://github.com/astral-sh/ruff-pre-commit
-  rev: v0.5.7
-  hooks: [{id: ruff, args: ["--fix"]}, {id: ruff-format}]
-- repo: https://github.com/pre-commit/mirrors-prettier
-  rev: v4.0.0-alpha.8
-  hooks: [{id: prettier}]
+  # --- Python formatting & linting ---
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9
+    hooks:
+      - id: ruff
+        args: [--fix]           # autofix what it can
+      - id: ruff-format         # code formatter (replaces black)
+
+  # --- Pyright type checking (quick, no deps install) ---
+  - repo: https://github.com/RobertCraigie/pyright-python
+    rev: v1.1.379
+    hooks:
+      - id: pyright
+        additional_dependencies: []   # uses packaged pyright
+        pass_filenames: false         # analyze the whole repo (fast enough)
+        args: ["--pythonversion", "3.10"]
+
+  # --- General hygiene hooks ---
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: check-toml
+      - id: check-ast
+      - id: detect-private-key
+      - id: check-added-large-files
+        args: ["--maxkb=500"]
+
+
+# Global excludes to keep hooks fast
+exclude: |
+  (?x)^(
+    .venv/|
+    dist/|
+    build/|
+    .*\.ipynb_checkpoints/|
+    docs/site/|
+    src/.*/(dist|build)/|
+    .*\.svg  # optional if you keep big svgs
+  )$
