@@ -1,0 +1,11 @@
+[project]
+name = "gs-schema"
+version = "0.1.0"
+requires-python = ">=3.10"
+description = "Shared typed interfaces for Genesis Playground"
+dependencies = []
+
+
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
