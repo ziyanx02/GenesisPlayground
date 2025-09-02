@@ -1,0 +1,15 @@
+name: CI
+on: [push, pull_request]
+
+jobs:
+  lint-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv venv
+      - run: uv pip install -e src/gs-schema -e src/gs-env -e src/gs-agent
+      - run: uv pip install pytest ruff pyright
+      - run: uv run ruff --output-format=github .
+      - run: uv run pyright
+      - run: uv run pytest -q

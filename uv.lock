@@ -1,0 +1,13 @@
+version = 1
+revision = 3
+requires-python = ">=3.10"
+required-markers = [
+    "platform_machine == 'arm64' and sys_platform == 'darwin'",
+    "platform_machine == 'aarch64' and sys_platform == 'linux'",
+    "platform_machine == 'x86_64' and sys_platform == 'linux'",
+]
+
+[[package]]
+name = "genesis-playground"
+version = "0.0.1"
+source = { virtual = "." }
