@@ -31,6 +31,13 @@ repos:
         args: ["--maxkb=500"]
 
 
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    rev: 0.8.4
+    hooks:
+      - id: uv-lock
+        stages: [commit]   # run only when committing
+
+
 # Global excludes to keep hooks fast
 exclude: |
   (?x)^(
