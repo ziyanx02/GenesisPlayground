@@ -1,6 +1,6 @@
 [project]
 name = "gs-schema"
-# version sourced via Hatch (see [tool.hatch.version])
+version = "0.1.0"
 description = "Shared typed interfaces for Genesis Playground"
 readme = "README.md"
 requires-python = ">=3.10"

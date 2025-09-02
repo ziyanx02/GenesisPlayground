@@ -1,29 +1,126 @@
 [project]
 name = "genesis-playground"
-description = "Meta-package for gs-schema, gs-env, and gs-agent"
-readme = "README.md"
+version = "0.0.1"
+description = "Playground for building intelligent robots"
 requires-python = ">=3.10"
-license = { text = "MIT" }
 
-dependencies = [
-  "gs-schema>=0.1,<0.2",
-  "gs-env>=0.1,<0.2",
-  "gs-agent>=0.1,<0.2",
+[tool.pyright]
+exclude = [
+  # Those exclusions are meant to be gradually removed as we fix typing errors in the codebase.
+  # Please do not add exclusions.
+]
+pythonVersion = "3.10"
+reportMatchNotExhaustive = "error"
+reportMissingModuleSource = "error"
+reportMissingTypeArgument = "error"
+reportUnknownArgumentType = "warning"
+reportUnknownLambdaType = "warning"
+reportUnknownMemberType = "warning"
+reportUnknownParameterType = "warning"
+reportUnknownVariableType = "warning"
+reportUnnecessaryCast = "error"
+reportUnnecessaryComparison = "error"
+reportUnnecessaryContains = "error"
+reportUnnecessaryIsInstance = "error"
+reportUnnecessaryTypeIgnoreComment = "warning"
+
+[tool.ruff]
+line-length = 100
+src = [
+  ".",
+]
+target-version = "py310"
+exclude = [
 ]
 
-[project.optional-dependencies]
-dev = ["ruff>=0.5", "pyright>=1.1", "pytest>=8", "pytest-cov>=5", "mkdocs-material>=9.5"]
+[tool.ruff.lint]
+select = [
+  "ANN001", # missing-type-function-argument
+  "ANN201", # missing-return-type-undocumented-public-function
+  "ANN202", # missing-return-type-private-function
+  "ANN204", # missing-return-type-special-method
+  "ANN205", # missing-return-type-static-method
+  "ANN206", # missing-return-type-class-method
+  "ASYNC", # flake8-async
+  "B", # flake8-bugbear
+  "E", # pycodestyle errors
+  "F", # pyflakes
+  "G", # flake8-logging-format
+  "I", # isort
+  "INP", # flake8-no-pep420
+  "RUF100", # unused-noqa
+  "SLF", # flake8-self
+  "T20", # flake8-print
+  "UP", # pyupgrade
+  "W", # pycodestyle warnings
+]
+ignore = [
+  "E501", # line too long
+]
 
-[build-system]
-requires = ["hatchling>=1.25"]
-build-backend = "hatchling.build"
+[tool.ruff.lint.per-file-ignores]
+"*/scripts/*" = [
+  "INP001", # implicit-namespace-package - Scripts are not meant to be imported.
+]
 
-[tool.hatch.version]
-path = "VERSION"
+[tool.pytest.ini_options]
+filterwarnings = [
+  "error",
+  "ignore::DeprecationWarning",
+  "ignore::ImportWarning",
+]
+markers = [
+  "gpu: tests that require gpus",
+]
+
+[tool.uv]
+# Require that the packages and its dependencies be installable on the following platforms.
+required-environments = [
+  "sys_platform == 'darwin' and platform_machine == 'arm64'",
+  "sys_platform == 'linux' and platform_machine == 'aarch64'",
+  "sys_platform == 'linux' and platform_machine == 'x86_64'",
+]
+
+[tool.uv.sources]
+# fairscale from source for nccl timeout that is not yet in v0.4.13
+fairscale = {git = "https://github.com/facebookresearch/fairscale", rev = "146f160241651e1211c4247979f159a4ef43b54a"}
+genesis-world = {git = "https://github.com/Genesis-Embodied-AI/Genesis", rev = "094f8a2df68352c0bbdfcb362bec9ba8be5ce717"}
+gs-env = {workspace = true}
+gs-agent = {workspace = true}
+gs-schemas = {workspace = true}
+torch = [
+  {index = "pytorch-cpu", marker = "sys_platform != 'linux'"},
+  {index = "pytorch-cpu", marker = "sys_platform == 'linux' and platform_machine != 'x86_64'"},
+  {index = "pytorch-cu128", marker = "sys_platform == 'linux' and platform_machine == 'x86_64'"},
+]
+torchvision = [
+  {index = "pytorch-cpu", marker = "sys_platform != 'linux'"},
+  {index = "pytorch-cpu", marker = "sys_platform == 'linux' and platform_machine != 'x86_64'"},
+  {index = "pytorch-cu128", marker = "sys_platform == 'linux' and platform_machine == 'x86_64'"},
+]
+xformers = [
+  {index = "pytorch-cu128", marker = "sys_platform == 'linux' and platform_machine == 'x86_64'"},
+]
 
 [tool.uv.workspace]
 members = [
-  "src/gs-schema",
-  "src/gs-env",
-  "src/gs-agent",
+  "env",
+  "agent",
+  "schemas",
+  "mpc",
 ]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.tomlsort]
+no_sort_tables = true
+sort_inline_arrays = true
+trailing_comma_inline_array = true

@@ -1,6 +1,6 @@
 [project]
 name = "gs-agent"
-# version sourced via Hatch
+version = "0.1.0"
 description = "RL and Imitation Learning algorithms for Genesis Playground."
 readme = "README.md"
 requires-python = ">=3.10"
