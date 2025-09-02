@@ -1,10 +1,19 @@
 [project]
 name = "gs-env"
-version = "0.1.0"
+# version sourced via Hatch
+description = "Genesis-based simulation environments."
+readme = "README.md"
 requires-python = ">=3.10"
-description = "Genesis-based environments"
-dependencies = ["gs-schema>=0.1.0"]
+license = { text = "MIT" }
+dependencies = ["gs-schema>=0.1,<0.2"]
+
+[project.optional-dependencies]
+adapters = ["gymnasium>=0.29"]
+# genesis = ["genesis-sim>=X.Y"]  # add when ready
 
 [build-system]
 requires = ["hatchling>=1.25"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "../../VERSION"

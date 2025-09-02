@@ -1,10 +1,23 @@
 [project]
 name = "gs-agent"
-version = "0.1.0"
+# version sourced via Hatch
+description = "RL and Imitation Learning algorithms for Genesis Playground."
+readme = "README.md"
 requires-python = ">=3.10"
-description = "RL and Imitation Learning algorithms"
-dependencies = ["gs-schema>=0.1.0"]
+license = { text = "MIT" }
+dependencies = [
+  "gs-schema>=0.1,<0.2",
+  "torch>=2.2",
+]
+
+[project.optional-dependencies]
+env = ["gs-env>=0.1,<0.2"]
+gym = ["gymnasium>=0.29"]
+log = ["wandb>=0.17"]
 
 [build-system]
 requires = ["hatchling>=1.25"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "../../VERSION"
