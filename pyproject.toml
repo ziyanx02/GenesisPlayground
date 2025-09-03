@@ -90,9 +90,9 @@ xformers = [
 
 [tool.uv.workspace]
 members = [
-  "src/gs-env",
-  "src/gs-agent",
-  "src/gs-schemas",
+  "src/env",
+  "src/agent",
+  "src/schemas",
 ]
 
 [[tool.uv.index]]
