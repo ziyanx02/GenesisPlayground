@@ -1,0 +1,146 @@
+#!/usr/bin/env python3
+"""Example: Train PPO on Pendulum-v1 environment using Genesis RL."""
+
+import time
+from pathlib import Path
+
+import fire
+import gymnasium as gym
+import torch
+from gs_agent.algos.ppo import PPO
+from gs_agent.configs import PPO_PENDULUM_MLP, RUNNER_PENDULUM_MLP
+from gs_agent.envs.gym_wrapper import GymEnvWrapper
+from gs_agent.runners.runner import Runner
+from loguru import logger
+
+
+def create_gym_env(
+    env_name: str = "Pendulum-v1", render_mode: str | None = None
+) -> GymEnvWrapper:
+    """Create gym environment wrapper."""
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    gym_env = gym.make(env_name, render_mode=render_mode)
+    return GymEnvWrapper(gym_env, device=device)
+
+
+def create_ppo_runner_from_registry(
+    config_name: str = "Pendulum-v1",
+) -> Runner:
+    """Create PPO runner using configuration from the registry."""
+    # Environment setup
+    wrapped_env = create_gym_env()
+
+    # Create PPO algorithm
+    ppo = PPO(
+        env=wrapped_env,
+        cfg=PPO_PENDULUM_MLP,
+        device=wrapped_env.device,
+    )
+
+    # Create PPO runner
+    runner = Runner(
+        algorithm=ppo,
+        runner_args=RUNNER_PENDULUM_MLP,
+        device=wrapped_env.device,
+    )
+    return runner
+
+
+def evaluate_policy(checkpoint_path: Path, num_episodes: int = 10) -> None:
+    """Evaluate a trained policy."""
+    # Create environment with rendering
+    wrapped_env = create_gym_env(render_mode="human")
+
+    # Load the saved PPO algorithm directly
+    checkpoint = torch.load(checkpoint_path, map_location=wrapped_env.device, weights_only=False)
+
+    # Get config from checkpoint if available, otherwise use default
+    ppo_args = checkpoint["config"]
+    ppo = PPO(env=wrapped_env, cfg=ppo_args, device=wrapped_env.device)
+
+    # Load checkpoint
+    ppo.load(checkpoint_path)
+    logger.info(f"Loaded checkpoint from {checkpoint_path}")
+
+    # Set to evaluation mode
+    ppo.eval_mode()
+
+    # Evaluate
+    episode_rewards = []
+    episode_lengths = []
+
+    inference_policy = ppo.get_inference_policy()
+    for episode in range(num_episodes):
+        obs = wrapped_env.reset()
+        episode_reward = 0.0
+        episode_length = 0
+
+        while True:
+            with torch.no_grad():
+                policy_output = inference_policy(obs, deterministic=True) # type: ignore
+                obs, reward, done, _ = wrapped_env.step(policy_output.action) # type: ignore
+
+            episode_reward += reward.tensors()["reward"].item()
+            episode_length += 1
+
+            if done.tensors()["done"].item():
+                break
+
+            time.sleep(0.01)
+
+        episode_rewards.append(episode_reward)
+        episode_lengths.append(episode_length)
+        logger.info(f"Episode {episode + 1}: reward={episode_reward:.3f}, length={episode_length}")
+
+    # Print results
+    mean_reward = sum(episode_rewards) / len(episode_rewards)
+    std_reward = torch.std(torch.tensor(episode_rewards)).item()
+    mean_length = sum(episode_lengths) / len(episode_lengths)
+
+    logger.info("Evaluation Results:")
+    logger.info(f"  Mean reward: {mean_reward:.3f} ± {std_reward:.3f}")
+    logger.info(f"  Mean episode length: {mean_length:.1f}")
+    logger.info(f"  Min reward: {min(episode_rewards):.3f}")
+    logger.info(f"  Max reward: {max(episode_rewards):.3f}")
+
+
+def main(
+    train: bool = True,
+    use_wandb: bool = True,
+    config_name: str = "Pendulum-v1-mlp",
+) -> None:
+    """Main function demonstrating proper registry usage."""
+    if train:
+        # Get configuration and runner from registry
+        print(f"Getting configuration '{config_name}' from registry...")
+        runner = create_ppo_runner_from_registry(
+            config_name=config_name,
+        )
+        #
+        log_dir = runner.save_dir
+
+        # Set up logging with proper configuration
+        print("Setting up metric logging...")
+
+        # Train using Runner
+        train_summary_info = runner.train(metric_logger=metric_logger) # type: ignore
+
+        print("Training completed successfully!")
+        print(f"Training completed in {train_summary_info.total_time:.2f} seconds.")
+        print(f"Total episodes: {train_summary_info.total_episodes}.")
+        print(f"Total steps: {train_summary_info.total_steps}.")
+        print(f"Total reward: {train_summary_info.final_reward:.2f}.")
+
+    else:
+        # Evaluation mode
+        checkpoint = find_latest_checkpoint_if_exists()
+        if checkpoint is None:
+            raise ValueError("No checkpoints found in ./logs directory")
+
+        print(f"Evaluating policy from {checkpoint}")
+        eval_episodes = 10
+        evaluate_policy(checkpoint, eval_episodes)
+
+
+if __name__ == "__main__":
+    fire.Fire(main)

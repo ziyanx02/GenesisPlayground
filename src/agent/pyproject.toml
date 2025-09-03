@@ -9,7 +9,7 @@ dependencies = [
   "gs-schemas>=0.1,<0.2",
   "torch>=2.2",
   "tensordict>=0.9",
-  "gymnasium>=0.29",
+  "gymnasium>=1.2.0",
 ]
 
 [project.optional-dependencies]
