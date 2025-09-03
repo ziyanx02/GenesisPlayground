@@ -9,9 +9,7 @@ _DEFAULT_DEVICE: Final[torch.device] = torch.device("cpu")
 
 
 class GymEnvWrapper(BaseEnvWrapper):
-    """Wrapper for a single Gymnasium env to typed (batch) step components (pseudo-batch).
-
-    """
+    """Wrapper for a single Gymnasium env to typed (batch) step components (pseudo-batch). """
 
     def __init__(
         self, env: gym.Env[Any, Any], device: torch.device = _DEFAULT_DEVICE
@@ -29,7 +27,7 @@ class GymEnvWrapper(BaseEnvWrapper):
 
     def step(
         self, action: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, dict[str, Any]]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, dict[str, Any]]:
         gym_actions = action.clone().cpu().numpy()
 
         obs, reward, terminated, truncated, info = self.env.step(gym_actions)
@@ -42,8 +40,9 @@ class GymEnvWrapper(BaseEnvWrapper):
         self._curr_obs = torch.tensor(obs, device=self.device)
 
         reward_batch = torch.as_tensor([[float(reward)]], device=self.device)
-        done_batch = torch.as_tensor([[1.0 if done else 0.0]], device=self.device)
-        return self._curr_obs, reward_batch, done_batch, info
+        terminated_batch = torch.as_tensor([[float(terminated)]], device=self.device)
+        truncated_batch = torch.as_tensor([[float(truncated)]], device=self.device) 
+        return self._curr_obs, reward_batch, terminated_batch, truncated_batch, info
 
     def get_observations(self) -> torch.Tensor:
         return self._curr_obs

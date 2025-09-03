@@ -17,7 +17,7 @@ class BaseEnvWrapper(ABC):
         ...
     
     @abstractmethod
-    def step(self, action: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, dict[str, Any]]:
+    def step(self, action: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, dict[str, Any]]:
         ...
         
     @abstractmethod

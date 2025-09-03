@@ -25,5 +25,5 @@ class EnvArgs:
     robot_args: RobotArgs
     objects_args: list[ObjectArgs]
     sensors_args: list[SensorArgs]
-    reward_args: dict | None = None
+    reward_args: dict[str, float] | None = None
     img_resolution: tuple[int, int] | None = None

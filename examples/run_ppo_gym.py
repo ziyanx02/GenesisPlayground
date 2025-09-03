@@ -9,7 +9,7 @@ import gymnasium as gym
 import torch
 from gs_agent.algos.ppo import PPO
 from gs_agent.configs import PPO_PENDULUM_MLP, RUNNER_PENDULUM_MLP
-from gs_agent.envs.gym_wrapper import GymEnvWrapper
+from gs_agent.wrappers.gym_env_wrapper import GymEnvWrapper
 from gs_agent.runners.onpolicy_runner import OnPolicyRunner
 from gs_agent.utils.logger import configure as logger_configure
 

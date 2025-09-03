@@ -7,13 +7,13 @@ The playground is built with a modular design that separates concerns:
 ```mermaid
 graph TD
     A[gs-schemas] --> B[gs-env]
-    A --> C[gs-rl]
+    A --> C[gs-agent]
 ```
 
 - **`gs-schemas`** - Shared data structures and interfaces
 - **`gs-env`** - Robot simulation and real-world environments
-- **`gs-rl`** - Reinforcement learning algorithms and training
-- **`scripts`** - Ready-to-run examples and demos
+- **`gs-agent`** - Robot learning algorithms 
+- **`examples`** - Ready-to-run examples and demos
 
 ## Quick Start
 
@@ -41,8 +41,8 @@ source .venv/bin/activate
 ```
 
 
-### 4. Run RL training for a simple `goal-reaching` task in simulation:
+### 4. Run RL training for a simple `inverted pendulum` task in simulation:
 
 ```bash
-python3 scripts/run_ppo_train.py
+python3 examples/run_ppo_gym.py # gym inverted pendulum 
 ```

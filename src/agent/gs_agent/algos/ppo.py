@@ -88,13 +88,13 @@ class PPO(BaseAlgo):
             for _step in range(num_steps):
                 action, log_prob = self._actor(obs)
                 # Step environment
-                next_obs, reward, done, _extra_infos = self.env.step(action)
+                next_obs, reward, terminated, truncated, _extra_infos = self.env.step(action)
 
                 transition = {
                     "obs": obs,
                     "act": action,
                     "rew": reward,
-                    "done": done,
+                    "done": terminated,
                     "value": self._critic(obs),
                     "log_prob": log_prob,
                 }
@@ -106,6 +106,7 @@ class PPO(BaseAlgo):
                 self._curr_ep_len += 1
 
                 # Check for episode completions and reset tracking
+                done = terminated | truncated
                 done_mask = done.squeeze(-1)  # Remove last dimension if present
                 new_ids = (done_mask > 0).nonzero(as_tuple=False)
                 if len(new_ids) > 0:
@@ -119,14 +120,10 @@ class PPO(BaseAlgo):
                     self._curr_ep_len[new_ids] = 0
 
                 obs = next_obs
-
-
-        #
         with torch.no_grad():
             last_value = self._critic(self.env.get_observations())
             self._rollouts.set_final_value(last_value.unsqueeze(-1))
             
-                # Calculate mean reward episode
         mean_reward = 0.0
         mean_ep_len = 0.0
         if len(self._rewbuffer) > 0:
@@ -267,10 +264,5 @@ class PPO(BaseAlgo):
         self.eval_mode()
         if device is not None:
             self._actor.to(device)
-        # policy = self._actor_critic.act_inference
         policy = self._actor
-        if self.cfg.policy.norm_obs:
-            self.actor_obs_normalizer.to(device)
-            return policy, self.actor_obs_normalizer
-        else:
-            return policy, None
+        return policy

@@ -3,9 +3,8 @@ import numpy as np
 import torch
 
 #
-from gs_env.common.bases import BaseGymEnv, spaces
+from gs_env.common.bases.base_env import BaseEnv
 from gs_env.common.rewards import ActionL2Penalty, KeypointsAlign
-from gs_env.common.utils.gs_types import NP_SCALAR, TORCH_SCALAR
 from gs_env.common.utils.math_utils import quat_mul
 from gs_env.common.utils.misc_utils import get_space_dim
 from gs_env.sim.envs.config.schema import EnvArgs
@@ -14,7 +13,9 @@ from gs_env.sim.scenes import FlatScene
 from gs_env.sim.sensors.camera import Camera
 
 
-class GoalReachingEnv(BaseGymEnv):
+_DEFAULT_DEVICE = torch.device("cpu")
+
+class GoalReachingEnv(BaseEnv):
     """
     Goal Reaching Environment for Manipulators.
     """
@@ -24,9 +25,9 @@ class GoalReachingEnv(BaseGymEnv):
         args: EnvArgs,
         num_envs: int,
         show_viewer: bool = False,
-        device: str | torch.device = "cpu",
+        device: torch.device = _DEFAULT_DEVICE,
     ) -> None:
-        super().__init__()
+        super().__init__(device=device)
         self._num_envs = num_envs
         self._device = device
         self._show_viewer = show_viewer

@@ -1,77 +1,66 @@
+from dataclasses import dataclass
+from typing import Any, Mapping, Optional, Tuple, Generic, TypeVar, Dict
+import torch
+from typing import Final
 from abc import ABC, abstractmethod
 
-import torch
-from typing import Any
+class BaseEnv(ABC):
+    """Core simulator/task with a minimal, tensor-only API. """
 
+    def __init__(self, device: torch.device, seed: int | None = None):
+        self.device: Final[torch.device] = device
+        self._rng = torch.Generator(device=self.device)  # seeding for any stochastic ops
+        if seed is not None:
+            self._rng.manual_seed(int(seed))
+        self._episode_steps: int = 0
+        self._episode_length_limit: int | None = None
 
-class BaseGymEnv(ABC):
-    """
-    Abstract base class for Gym-like environments using TensorDict.
-    """
-
-    # TODO
-    _observation_space: Any
-    _action_space: Any
-    _info_space: Any
-    _num_env: int
-
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-
-    @property
-    def observation_space(self) -> Any:
-        return self._observation_space
-
-    @property
-    def action_space(self) -> Any:
-        return self._action_space
-
-    @property
-    def info_space(self) -> Any:
-        return self._info_space
-
-    @property
+    @abstractmethod
     def num_envs(self) -> int:
-        return self._num_env
-
+        ...
+ 
     @abstractmethod
-    def reset(self, envs_idx: torch.IntTensor | None = None) -> None:
-        """
-        Reset the environment and return the initial observation as a TensorDict.
-        """
+    def reset_idx(self, envs_idx: torch.Tensor) -> tuple[torch.Tensor, dict[str, Any]]:
+        ...
+    
+    @abstractmethod
+    def step(self, action: torch.Tensor) -> None:
+        ...
+        
+    @abstractmethod
+    def get_observations(self) -> torch.Tensor:
+        ...
+        
+    @abstractmethod
+    def get_info(self, envs_idx: torch.Tensor) -> dict[str, Any]:
         ...
 
     @abstractmethod
-    def step(self, action: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, dict]:
-        """
-        Take an action and return:
-        - 'observation'
-        - 'reward'
-        - 'done'
-        - 'info'
-        """
+    def get_terminated(self) -> torch.Tensor:
+        ...
+        
+    @abstractmethod
+    def get_truncated(self) -> torch.Tensor:
+        ...
+        
+    @abstractmethod
+    def get_reward(self) -> torch.Tensor:
         ...
 
-    @property
-    @abstractmethod
-    def action_dim(self) -> int:
-        """
-        The number of actions available in the action space.
-        """
-        ...
+    def reset(self):
+        self._episode_steps = 0
+        envs_idx = torch.arange(self.num_envs(), device=self.device)
+        return self.reset_idx(envs_idx=envs_idx)
 
-    @property
-    @abstractmethod
-    def actor_obs_dim(self) -> int:
-        """
-        The dimension of the actor's observation space.
-        """
-        ...
+    def observation_spec(self) -> Mapping[str, Any]:
+        return {}
 
-    @property
-    @abstractmethod
-    def critic_obs_dim(self) -> int:
-        """
-        The dimension of the critic's observation space.
-        """
-        ...
+    def action_spec(self) -> Mapping[str, Any]:
+        return {}
+
+    def episode_steps(self) -> int:
+        return self._episode_steps
+
+    def set_time_limit(self, max_steps: Optional[int]) -> None:
+        self._episode_length_limit = max_steps
+

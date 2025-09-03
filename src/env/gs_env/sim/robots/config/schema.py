@@ -9,10 +9,8 @@ from pydantic import field_validator
 from pydantic.dataclasses import dataclass
 
 from gs_env.common.utils.asset_utils import get_urdf_path
-from gs_env.common.utils.gs_utils import add_to_gs_method
 
 
-@add_to_gs_method(gs.materials.Rigid)
 @dataclass(config=genesis_pydantic_config(frozen=True))
 class RigidMaterialArgs:
     rho: float
@@ -27,13 +25,12 @@ class RigidMaterialArgs:
     gravity_compensation: float
 
 
-@add_to_gs_method(gs.morphs.URDF)
 @dataclass(config=genesis_pydantic_config(frozen=True))
 class URDFMorphArgs:
     # Morph
     pos: tuple[float, float, float]
     euler: tuple[int, int, int]
-    quat: tuple | None
+    quat: tuple[float, float, float, float] | None
     visualization: bool
     collision: bool
     requires_jac_and_IK: bool
@@ -114,7 +111,7 @@ RobotArgs: TypeAlias = (
 )
 
 
-@dataclass(config=dict(arbitrary_types_allowed=True, frozen=True))
+@dataclass(config=genesis_pydantic_config(frozen=True))
 class JointPosAction:
     """
     Joint position action.
@@ -124,7 +121,7 @@ class JointPosAction:
     joint_pos: torch.Tensor  # (n_dof,)
 
 
-@dataclass(config=dict(arbitrary_types_allowed=True, frozen=True))
+@dataclass(config=genesis_pydantic_config(frozen=True))
 class JointVelAction:
     """
     Joint velocity action.
@@ -134,7 +131,7 @@ class JointVelAction:
     joint_vel: torch.Tensor
 
 
-@dataclass(config=dict(arbitrary_types_allowed=True, frozen=True))
+@dataclass(config=genesis_pydantic_config(frozen=True))
 class JointTorqueAction:
     """
     Joint torque action.
@@ -144,7 +141,7 @@ class JointTorqueAction:
     joint_force: torch.Tensor  # (n_dof,)
 
 
-@dataclass(config=dict(arbitrary_types_allowed=True, frozen=True))
+@dataclass(config=genesis_pydantic_config(frozen=True))
 class EEPoseAbsAction:
     """
     End-effector pose absolute action.
@@ -155,7 +152,7 @@ class EEPoseAbsAction:
     ee_link_quat: torch.Tensor  # (4,)
 
 
-@dataclass(config=dict(arbitrary_types_allowed=True, frozen=True))
+@dataclass(config=genesis_pydantic_config(frozen=True))
 class EEPoseRelAction:
     """
     End-effector pose relative action.

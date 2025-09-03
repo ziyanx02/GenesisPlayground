@@ -10,7 +10,6 @@ from gs_env.common.utils.gs_utils import to_gs_and_assert
 from gs_env.common.utils.math_utils import quat_from_angle_axis, quat_mul
 from gs_env.common.utils.misc_utils import get_action_space
 from gs_env.sim.robots.config.schema import (
-    BaseAction,
     CtrlType,
     EEPoseAbsAction,
     EEPoseRelAction,
@@ -43,7 +42,7 @@ class ManipulatorBase(BaseGymRobot):
         # == Genesis configurations ==
         material: gs.materials.Rigid = to_gs_and_assert(args.material_args, gs.materials.Rigid)
         morph: gs.morphs.URDF = to_gs_and_assert(args.morph_args, gs.morphs.URDF)
-        self._robot: RigidEntity = scene.add_entity(
+        self._robot: gs.entities.Entity = scene.add_entity(
             material=material,
             morph=morph,
             visualize_contact=args.visualize_contact,
@@ -263,20 +262,6 @@ class ManipulatorBase(BaseGymRobot):
 
 
 class PiperRobot(ManipulatorBase):
-    def __init__(
-        self, num_envs: int, scene: gs.Scene, args: ManipulatorRobotArgs, device: str = "cpu"
-    ) -> None:
-        super().__init__(num_envs=num_envs, scene=scene, args=args, device=device)
-
-
-class FrankaPandaRobot(ManipulatorBase):
-    def __init__(
-        self, num_envs: int, scene: gs.Scene, args: ManipulatorRobotArgs, device: str = "cpu"
-    ) -> None:
-        super().__init__(num_envs=num_envs, scene=scene, args=args, device=device)
-
-
-class UR5Robot(ManipulatorBase):
     def __init__(
         self, num_envs: int, scene: gs.Scene, args: ManipulatorRobotArgs, device: str = "cpu"
     ) -> None:

@@ -1,6 +1,5 @@
-from .manipulators import FrankaPandaRobot, PiperRobot
+from .manipulators import PiperRobot
 
 __all__ = [
     "PiperRobot",
-    "FrankaPandaRobot",
 ]
