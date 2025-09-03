@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Any
 from typing import Final
 from gs_agent.bases.env_wrapper import BaseEnvWrapper
+from gs_agent.bases.policy import Policy
 
 import torch
 

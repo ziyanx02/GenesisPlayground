@@ -4,7 +4,6 @@ from pathlib import Path
 from typing import Final, Any
 
 import torch
-from loguru import logger
 
 from gs_agent.bases.algo import BaseAlgo
 from gs_agent.bases.runner import BaseRunner
@@ -34,7 +33,9 @@ class Runner(BaseRunner):
             device: Device to run training on
         """
         super().__init__()
+        self.algorithm: Final[BaseAlgo] = algorithm
         self.args: Final[RunnerArgs] = runner_args
+        self.device: Final[torch.device] = device
 
         # Create save directory
         self.save_dir: Final[Path] = self.args.save_path / datetime.datetime.now().strftime(
@@ -44,7 +45,7 @@ class Runner(BaseRunner):
         self.checkpoint_dir: Final[Path] = self.args.save_path / "checkpoints"
         self.checkpoint_dir.mkdir(exist_ok=True)
 
-        logger.info(f"OnPolicyRunner initialized with save path: {self.args.save_path}")
+        print(f"OnPolicyRunner initialized with save path: {self.args.save_path}")
 
     def train(self, metric_logger: Any) -> dict[str, Any]:
         """Train the algorithm for a specified number of episodes.
@@ -55,7 +56,7 @@ class Runner(BaseRunner):
         Returns:
             Dictionary containing training results and final metrics
         """
-        logger.info(f"Starting training for {self.args.total_episodes} episodes")
+        print(f"Starting training for {self.args.total_episodes} episodes")
 
         start_time = time.time()
         total_steps = 0
@@ -111,7 +112,7 @@ class Runner(BaseRunner):
                 if isinstance(v, float | int):
                     metric_logger.record(f"{metric_name}/{k}", v)
                 else:
-                    logger.warning(f"Invalid metric type: {type(value)}")
+                    print(f"Invalid metric type: {type(value)}")
         metric_logger.log(step=step)
 
     def _save_checkpoint(self, filename: str) -> None:
@@ -123,7 +124,7 @@ class Runner(BaseRunner):
         """
         checkpoint_path = self.checkpoint_dir / filename
         self.algorithm.save(checkpoint_path)
-        logger.info(f"Checkpoint saved: {checkpoint_path}")
+        print(f"Checkpoint saved: {checkpoint_path}")
 
     def load_checkpoint(self, checkpoint_path: str | Path) -> None:
         """Load a checkpoint of the algorithm.
@@ -132,7 +133,7 @@ class Runner(BaseRunner):
             checkpoint_path: Path to the checkpoint file
         """
         self.algorithm.load(Path(checkpoint_path))
-        logger.info(f"Checkpoint loaded: {checkpoint_path}")
+        print(f"Checkpoint loaded: {checkpoint_path}")
 
     def get_policy(self) -> Policy:
         """Get the trained policy for inference."""

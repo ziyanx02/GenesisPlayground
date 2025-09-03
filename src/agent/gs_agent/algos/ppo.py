@@ -13,7 +13,7 @@ from gs_agent.buffers.transition import OnPolicyTransition
 from gs_agent.buffers.mini_batches import OnPolicyMiniBatch
 from gs_agent.configs.schema import PPOArgs
 from gs_agent.modules.policies import GaussianPolicy
-from gs_agent.modules.critics import StateValueFunction, QValueFunction
+from gs_agent.modules.critics import StateValueFunction
 from gs_agent.modules.models import NetworkFactory
 from gs_agent.bases.algo import BaseAlgo
 from gs_agent.bases.env_wrapper import BaseEnvWrapper
@@ -47,7 +47,7 @@ class PPO(BaseAlgo):
 
     def _build_actor_critic(self):
         policy_backbone = NetworkFactory.create_network(
-            network_backbone_args=self.cfg.policy.policy_backbone,
+            network_backbone_args=self.cfg.policy_backbone,
             input_dim=self._actor_obs_dim,
             output_dim=self._action_dim,
             device=self.device,
@@ -61,17 +61,20 @@ class PPO(BaseAlgo):
         self._actor_optimizer = torch.optim.Adam(self._actor.parameters(), lr=self.cfg.lr)
 
         critic_backbone = NetworkFactory.create_network(
-            network_backbone_args=self.cfg.critic.critic_backbone,
+            network_backbone_args=self.cfg.critic_backbone,
             input_dim=self._critic_obs_dim,
             output_dim=1,
             device=self.device,
         )
         print(f"Critic backbone: {critic_backbone}")
         self._critic = StateValueFunction(critic_backbone).to(self.device)
-        self._critic_optimizer = torch.optim.Adam(self._critic.parameters(), lr=self.cfg.value_lr)
+        value_lr = self.cfg.value_lr if self.cfg.value_lr is not None else self.cfg.lr
+        self._critic_optimizer = torch.optim.Adam(self._critic.parameters(), lr=value_lr)
 
         self.actor_obs_normalizer = torch.nn.Identity().to(self.device)  # no normalization
         self.critic_obs_normalizer = torch.nn.Identity().to(self.device)  # no normalization
+
+        print("Device: ", self.device)
 
     def _build_rollouts(self):
         self._rollouts = GAEBuffer(
@@ -88,16 +91,14 @@ class PPO(BaseAlgo):
             start = time.time()
             for step in range(self._num_steps):
                 #
-                norm_obs = self.actor_obs_normalizer(self.env.get_observations())
-                action, log_prob = self._actor(norm_obs)
+                obs = self.env.get_observations()
+                action, log_prob = self._actor(obs)
                 # Step environment
                 next_obs, reward, done, extra_infos = self.env.step(action)
-                critic_obs = self.env.get_critic_observations()
-
-                obs = next_obs
+                critic_obs = self.env.get_observations()
 
                 self._rollouts.append(OnPolicyTransition(
-                    obs=next_obs,
+                    obs=obs,
                     act=action,
                     rew=reward,
                     done=done,
@@ -105,22 +106,31 @@ class PPO(BaseAlgo):
                     log_prob=log_prob,
                 ))
 
+                # Update episode tracking - handle reward and done sequences
+                # Extract tensors from reward and done objects
+                self._curr_reward_sum += reward.squeeze(-1)
+                self._curr_ep_len += 1
 
-                if logger is not None: # type: ignore
-                    self._curr_reward_sum += reward
-                    self._curr_ep_len += 1
-                    new_ids = (done > 0).nonzero(as_tuple=False)
-                    self._rewbuffer.extend(self._curr_reward_sum[new_ids][:, 0].cpu().numpy().tolist())
+                # Check for episode completions and reset tracking
+                done_mask = done.squeeze(-1)  # Remove last dimension if present
+                new_ids = (done_mask > 0).nonzero(as_tuple=False)
+                if len(new_ids) > 0:
+                    # Vectorized environment
+                    self._rewbuffer.extend(
+                        self._curr_reward_sum[new_ids][:, 0].cpu().numpy().tolist()
+                    )
                     self._lenbuffer.extend(self._curr_ep_len[new_ids][:, 0].cpu().numpy().tolist())
+                    # Reset tracking
                     self._curr_reward_sum[new_ids] = 0
                     self._curr_ep_len[new_ids] = 0
-            #
-            stop = time.time()
-            collection_time = stop - start
-            #
-            start = stop
-            last_value = self._critic(self.env.get_critic_observations()).detach()
-            self._rollouts.compute_gae(last_value)
+
+                obs = next_obs
+
+
+        #
+        with torch.no_grad():
+            last_value = self._critic(self.env.get_observations())
+        self._rollouts.compute_gae(last_value)
 
     def train_one_batch(self, mini_batch: OnPolicyMiniBatch) -> dict[str, Any]:
         old_log_probs = torch.squeeze(mini_batch.log_prob)

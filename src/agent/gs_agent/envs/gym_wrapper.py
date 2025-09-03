@@ -16,21 +16,22 @@ class GymEnvWrapper(BaseEnvWrapper):
     def __init__(
         self, env: gym.Env[Any, Any], device: torch.device = _DEFAULT_DEVICE
     ) -> None:
-        super().__init__(env)
-        self._curr_obs: torch.Tensor = torch.tensor(self.env.reset()[0])
+        super().__init__(env, device)
+        self._curr_obs: torch.Tensor = torch.tensor(self.env.reset()[0], device=self.device)
 
     # ---------------------------
     # BatchEnvWrapper API (batch)
     # ---------------------------
     def reset(self) -> tuple[torch.Tensor, dict[str, Any]]:
         obs, info = self.env.reset()
-        self._curr_obs = torch.tensor(obs)
+        self._curr_obs = torch.tensor(obs, device=self.device)
         return self._curr_obs, info
 
     def step(
         self, action: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, dict[str, Any]]:
-        gym_actions = action.clone().cpu().numpy().squeeze()
+        gym_actions = action.clone().cpu().numpy()
+
         obs, reward, terminated, truncated, info = self.env.step(gym_actions)
 
         done = terminated | truncated
@@ -38,10 +39,10 @@ class GymEnvWrapper(BaseEnvWrapper):
         if done:
             obs, info = self.env.reset()
 
-        self._curr_obs = torch.tensor(obs)
+        self._curr_obs = torch.tensor(obs, device=self.device)
 
-        reward_batch = torch.as_tensor([[float(reward)]])
-        done_batch = torch.as_tensor([[1.0 if done else 0.0]])
+        reward_batch = torch.as_tensor([[float(reward)]], device=self.device)
+        done_batch = torch.as_tensor([[1.0 if done else 0.0]], device=self.device)
         return self._curr_obs, reward_batch, done_batch, info
 
     def get_observations(self) -> torch.Tensor:

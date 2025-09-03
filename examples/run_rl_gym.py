@@ -79,10 +79,10 @@ def evaluate_policy(checkpoint_path: Path, num_episodes: int = 10) -> None:
                 policy_output = inference_policy(obs, deterministic=True) # type: ignore
                 obs, reward, done, _ = wrapped_env.step(policy_output.action) # type: ignore
 
-            episode_reward += reward.tensors()["reward"].item()
+            episode_reward += reward.item()
             episode_length += 1
 
-            if done.tensors()["done"].item():
+            if done.item():
                 break
 
             time.sleep(0.01)
@@ -120,7 +120,7 @@ def main(
         # Set up logging with proper configuration
         print("Setting up metric logging...")
 
-        logger = logger_configure(folder=log_dir, format_strings=["stdout", "csv", "wandb"])
+        logger = logger_configure(folder=str(log_dir), format_strings=["stdout", "csv", "wandb"])
 
         # Train using Runner
         train_summary_info = runner.train(metric_logger=logger) 

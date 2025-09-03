@@ -8,8 +8,9 @@ class BaseEnvWrapper(ABC):
     Base class for all environment wrappers.
     """
 
-    def __init__(self, env: Any) -> None:
+    def __init__(self, env: Any, device: torch.device) -> None:
         self.env: Final[Any] = env
+        self.device: Final[torch.device] = device
         
     @abstractmethod
     def reset(self) -> tuple[torch.Tensor, dict[str, Any]]:
@@ -21,10 +22,6 @@ class BaseEnvWrapper(ABC):
         
     @abstractmethod
     def get_observations(self) -> torch.Tensor:
-        ...
-        
-    @abstractmethod
-    def get_critic_observations(self) -> torch.Tensor:
         ...
          
     @property
