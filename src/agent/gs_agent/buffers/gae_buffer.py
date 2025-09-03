@@ -5,6 +5,7 @@ from gs_agent.bases.buffer import BaseBuffer
 from gs_agent.buffers.transition import OnPolicyTransition
 from gs_agent.buffers.mini_batches import OnPolicyMiniBatch
 from typing import Final
+from typing import Generator
 
 
 _DEFAULT_DEVICE: Final[torch.device] = torch.device("cpu")
@@ -180,7 +181,7 @@ class GAEBuffer(BaseBuffer[OnPolicyTransition]):
     def __len__(self):
         return self._idx * self._num_envs
 
-    def minibatch_gen(self, num_mini_batches: int, num_epochs: int, shuffle: bool = True):
+    def minibatch_gen(self, num_mini_batches: int, num_epochs: int, shuffle: bool = True) -> Generator[dict[str, torch.Tensor]]:
         advantages, returns = compute_gae(
             rewards=self._buffer[REWARDS],
             values=self._buffer[VALUES],
@@ -210,15 +211,14 @@ class GAEBuffer(BaseBuffer[OnPolicyTransition]):
                 t_idx = bucket // self._num_envs
                 b_idx = bucket % self._num_envs
                 mini_batch_size = bucket.numel()
+                yield {
+                    "obs": self._buffer[ACTOR_OBS][t_idx, b_idx].reshape(mini_batch_size, -1),
+                    "act": self._buffer[ACTIONS][t_idx, b_idx].reshape(mini_batch_size, -1),
+                    "rew": self._buffer[REWARDS][t_idx, b_idx].reshape(mini_batch_size, -1),
+                    "done": self._buffer[DONES][t_idx, b_idx].reshape(mini_batch_size, -1),
+                    "value": self._buffer[VALUES][t_idx, b_idx].reshape(mini_batch_size, -1),
+                    "log_prob": self._buffer[ACTION_LOGPROBS][t_idx, b_idx].reshape(mini_batch_size, -1),
+                    "advantage": advantages[t_idx, b_idx].reshape(mini_batch_size, -1),
+                    "returns": returns[t_idx, b_idx].reshape(mini_batch_size, -1),
+                }
 
-                # Extract tensors for the batch
-                yield OnPolicyMiniBatch(
-                    obs=self._buffer[ACTOR_OBS][t_idx, b_idx].reshape(mini_batch_size, -1),
-                    act=self._buffer[ACTIONS][t_idx, b_idx].reshape(mini_batch_size, -1),
-                    rew=self._buffer[REWARDS][t_idx, b_idx].reshape(mini_batch_size, -1),
-                    done=self._buffer[DONES][t_idx, b_idx].reshape(mini_batch_size, -1),
-                    value=self._buffer[VALUES][t_idx, b_idx].reshape(mini_batch_size, -1),
-                    log_prob=self._buffer[ACTION_LOGPROBS][t_idx, b_idx].reshape(mini_batch_size, -1),
-                    advantage=advantages[t_idx, b_idx].reshape(mini_batch_size, -1),
-                    returns=returns[t_idx, b_idx].reshape(mini_batch_size, -1),
-                )

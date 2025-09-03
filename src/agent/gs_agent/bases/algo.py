@@ -29,7 +29,7 @@ class BaseAlgo(ABC):
      
         
     @abstractmethod
-    def train_one_episode(self) -> dict:
+    def train_one_episode(self) -> dict[str, Any]:
         """
         Train the algorithm for a given episode.
 

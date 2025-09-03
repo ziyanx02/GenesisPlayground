@@ -57,7 +57,7 @@ class PPO(BaseAlgo):
         self._actor = GaussianPolicy(
             policy_backbone=policy_backbone,
             action_dim=self._action_dim,
-        ).to(self.device) # type: ignore
+        ).to(self.device)
         self._actor_optimizer = torch.optim.Adam(self._actor.parameters(), lr=self.cfg.lr)
 
         critic_backbone = NetworkFactory.create_network(
@@ -85,24 +85,21 @@ class PPO(BaseAlgo):
             device=self.device,
         )
 
-    def _collect_rollouts(self, num_steps: int) -> None:
+    def _collect_rollouts(self, num_steps: int) -> dict[str, Any]:
+        obs = self.env.get_observations()
         with torch.inference_mode():
             # collect rollouts and compute returns & advantages
-            start = time.time()
-            for step in range(self._num_steps):
-                #
-                obs = self.env.get_observations()
+            for _step in range(num_steps):
                 action, log_prob = self._actor(obs)
                 # Step environment
-                next_obs, reward, done, extra_infos = self.env.step(action)
-                critic_obs = self.env.get_observations()
+                next_obs, reward, done, _extra_infos = self.env.step(action)
 
                 self._rollouts.append(OnPolicyTransition(
                     obs=obs,
                     act=action,
                     rew=reward,
                     done=done,
-                    value=self._critic(critic_obs),
+                    value=self._critic(obs),
                     log_prob=log_prob,
                 ))
 
@@ -131,45 +128,64 @@ class PPO(BaseAlgo):
         with torch.no_grad():
             last_value = self._critic(self.env.get_observations())
             self._rollouts.set_final_value(last_value.unsqueeze(-1))
+            
+                # Calculate mean reward episode
+        mean_reward = 0.0
+        mean_ep_len = 0.0
+        if len(self._rewbuffer) > 0:
+            mean_reward = statistics.mean(self._rewbuffer)
+            mean_ep_len = statistics.mean(self._lenbuffer)
+        return {
+            "mean_reward": mean_reward,
+            "mean_ep_len": mean_ep_len,
+        }
+        
 
-    def train_one_batch(self, mini_batch: OnPolicyMiniBatch) -> dict[str, Any]:
-        old_log_probs = torch.squeeze(mini_batch.log_prob)
 
-        new_log_probs = self._actor.evaluate_log_prob(mini_batch.obs, mini_batch.act)
-        batch_adv = mini_batch.advantage
-        ratio = torch.exp(new_log_probs - old_log_probs)
-        surr1 = -torch.squeeze(batch_adv) * ratio
-        surr2 = -torch.squeeze(batch_adv) * torch.clamp(
+    def train_one_batch(self, mini_batch: dict[str, torch.Tensor]) -> dict[str, Any]:
+        obs = mini_batch["obs"]
+        act = mini_batch["act"]
+        rew = mini_batch["rew"]
+        done = mini_batch["done"]
+        value = mini_batch["value"]
+        old_log_prob = mini_batch["log_prob"]
+        advantage = mini_batch["advantage"]
+        returns = mini_batch["returns"]
+        
+        #
+        new_log_prob = self._actor.evaluate_log_prob(obs, act)
+        ratio = torch.exp(new_log_prob - old_log_prob)
+        surr1 = -advantage * ratio
+        surr2 = -advantage * torch.clamp(
             ratio, 1.0 - self.cfg.clip_ratio, 1.0 + self.cfg.clip_ratio
         )
         policy_loss = torch.max(surr1, surr2).mean()
 
-        # TODO: add KL divergence loss
-        # if self.desired_kl is not None and self.schedule == "adaptive":
-        #     with torch.inference_mode():
-        #         kl = torch.sum(
-        #             torch.log(sigma_batch / old_sigma_batch + 1.0e-5)
-        #             + (torch.square(old_sigma_batch) + torch.square(old_mu_batch - mu_batch))
-        #             / (2.0 * torch.square(sigma_batch))
-        #             - 0.5,
-        #             axis=-1,
-        #         )
-        #         kl_mean = torch.mean(kl)
-        #
-        #         if kl_mean > self.desired_kl * 2.0:
-        #             self.learning_rate = max(1e-5, self.learning_rate / 1.5)
-        #         elif kl_mean < self.desired_kl / 2.0 and kl_mean > 0.0:
-        #             self.learning_rate = min(1e-2, self.learning_rate * 1.5)
-        #
-        #         for param_group in self.optimizer.param_groups:
-        #             param_group["lr"] = self.learning_rate
+        if self.cfg.target_kl is not None and self.cfg.schedule == "adaptive":
+            with torch.inference_mode():
+                kl = torch.sum(
+                    torch.log(sigma_batch / old_sigma_batch + 1.0e-5)
+                    + (torch.square(old_sigma_batch) + torch.square(old_mu_batch - mu_batch))
+                    / (2.0 * torch.square(sigma_batch))
+                    - 0.5,
+                    axis=-1,
+                )
+                kl_mean = torch.mean(kl)
+
+                if kl_mean > self.cfg.target_kl * 2.0:
+                    self.learning_rate = max(1e-5, self.learning_rate / 1.5)
+                elif kl_mean < self.cfg.target_kl / 2.0 and kl_mean > 0.0:
+                    self.learning_rate = min(1e-2, self.learning_rate * 1.5)
+
+                for param_group in self._actor_optimizer.param_groups:
+                    param_group["lr"] = self.cfg.lr
 
         # Calculate value loss
-        values = self._critic(mini_batch.obs)
-        value_loss = (mini_batch.returns - values).pow(2).mean()
+        values = self._critic(obs)
+        value_loss = (returns - values).pow(2).mean()
 
         # Calculate entropy loss
-        entropy = self._actor.entropy_on(mini_batch.obs)
+        entropy = self._actor.entropy_on(obs)
         entropy_loss = entropy.mean()
 
         # Total loss
@@ -196,19 +212,41 @@ class PPO(BaseAlgo):
 
     def train_one_episode(self) -> dict[str, Any]:
         # collect rollouts
-        rollouts = self._collect_rollouts(num_steps=self._num_steps)
+        t0 = time.time()
+        rollout_infos = self._collect_rollouts(num_steps=self._num_steps)
+        t1 = time.time()
+        rollouts_time = t1 - t0
+        fps = (self._num_steps / rollouts_time) if rollouts_time > 0 else 0
 
-        generator = self._rollouts.minibatch_gen(
+        train_metrics_list: list[dict[str, Any]] = []
+        for mini_batch in self._rollouts.minibatch_gen(
             num_mini_batches=self.cfg.num_mini_batches,
             num_epochs=self.cfg.num_epochs,
-        )
-        metrics = {}
-        for mini_batch in generator:
+        ):
             metrics = self.train_one_batch(mini_batch)
-            metrics.update(metrics)
+            train_metrics_list.append(metrics)
+        t2 = time.time()
+        train_time = t2 - t1
 
         self._rollouts.reset()
-        return metrics
+        
+        episode_infos = {
+            "rollout" : {
+                "mean_reward": rollout_infos["mean_reward"],
+                "mean_length": rollout_infos["mean_ep_len"],
+            },
+            "train" : {
+                "policy_loss": statistics.mean([metrics["policy_loss"] for metrics in train_metrics_list]),
+                "value_loss": statistics.mean([metrics["value_loss"] for metrics in train_metrics_list]),
+                "entropy_loss": statistics.mean([metrics["entropy_loss"] for metrics in train_metrics_list]),
+            },
+            "speed" : {
+                "rollout_time": rollouts_time,
+                "rollout_fps": fps,
+                "train_time": train_time,
+            },
+        }
+        return episode_infos
 
 
     def save(self, path, infos=None):
