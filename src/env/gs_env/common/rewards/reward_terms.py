@@ -42,7 +42,7 @@ class ActionL2Penalty(RewardTerm):
 
     required_keys = ("action",)
 
-    def _compute(self, action: torch.Tensor) -> torch.Tensor:
+    def _compute(self, action: torch.Tensor) -> torch.Tensor: # type: ignore
         return -torch.sum(action**2, dim=-1)
 
 
@@ -57,7 +57,7 @@ class PositionL2Penalty(RewardTerm):
 
     required_keys = ("pos_a", "pos_b")
 
-    def _compute(self, pos_a: torch.Tensor, pos_b: torch.Tensor) -> torch.Tensor:
+    def _compute(self, pos_a: torch.Tensor, pos_b: torch.Tensor) -> torch.Tensor: # type: ignore
         return -torch.norm(pos_a - pos_b, p=2, dim=-1)
 
 
@@ -73,12 +73,12 @@ class KeypointsAlign(RewardTerm):
 
     required_keys = ("pose_a", "pose_b", "key_offsets")
 
-    def _compute(
+    def _compute( # type: ignore
         self,
         pose_a: torch.Tensor,  # (B, 7)
         pose_b: torch.Tensor,  # (B, 7)
         key_offsets: torch.Tensor,  # (B, K, 3)
-    ) -> torch.Tensor:
+    ) -> torch.Tensor: 
         b_pos, b_quat = pose_a[:, :3], pose_a[:, 3:]
         g_pos, g_quat = pose_b[:, :3], pose_b[:, 3:]
 
@@ -109,7 +109,7 @@ class PoseDist(RewardTerm):
 
     required_keys = ("pose_a", "pose_b")
 
-    def _compute(self, pose_a: torch.Tensor, pose_b: torch.Tensor) -> torch.Tensor:
+    def _compute(self, pose_a: torch.Tensor, pose_b: torch.Tensor) -> torch.Tensor: # type: ignore
         ...
 
     @staticmethod

@@ -1,16 +1,15 @@
 import genesis as gs
+import gymnasium as gym
 import numpy as np
 import torch
-
-#
+from typing import Any
 from gs_env.common.bases.base_env import BaseEnv
 from gs_env.common.rewards import ActionL2Penalty, KeypointsAlign
 from gs_env.common.utils.math_utils import quat_mul
 from gs_env.common.utils.misc_utils import get_space_dim
 from gs_env.sim.envs.config.schema import EnvArgs
-from gs_env.sim.robots import PiperRobot
+from gs_env.sim.robots.manipulators import PiperRobot
 from gs_env.sim.scenes import FlatScene
-from gs_env.sim.sensors.camera import Camera
 
 
 _DEFAULT_DEVICE = torch.device("cpu")
@@ -46,12 +45,8 @@ class GoalReachingEnv(BaseEnv):
             num_envs=self._num_envs,
             scene=self._scene.scene,
             args=args.robot_args,
-            device=self._device,
+            device=self.device,
         )
-
-        self._camera = None
-        if self._args.img_resolution is not None:
-            self._camera = Camera(scene=self._scene.scene)
 
         # == setup target entity
         self._target = self._scene.add_entity(
@@ -75,37 +70,27 @@ class GoalReachingEnv(BaseEnv):
     def _init(self) -> None:
         # specify the space attributes
         self._action_space = self._robot.action_space
-        self._observation_space = spaces.Dict(
+        self._observation_space = gym.spaces.Dict(
             {
-                "pose_vec": spaces.Box(low=-np.inf, high=np.inf, shape=(3,), dtype=NP_SCALAR),
-                "ee_quat": spaces.Box(low=-1.0, high=1.0, shape=(4,), dtype=NP_SCALAR),
-                "ref_position": spaces.Box(
-                    low=-np.inf, high=np.inf, shape=(3,), dtype=NP_SCALAR
+                "pose_vec": gym.spaces.Box(low=-np.inf, high=np.inf, shape=(3,), dtype=np.float32),
+                "ee_quat": gym.spaces.Box(low=-1.0, high=1.0, shape=(4,), dtype=np.float32),
+                "ref_position": gym.spaces.Box(
+                    low=-np.inf, high=np.inf, shape=(3,), dtype=np.float32
                 ),  # 3D position
-                "ref_quat": spaces.Box(
-                    low=-1.0, high=1.0, shape=(4,), dtype=NP_SCALAR
+                "ref_quat": gym.spaces.Box(
+                    low=-1.0, high=1.0, shape=(4,), dtype=np.float32
                 ),  # 4D quaternion
-                # "img": spaces.Box(
-                #     low=0.0, high=255.0, shape=self._args.img_resolution, dtype=NP_SCALAR
-                # ),  # RGB image
             }
         )
-        self._info_space = spaces.Dict({})
+        self._info_space = gym.spaces.Dict({})
 
         #
-        self.goal_pose = torch.zeros(self.num_envs, 7, dtype=TORCH_SCALAR, device=self._device)
-        self.reset_buf = torch.zeros(self.num_envs, dtype=torch.bool, device=self._device)
-        self.time_out_buf = torch.zeros(self.num_envs, dtype=torch.bool, device=self._device)
+        self.goal_pose = torch.zeros(self.num_envs, 7, dtype=torch.float32, device=self._device)
         self.time_since_reset = torch.zeros(self.num_envs, device=self._device)
         self.keypoints_offset = self.get_keypoint_offsets(
             batch_size=self.num_envs, device=self._device, unit_length=0.5
         )
         self.action_buf = torch.zeros((self.num_envs, self.action_dim), device=self._device)
-
-    def reset(self, envs_idx: torch.IntTensor | None = None) -> None:
-        if envs_idx is None:
-            envs_idx = torch.IntTensor(range(self.num_envs))
-        self.reset_idx(envs_idx=envs_idx)
 
     def reset_idx(self, envs_idx: torch.IntTensor) -> None:
         self._robot.reset(envs_idx=envs_idx)
@@ -121,9 +106,9 @@ class GoalReachingEnv(BaseEnv):
         self.goal_pose[envs_idx, 2] = random_z
 
         self.goal_pose[envs_idx] = torch.tensor(
-            [0.2, 0.0, 0.2, 1.0, 0.0, 0.0, 0.0], dtype=TORCH_SCALAR, device=self._device
+            [0.2, 0.0, 0.2, 1.0, 0.0, 0.0, 0.0], dtype=torch.float32, device=self._device
         )
-        q_down = torch.tensor([0.0, 0.0, 1.0, 0.0], dtype=TORCH_SCALAR, device=self._device).repeat(
+        q_down = torch.tensor([0.0, 0.0, 1.0, 0.0], dtype=torch.float32, device=self._device).repeat(
             num_reset, 1
         )
         random_yaw = torch.rand(num_reset, device=self._device) * 2 * np.pi - np.pi  # -pi to pi
@@ -142,17 +127,18 @@ class GoalReachingEnv(BaseEnv):
 
         #
         self.time_since_reset[envs_idx] = 0.0
-        self._target.set_qpos(self.goal_pose[envs_idx], envs_idx=envs_idx)
+        self._target.set_pos(self.goal_pose[envs_idx], envs_idx=envs_idx) # type: ignore
+        self._target.set_quat(self.goal_pose[envs_idx, 3:7], envs_idx=envs_idx) # type: ignore
+    
+    def get_terminated(self) -> torch.Tensor:
+        reset_buf = self.get_truncated()
+        return reset_buf
+    
+    def get_truncated(self) -> torch.Tensor:
+        time_out_buf = self.time_since_reset > self._max_sim_time
+        return time_out_buf
 
-    def is_episode_complete(self) -> torch.Tensor:
-        self.time_out_buf = self.time_since_reset > self._max_sim_time
-
-        # check if the ee is in the valid position
-        self.reset_buf = self.time_out_buf
-
-        return self.reset_buf.nonzero(as_tuple=True)[0]
-
-    def get_observations(self) -> tuple[torch.Tensor, dict]:
+    def get_observations(self) -> torch.Tensor:
         # Current end-effector pose
         ee_pos, ee_quat = self._robot.ee_pose[:, :3], self._robot.ee_pose[:, 3:7]
         #
@@ -162,79 +148,26 @@ class GoalReachingEnv(BaseEnv):
             ee_quat,  # current orientation (4D quaternion)
             self.goal_pose,  # goal pose (7D: pos + quat)
         ]
-        obs_tensor = torch.cat(obs_components, dim=-1)
-
-        extra_info = {
-            "observations": {"critic": obs_tensor},
-            "time_outs": self.reset_buf,
-        }
-
-        return obs_tensor, extra_info
-
-    def get_ee_pose(self) -> torch.Tensor:
-        return self._robot.ee_pose
-
-    def get_obj_ori(self) -> torch.Tensor:
-        return self.goal_pose[:, 3:7]
-
-    def get_depth_image(self, normalize: bool = True) -> torch.Tensor:
-        # Render depth image from the camera
-        depth = self._camera.render()["depth"].permute(0, 3, 1, 2)  # shape (B, 1, H, W)
-        if normalize:
-            depth = torch.clamp(depth, min=0.0, max=10)
-            depth = (depth - 0.0) / (10.0 - 0.0)  # normalize to [0, 1]
-        return depth
-
-    def get_rgb_image(self, normalize: bool = True) -> torch.Tensor:
-        rgb = self._camera.render()["rgb"].permute(0, 3, 1, 2)  # shape (B, 4, H, W)
-        if normalize:
-            rgb = torch.clamp(rgb, min=0.0, max=255.0)
-            rgb = (rgb - 0.0) / (255.0 - 0.0)
-        return rgb
-
-    def step(self, action: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, dict]:
+        return torch.cat(obs_components, dim=-1)
+    
+    def apply_action(self, action: torch.Tensor) -> None:
         action = self.rescale_action(action)
         self.action_buf[:] = action.clone().to(self._device)
-
-        # Apply actions and simulate physics
         self.time_since_reset += self._scene.scene.dt
         self._robot.apply_action(action=action)
         self._scene.scene.step()
 
-        # Compute rewards
-        reward_total, reward_dict = self.compute_reward()
 
-        # Check if the episode is complete
-        env_reset_ids = self.is_episode_complete()
-        if len(env_reset_ids) > 0:
-            self.reset_idx(env_reset_ids)
-
-        #
-        next_obs, extra_info = self.get_observations()
-        extra_info["reward_dict"] = reward_dict
-        return next_obs, reward_total.clone(), self.reset_buf, extra_info
-
-    def get_info(
-        self, envs_idx: torch.IntTensor | None = None
-    ) -> dict[str, dict[str, torch.Tensor]]:
-        if envs_idx is None:
-            envs_idx = torch.IntTensor(range(self.num_envs))
+    def get_extra_infos(self) -> dict[str, Any]:
         return dict()
 
     def rescale_action(self, action: torch.Tensor) -> torch.Tensor:
         action_scale: torch.Tensor = torch.tensor(
-            [0.1, 0.1, 0.1, 0.1, 0.1, 0.1], dtype=TORCH_SCALAR, device=self._device
+            [0.1, 0.1, 0.1, 0.1, 0.1, 0.1], dtype=torch.float32, device=self._device
         )
         return action * action_scale
 
-    def compute_reward(self) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
-        # Squared-L2 action penalty
-        reward_actions = self.rwd_action_l2(
-            {
-                "action": self.action_buf,  #
-            }
-        )
-        # Key-point alignment
+    def get_reward(self) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
         # Squared-L2 action penalty
         reward_actions = self.rwd_action_l2(
             {
@@ -282,15 +215,12 @@ class GoalReachingEnv(BaseEnv):
                     [0, 0, 1.0],  # z-positive
                 ],
                 device=device,
-                dtype=TORCH_SCALAR,
+                dtype=torch.float32,
             )
             * unit_length
         )
         return keypoint_offsets.unsqueeze(0).repeat(batch_size, 1, 1)
 
-    @property
-    def device(self) -> torch.device:
-        return self._device
 
     @property
     def action_dim(self) -> int:
@@ -306,20 +236,3 @@ class GoalReachingEnv(BaseEnv):
         num_critic_obs = get_space_dim(self._observation_space)
         return num_critic_obs
 
-    @property
-    def depth_shape(self) -> tuple[int, int] | None:
-        if self._camera is None and self._args.img_resolution is None:
-            return None
-        return (1, *self._args.img_resolution)
-
-    @property
-    def rgb_shape(self) -> tuple[int, int] | None:
-        if self._camera is None and self._args.img_resolution is None:
-            return None
-        return (4, *self._args.img_resolution)
-
-    @property
-    def img_resolution(self) -> tuple[int, int] | None:
-        if self._camera is None and self._args.img_resolution is None:
-            return None
-        return self._args.img_resolution

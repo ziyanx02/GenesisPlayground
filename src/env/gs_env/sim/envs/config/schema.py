@@ -1,15 +1,15 @@
 import genesis as gs
 from gs_schemas.base_types import genesis_pydantic_config
-from pydantic.dataclasses import dataclass
+from pydantic import BaseModel
 
 from gs_env.sim.objects.config.schema import ObjectArgs
-from gs_env.sim.robots.config.schema import RobotArgs
+from gs_env.sim.robots.config.schema import ManipulatorRobotArgs
 from gs_env.sim.scenes.config.schema import SceneArgs
 from gs_env.sim.sensors.config.schema import SensorArgs
 
 
-@dataclass(config=genesis_pydantic_config(frozen=True))
-class GenesisInitArgs:
+class GenesisInitArgs(BaseModel):
+    model_config = genesis_pydantic_config(frozen=True)
     seed: int
     precision: str
     logging_level: str
@@ -18,12 +18,14 @@ class GenesisInitArgs:
     )  # While we avoid using None, this is an exception where it finds a suitable backend automatically
 
 
-@dataclass(config=genesis_pydantic_config(frozen=True))
-class EnvArgs:
+class EnvArgs(BaseModel):
+    model_config = genesis_pydantic_config(frozen=True)
+
     gs_init_args: GenesisInitArgs
     scene_args: SceneArgs
-    robot_args: RobotArgs
+    robot_args: ManipulatorRobotArgs
     objects_args: list[ObjectArgs]
     sensors_args: list[SensorArgs]
-    reward_args: dict[str, float] | None = None
-    img_resolution: tuple[int, int] | None = None
+    reward_args: dict[str, float] 
+    img_resolution: tuple[int, int] 
+    

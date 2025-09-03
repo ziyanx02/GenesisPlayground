@@ -2,35 +2,27 @@ from collections.abc import Callable
 from typing import Any
 
 import genesis as gs
+from gymnasium import spaces
 import torch
-from genesis.engine.entities.rigid_entity import RigidEntity
-
 from gs_env.common.bases.base_robot import BaseGymRobot
 from gs_env.common.utils.gs_utils import to_gs_and_assert
-from gs_env.common.utils.math_utils import quat_from_angle_axis, quat_mul
-from gs_env.common.utils.misc_utils import get_action_space
+from gs_env.common.utils.math_utils import quat_from_angle_axis, quat_mul, quat_mul
 from gs_env.sim.robots.config.schema import (
     CtrlType,
     EEPoseAbsAction,
     EEPoseRelAction,
     JointPosAction,
-    JointTorqueAction,
-    JointVelAction,
     ManipulatorRobotArgs,
 )
 
 
 class ManipulatorBase(BaseGymRobot):
-    """
-    Base class for manipulator robots
-    """
-
     def __init__(
         self,
         num_envs: int,
         scene: gs.Scene,
         args: ManipulatorRobotArgs,
-        device: str = "cpu",
+        device: torch.device,
     ) -> None:
         super().__init__()
         # == set members ==
@@ -42,7 +34,9 @@ class ManipulatorBase(BaseGymRobot):
         # == Genesis configurations ==
         material: gs.materials.Rigid = to_gs_and_assert(args.material_args, gs.materials.Rigid)
         morph: gs.morphs.URDF = to_gs_and_assert(args.morph_args, gs.morphs.URDF)
-        self._robot: gs.entities.Entity = scene.add_entity(
+        
+        #
+        self._robot = scene.add_entity(
             material=material,
             morph=morph,
             visualize_contact=args.visualize_contact,
@@ -50,10 +44,27 @@ class ManipulatorBase(BaseGymRobot):
         )
 
         # == action space ==
-        self._action_space = get_action_space(
-            ctrl_type=args.ctrl_type, n_dof=len(args.default_arm_dof.keys())
-        )
-        assert self._action_space is not None, "Action space cannot be None"
+        n_dof = len(args.default_arm_dof.keys())
+        action_space_dict = {"gripper_width": spaces.Box(0.0, 0.08)}
+        match args.ctrl_type:
+            case CtrlType.JOINT_POSITION:
+                action_space_dict.update({"joint_pos": spaces.Box(shape=(n_dof,), low=-1.0, high=1.0)})
+            case CtrlType.EE_POSE_ABS:
+                action_space_dict.update(
+                    {
+                        "ee_link_pos": spaces.Box(shape=(3,), low=-1.0, high=1.0),
+                        "ee_link_quat": spaces.Box(shape=(4,), low=-1.0, high=1.0),
+                    }
+                )
+            case CtrlType.EE_POSE_REL:
+                action_space_dict.update(
+                    {
+                        "ee_link_pos_delta": spaces.Box(shape=(3,), low=-1.0, high=1.0),
+                        "ee_link_ang_delta": spaces.Box(shape=(3,), low=-1.0, high=1.0),  # roll, pitch, yaw
+                    }
+                )
+            case _:  # type: ignore
+                raise ValueError(f"Unknown control type: {args.ctrl_type}")
 
         # == some buffer initialization ==
         self._init()
@@ -84,16 +95,14 @@ class ManipulatorBase(BaseGymRobot):
             self._default_joint_angles += list(self._args.default_gripper_dof.values())
 
         # == set up control dispatch ==
-        self._dispatch: dict[CtrlType, Callable[[BaseAction], None]] = {
+        self._dispatch = {
             CtrlType.JOINT_POSITION.value: self._apply_joint_pos,
-            CtrlType.JOINT_VELOCITY.value: self._apply_joint_vel,
-            CtrlType.JOINT_FORCE.value: self._apply_joint_force,
             CtrlType.EE_POSE_ABS.value: self._apply_ee_pose_abs,
             CtrlType.EE_POSE_REL.value: self._apply_ee_pose_rel,
         }
 
-    def reset(self, envs_idx: torch.IntTensor) -> None:
-        if len(envs_idx) == 0:
+    def reset(self, envs_idx: torch.IntTensor | None = None) -> None:
+        if envs_idx is None or len(envs_idx) == 0:
             return
         self.go_home(envs_idx)
 
@@ -103,7 +112,7 @@ class ManipulatorBase(BaseGymRobot):
         ).repeat(len(envs_idx), 1)
         self._robot.set_qpos(default_joint_angles, envs_idx=envs_idx)
 
-    def apply_action(self, action: BaseAction | torch.Tensor) -> None:
+    def apply_action(self, action: JointPosAction | EEPoseAbsAction | EEPoseRelAction | torch.Tensor) -> None:
         """
         Apply the action to the robot.
         """
@@ -111,10 +120,6 @@ class ManipulatorBase(BaseGymRobot):
             match self.ctrl_type:
                 case CtrlType.JOINT_POSITION:
                     action = JointPosAction(joint_pos=action, gripper_width=0.0)
-                case CtrlType.JOINT_VELOCITY:
-                    action = JointVelAction(joint_vel=action, gripper_width=0.0)
-                case CtrlType.JOINT_FORCE:
-                    action = JointTorqueAction(joint_force=action, gripper_width=0.0)
                 case CtrlType.EE_POSE_ABS:
                     action = EEPoseAbsAction(
                         ee_link_pos=action[:, :3],
@@ -123,8 +128,8 @@ class ManipulatorBase(BaseGymRobot):
                     )
                 case CtrlType.EE_POSE_REL:
                     action = EEPoseRelAction(
-                        ee_link_pos_delta=action[:, :3],
-                        ee_link_ang_delta=action[:, 3:6],
+                        ee_link_pos=action[:, :3],
+                        ee_link_quat=action[:, 3:7],
                         gripper_width=0.0,
                     )
                 case _:
@@ -137,32 +142,10 @@ class ManipulatorBase(BaseGymRobot):
         """
         assert act.joint_pos.shape == (
             self._num_envs,
-            self._arm_dim,
+            self._arm_dof_dim,
         ), "Joint position action must match the number of joints."
         q_target = act.joint_pos.to(self._device)
-        self._robot.control_dofs_position(position=q_target)
-
-    def _apply_joint_vel(self, act: JointVelAction) -> None:
-        """
-        Apply joint velocity control to the robot.
-        """
-        assert act.joint_vel.shape == (
-            self._num_envs,
-            self._arm_dim,
-        ), "Joint velocity action must match the number of joints."
-        q_vel = act.joint_vel.to(self._device)
-        self._robot.control_dofs_velocity(velocity=q_vel)
-
-    def _apply_joint_force(self, act: JointTorqueAction) -> None:
-        """
-        Apply joint torque control to the robot.
-        """
-        assert act.joint_force.shape == (
-            self._num_envs,
-            self._arm_dim,
-        ), "Joint torque action must match the number of joints."
-        q_force = act.joint_force.to(self._device)
-        self._robot.control_dofs_force(force=q_force)
+        self._robot.control_dofs_position(position=q_target) 
 
     def _apply_ee_pose_abs(self, act: EEPoseAbsAction) -> None:
         """
@@ -184,7 +167,7 @@ class ManipulatorBase(BaseGymRobot):
             link=self._ee_link,
             pos=target_pos,
             quat=target_quat,
-            dofs_idx_local=self._motors_dof,
+            dofs_idx_local=self._arm_dof_idx,
             max_samples=10,  # number of IK samples
             max_solver_iters=20,  # maximum solver iterations
         )
@@ -194,11 +177,11 @@ class ManipulatorBase(BaseGymRobot):
         """
         Apply relative end-effector pose control to the robot.
         """
-        assert act.ee_link_pos_delta.shape == (
+        assert act.ee_link_pos.shape == (
             self._num_envs,
             3,
         ), "End-effector position delta must be a 3D vector."
-        assert act.ee_link_ang_delta.shape == (
+        assert act.ee_link_quat.shape == (
             self._num_envs,
             3,
         ), "End-effector angle delta must be a 3D vector."
@@ -206,11 +189,11 @@ class ManipulatorBase(BaseGymRobot):
         current_pos = self._ee_link.get_pos()
         current_quat = self._ee_link.get_quat()
 
-        target_pos = current_pos + act.ee_link_pos_delta.to(self._device)
+        target_pos = current_pos + act.ee_link_pos.to(self._device)
         target_quat = quat_mul(
             quat_from_angle_axis(
-                torch.linalg.vector_norm(act.ee_link_ang_delta, dim=-1),
-                act.ee_link_ang_delta
+                torch.linalg.vector_norm(act.ee_link_quat, dim=-1),
+                act.ee_link_quat
                 / (torch.linalg.vector_norm(act.ee_link_ang_delta, dim=-1).unsqueeze(-1) + 1e-6),
             ),
             current_quat,
@@ -263,6 +246,6 @@ class ManipulatorBase(BaseGymRobot):
 
 class PiperRobot(ManipulatorBase):
     def __init__(
-        self, num_envs: int, scene: gs.Scene, args: ManipulatorRobotArgs, device: str = "cpu"
+        self, num_envs: int, scene: gs.Scene, args: ManipulatorRobotArgs, device: torch.device
     ) -> None:
         super().__init__(num_envs=num_envs, scene=scene, args=args, device=device)

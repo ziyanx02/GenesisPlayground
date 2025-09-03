@@ -15,16 +15,16 @@ class BaseEnv(ABC):
         self._episode_steps: int = 0
         self._episode_length_limit: int | None = None
 
-    @abstractmethod
-    def num_envs(self) -> int:
-        ...
+    def reset(self) -> None:
+        envs_idx = torch.IntTensor(range(self.num_envs))
+        self.reset_idx(envs_idx=envs_idx)
  
     @abstractmethod
-    def reset_idx(self, envs_idx: torch.Tensor) -> tuple[torch.Tensor, dict[str, Any]]:
+    def reset_idx(self, envs_idx: torch.IntTensor):
         ...
     
     @abstractmethod
-    def step(self, action: torch.Tensor) -> None:
+    def apply_action(self, action: torch.Tensor) -> None:
         ...
         
     @abstractmethod
@@ -32,7 +32,7 @@ class BaseEnv(ABC):
         ...
         
     @abstractmethod
-    def get_info(self, envs_idx: torch.Tensor) -> dict[str, Any]:
+    def get_extra_infos(self) -> dict[str, Any]:
         ...
 
     @abstractmethod
@@ -44,13 +44,13 @@ class BaseEnv(ABC):
         ...
         
     @abstractmethod
-    def get_reward(self) -> torch.Tensor:
+    def get_reward(self) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
         ...
-
-    def reset(self):
-        self._episode_steps = 0
-        envs_idx = torch.arange(self.num_envs(), device=self.device)
-        return self.reset_idx(envs_idx=envs_idx)
+        
+    @property
+    @abstractmethod
+    def num_envs(self) -> int:
+        ...
 
     def observation_spec(self) -> Mapping[str, Any]:
         return {}

@@ -9,15 +9,17 @@ from gs_agent.algos.ppo import PPO
 from gs_agent.runners.onpolicy_runner import OnPolicyRunner
 from gs_agent.utils.logger import configure as logger_configure
 from gs_env.sim.envs.manipulation.goal_reaching_env import GoalReachingEnv
+from gs_agent.wrappers.gs_env_wrapper import GenesisEnvWrapper
 from gs_env.sim.envs.config.registry import EnvArgsRegistry
 from gs_agent.configs import PPO_DEFAULT, RUNNER_DEFAULT
 
 def create_gs_env(
     env_name: str = "goal_reach_default", show_viewer: bool = False
-) -> GoalReachingEnv:
+) -> GenesisEnvWrapper:
     """Create gym environment wrapper."""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    return GoalReachingEnv(args=EnvArgsRegistry[env_name], num_envs=1, show_viewer=show_viewer, device=device)
+    env = GoalReachingEnv(args=EnvArgsRegistry[env_name], num_envs=1024, show_viewer=show_viewer, device=device)
+    return GenesisEnvWrapper(env, device=device)
 
 
 def create_ppo_runner_from_registry() -> OnPolicyRunner:

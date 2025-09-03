@@ -41,20 +41,6 @@ class BaseCamera(BaseSensor, abc.ABC):
         ...
 
     @abc.abstractmethod
-    def start(self) -> None:
-        """
-        Start the camera device.
-        """
-        ...
-
-    @abc.abstractmethod
-    def stop(self) -> None:
-        """
-        Stop the camera device.
-        """
-        ...
-
-    @abc.abstractmethod
     def get_frame(self) -> dict[str, torch.Tensor]:
         """
         Get a frame from the camera device.
@@ -77,13 +63,3 @@ class BaseCamera(BaseSensor, abc.ABC):
         """
         ...
 
-    @property
-    @abc.abstractmethod
-    def intrinsics(self) -> torch.Tensor:
-        """
-        Get the camera intrinsics.
-        """
-        ...
-
-    def get_observation(self, envs_idx: torch.Tensor) -> dict[str, torch.Tensor]:
-        return self.get_frame()

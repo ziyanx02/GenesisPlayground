@@ -6,7 +6,6 @@ from gs_env.sim.robots.config.schema import (
     IKSolver,
     ManipulatorRobotArgs,
     RigidMaterialArgs,
-    RobotArgs,
     URDFMorphArgs,
 )
 
@@ -88,35 +87,7 @@ MorphArgsRegistry["franka_default"] = URDFMorphArgs(
 # ------------------------------------------------------------
 
 
-RobotArgsRegistry: dict[str, RobotArgs] = {}
-
-
-RobotArgsRegistry["piper_default"] = ManipulatorRobotArgs(
-    material_args=MaterialArgsRegistry["default"],
-    morph_args=MorphArgsRegistry["piper_default"],
-    visualize_contact=False,
-    vis_mode="visual",
-    ctrl_type=CtrlType.EE_POSE_REL,
-    ik_solver=IKSolver.GS,  # TODO: need to be aligned with real
-    ee_link_name="gripper_base",  # or "gripper_tip"
-    show_target=True,
-    gripper_link_names=[
-        "link7",
-        "link8",
-    ],
-    default_arm_dof={
-        "joint1": 0.0,
-        "joint2": 0.0,
-        "joint3": 0.0,
-        "joint4": -2.27,
-        "joint5": 0.0,
-        "joint6": 2.27,
-    },
-    default_gripper_dof={
-        "joint7": 0.03,
-        "joint8": -0.03,
-    },  # open gripper
-)
+RobotArgsRegistry: dict[str, ManipulatorRobotArgs] = {}
 
 RobotArgsRegistry["piper_default"] = ManipulatorRobotArgs(
     material_args=MaterialArgsRegistry["default"],

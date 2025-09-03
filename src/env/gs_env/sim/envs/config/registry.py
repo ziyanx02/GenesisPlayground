@@ -27,21 +27,6 @@ GenesisInitArgsRegistry["default"] = GenesisInitArgs(
 
 EnvArgsRegistry: dict[str, EnvArgs] = {}
 
-
-EnvArgsRegistry["pick_place_default"] = EnvArgs(
-    gs_init_args=GenesisInitArgsRegistry["default"],
-    scene_args=SceneArgsRegistry["flat_scene_default"],
-    robot_args=RobotArgsRegistry["piper_default"],
-    objects_args=[ObjectArgsRegistry["box_default"]],
-    sensors_args=[
-        SensorArgsRegistry["oak_camera_default"],
-        SensorArgsRegistry["ee_link_pos"],
-        SensorArgsRegistry["ee_link_quat"],
-        SensorArgsRegistry["joint_angles"],
-        SensorArgsRegistry["gripper_width"],
-    ],
-)
-
 EnvArgsRegistry["goal_reach_default"] = EnvArgs(
     gs_init_args=GenesisInitArgsRegistry["default"],
     scene_args=SceneArgsRegistry["flat_scene_default"],
@@ -58,5 +43,5 @@ EnvArgsRegistry["goal_reach_default"] = EnvArgs(
         "rew_actions": 0.0,
         "rew_keypoints": 1.0,
     },
-    img_resolution=None,
+    img_resolution=(480, 270),
 )

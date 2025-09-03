@@ -5,14 +5,13 @@ from typing import TypeAlias
 import genesis as gs
 import torch
 from gs_schemas.base_types import GenesisEnum, genesis_pydantic_config
-from pydantic import field_validator
-from pydantic.dataclasses import dataclass
+from pydantic import field_validator, BaseModel
 
 from gs_env.common.utils.asset_utils import get_urdf_path
 
 
-@dataclass(config=genesis_pydantic_config(frozen=True))
-class RigidMaterialArgs:
+class RigidMaterialArgs(BaseModel):
+    model_config = genesis_pydantic_config(frozen=True)
     rho: float
     friction: float | None
     needs_coup: bool
@@ -25,8 +24,8 @@ class RigidMaterialArgs:
     gravity_compensation: float
 
 
-@dataclass(config=genesis_pydantic_config(frozen=True))
-class URDFMorphArgs:
+class URDFMorphArgs(BaseModel):
+    model_config = genesis_pydantic_config(frozen=True)
     # Morph
     pos: tuple[float, float, float]
     euler: tuple[int, int, int]
@@ -54,24 +53,18 @@ class URDFMorphArgs:
 class CtrlType(GenesisEnum):
     # Arm Control Types
     JOINT_POSITION = "JOINT_POSITION"
-    JOINT_VELOCITY = "JOINT_VELOCITY"
-    JOINT_FORCE = "JOINT_FORCE"
-    #
     EE_POSE_ABS = "EE_POSE_ABS"  # Absolute pose
     EE_POSE_REL = "EE_POSE_REL"  # Delta pose from current EE pose
-    EE_VELOCITY = "EE_VELOCITY"
-    #
-    IMPEDANCE = "IMPEDANCE"
-    HYBRID = "HYBRID"
-
 
 class IKSolver(GenesisEnum):
     GS = "GS"  # Genesis Solver
     PIN = "PIN"  # Pinocchio Solver
 
 
-@dataclass(config=genesis_pydantic_config(frozen=True))
-class ManipulatorRobotArgs:
+
+class ManipulatorRobotArgs(BaseModel):
+    model_config = genesis_pydantic_config(frozen=True)
+
     material_args: RigidMaterialArgs
     morph_args: URDFMorphArgs
     visualize_contact: bool
@@ -94,75 +87,32 @@ class ManipulatorRobotArgs:
         return morph_args
 
 
-@dataclass(config=genesis_pydantic_config(frozen=True))
-class QuadrotorRobotArgs: ...
 
 
-@dataclass(config=genesis_pydantic_config(frozen=True))
-class QuadrupedRobotArgs: ...
 
-
-@dataclass(config=genesis_pydantic_config(frozen=True))
-class HumanoidRobotArgs: ...
-
-
-RobotArgs: TypeAlias = (
-    ManipulatorRobotArgs | QuadrotorRobotArgs | QuadrupedRobotArgs | HumanoidRobotArgs
-)
-
-
-@dataclass(config=genesis_pydantic_config(frozen=True))
-class JointPosAction:
-    """
-    Joint position action.
-    """
+class JointPosAction(BaseModel):
+    model_config = genesis_pydantic_config(frozen=True)
 
     gripper_width: float
     joint_pos: torch.Tensor  # (n_dof,)
 
 
-@dataclass(config=genesis_pydantic_config(frozen=True))
-class JointVelAction:
-    """
-    Joint velocity action.
-    """
-
-    gripper_width: float
-    joint_vel: torch.Tensor
-
-
-@dataclass(config=genesis_pydantic_config(frozen=True))
-class JointTorqueAction:
-    """
-    Joint torque action.
-    """
-
-    gripper_width: float
-    joint_force: torch.Tensor  # (n_dof,)
-
-
-@dataclass(config=genesis_pydantic_config(frozen=True))
-class EEPoseAbsAction:
-    """
-    End-effector pose absolute action.
-    """
+class EEPoseAbsAction(BaseModel):
+    model_config = genesis_pydantic_config(frozen=True)
 
     gripper_width: float
     ee_link_pos: torch.Tensor  # (3,)
     ee_link_quat: torch.Tensor  # (4,)
 
 
-@dataclass(config=genesis_pydantic_config(frozen=True))
-class EEPoseRelAction:
-    """
-    End-effector pose relative action.
-    """
+class EEPoseRelAction(BaseModel):
+    model_config = genesis_pydantic_config(frozen=True)
 
     gripper_width: float
-    ee_link_pos_delta: torch.Tensor  # (3,)
-    ee_link_ang_delta: torch.Tensor  # (3,)  # rpy
+    ee_link_pos: torch.Tensor  # (3,)
+    ee_link_quat: torch.Tensor  # (4,)
 
 
 BaseAction: TypeAlias = (
-    JointPosAction | JointVelAction | JointTorqueAction | EEPoseAbsAction | EEPoseRelAction
+    JointPosAction | EEPoseAbsAction | EEPoseRelAction
 )

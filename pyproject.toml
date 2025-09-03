@@ -69,7 +69,7 @@ required-environments = [
 # Map dependency names to workspace members (names must match [project].name)
 [tool.uv.sources]
 fairscale = { git = "https://github.com/facebookresearch/fairscale", rev = "146f160241651e1211c4247979f159a4ef43b54a" }
-genesis-world = { git = "https://github.com/Genesis-Embodied-AI/Genesis", rev = "094f8a2df68352c0bbdfcb362bec9ba8be5ce717" }
+genesis-world = { git = "https://github.com/Genesis-Embodied-AI/Genesis", rev = "5a8928a5e1b3d9e668bb2381ded44ef64357afb2" }
 gs-env    = { workspace = true }
 gs-agent  = { workspace = true }
 gs-schemas = { workspace = true }
