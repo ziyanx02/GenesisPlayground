@@ -18,6 +18,68 @@ ACTION_LOGPROBS = "action_logprobs"
 ADVANTAGES = "advantages"
 RETURNS = "returns"
 
+def compute_gae(
+    rewards: torch.Tensor,
+    values: torch.Tensor,
+    dones: torch.Tensor,
+    gamma: float = 0.99,
+    gae_lambda: float = 0.95,
+    final_value: torch.Tensor | None = None,
+    truncation_mask: torch.Tensor | None = None,  # optional, shape [T, B, 1]
+    normalize_advantages: bool = True,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Compute Generalized Advantage Estimation (GAE) with optional support for truncated episodes.
+
+    Args:
+        rewards: Reward object containing reward tensor [time_dim, batch_dim, 1]
+        values: StateValue object containing value tensor [time_dim, batch_dim, 1]
+        dones: Done object containing done flags [time_dim, batch_dim, 1]
+        gamma: Discount factor
+        gae_lambda: GAE lambda parameter
+        final_value: Final value estimate for bootstrapping [batch_dim, 1]. If None, uses zero.
+        truncation_mask: Optional mask tensor [time_dim, batch_dim, 1], where 1 indicates valid step and 0 indicates truncation.
+        normalize_advantages: Whether to normalize the advantages
+
+    Returns:
+        Tuple of (Advantage, Returns), both of shape [time_dim, batch_dim, 1]
+    """
+    masks = 1.0 - dones.float()  # Standard mask for episode termination
+
+    if truncation_mask is not None:
+        masks = (masks.bool() & truncation_mask.bool()).float()
+
+    time_dim, batch_dim, _ = rewards.shape
+
+    advantages = torch.zeros_like(rewards)
+    returns = torch.zeros_like(rewards)
+    gae = torch.zeros(batch_dim, 1, device=rewards.device, dtype=rewards.dtype)
+
+    # Append final value for bootstrapping
+    next_values = torch.cat(
+        [
+            values[1:],
+            (
+                final_value.unsqueeze(0)
+                if final_value is not None
+                else torch.zeros(1, batch_dim, 1, device=rewards.device)
+            ),
+        ],
+        dim=0,
+    )
+
+    # Compute deltas
+    deltas = rewards + gamma * next_values * masks - values
+
+    # Compute GAE in reverse
+    for t in reversed(range(time_dim)):
+        gae = deltas[t] + gamma * gae_lambda * masks[t] * gae
+        advantages[t] = gae
+        returns[t] = advantages[t] + values[t]
+
+    if normalize_advantages:
+        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+
+    return advantages, returns
 class GAEBuffer(BaseBuffer[OnPolicyTransition]):
     """
     A fixed-size buffer for storing rollouts for multi-env on-policy training,
@@ -60,6 +122,8 @@ class GAEBuffer(BaseBuffer[OnPolicyTransition]):
         # Track current size dynamically
         self._idx, self._idx_hidden = 0, 0
 
+        self._final_value = None
+
         # Initialize buffer
         self._buffer = self._init_buffers(actor_obs_size, action_size)
 
@@ -73,8 +137,6 @@ class GAEBuffer(BaseBuffer[OnPolicyTransition]):
                 DONES: torch.zeros(max_steps, num_envs, 1).byte(),
                 VALUES: torch.zeros(max_steps, num_envs, 1),
                 ACTION_LOGPROBS: torch.zeros(max_steps, num_envs, 1),
-                ADVANTAGES: torch.zeros(max_steps, num_envs, 1),
-                RETURNS: torch.zeros(max_steps, num_envs, 1),
             },
             batch_size=[self._max_steps, self._num_envs],
             device=self._device,
@@ -84,6 +146,7 @@ class GAEBuffer(BaseBuffer[OnPolicyTransition]):
 
     def reset(self):
         self._idx = 0
+        self._final_value = None
 
     def append(self, transition: OnPolicyTransition) -> None:
         if self._idx >= self._max_steps:
@@ -96,31 +159,20 @@ class GAEBuffer(BaseBuffer[OnPolicyTransition]):
         self._buffer[VALUES][idx] = transition.value
         self._buffer[ACTION_LOGPROBS][idx] = transition.log_prob.unsqueeze(-1)
 
-        self._buffer[ADVANTAGES][idx].zero_()  # Initialize advantages to zero
-        self._buffer[RETURNS][idx].zero_()  # Initialize returns to zero
-
         # Increment index
         self._idx += 1
 
-    @torch.no_grad()
-    def compute_gae(self, last_value: torch.Tensor) -> None:
-        assert self._idx == self._max_steps, "Buffer must be full to compute GAE."
-        # shape: (max_steps+1, num_envs, 1)
-        vals = torch.cat([self._buffer[VALUES], last_value.unsqueeze(0)], dim=0)
-        masks = 1.0 - self._buffer[DONES].float()
-        deltas = self._buffer[REWARDS] + self._gae_gamma * masks * vals[1:] - vals[:-1]
-        # backward recursion
-        advantage = torch.zeros_like(last_value)
-        for t in reversed(range(self._max_steps)):
-            advantage = deltas[t] + self._gae_gamma * self._gae_lam * masks[t] * advantage
-            self._buffer[ADVANTAGES][t] = advantage
-        self._buffer[RETURNS] = self._buffer[ADVANTAGES] + self._buffer[VALUES]
 
-        # normalize
-        if self._normalize_adv:
-            adv_mean = self._buffer[ADVANTAGES].mean()
-            adv_std = self._buffer[ADVANTAGES].std()
-            self._buffer[ADVANTAGES] = (self._buffer[ADVANTAGES] - adv_mean) / (adv_std + 1e-8)
+    def set_final_value(self, final_value: torch.Tensor) -> None:
+        """Set the final value for bootstrapping incomplete episodes.
+
+        This is used to bootstrap the value function for episodes that didn't
+        naturally terminate, which is important for short horizon policy updates.
+
+        Args:
+            final_value: Value estimate for the final observation [B, 1]
+        """
+        self._final_value = final_value
 
     def is_full(self):
         return self._idx >= self._max_steps
@@ -128,19 +180,45 @@ class GAEBuffer(BaseBuffer[OnPolicyTransition]):
     def __len__(self):
         return self._idx * self._num_envs
 
-    def minibatch_gen(self, num_mini_batches: int, num_epochs: int):
-        buffer_size = self._idx * self._num_envs
-        indices = torch.randperm(buffer_size)
-        # Calculate the size of each mini-batch
-        batch_size = self._idx * self._num_envs // num_mini_batches
-        # Shuffle indices for mini-batch sampling
-        for _ in range(num_epochs):
-            for start in range(0, len(indices), batch_size):
-                end = start + batch_size
-                mb_indices = indices[start:end]
-                # Yield a mini-batch of data
-                batch = {
-                    key: value.view(-1, *value.shape[2:])[mb_indices]
-                    for key, value in self._buffer.items()
-                }
-                yield OnPolicyMiniBatch(**batch)
+    def minibatch_gen(self, num_mini_batches: int, num_epochs: int, shuffle: bool = True):
+        advantages, returns = compute_gae(
+            rewards=self._buffer[REWARDS],
+            values=self._buffer[VALUES],
+            dones=self._buffer[DONES],
+            final_value=self._final_value,
+            gamma=self._gae_gamma,
+            gae_lambda=self._gae_lam,
+        )
+
+        # Get total number of timesteps and batch size
+        total_samples = self._max_steps * self._num_envs
+        # Create indices for all samples on the same device as the tensors
+        base_indices = torch.arange(total_samples, device=self._device)
+
+        for _epoch in range(num_epochs):
+            # Split into minibatches
+            if shuffle:
+                perm_indices = base_indices[torch.randperm(total_samples, device=self._device)]
+            else:
+                perm_indices = base_indices
+
+            buckets = torch.tensor_split(perm_indices, num_mini_batches)  # not torch.split here
+            for bucket in buckets:
+                if bucket.numel() == 0:
+                    continue
+
+                t_idx = bucket // self._num_envs
+                b_idx = bucket % self._num_envs
+                mini_batch_size = bucket.numel()
+
+                # Extract tensors for the batch
+                yield OnPolicyMiniBatch(
+                    obs=self._buffer[ACTOR_OBS][t_idx, b_idx].reshape(mini_batch_size, -1),
+                    act=self._buffer[ACTIONS][t_idx, b_idx].reshape(mini_batch_size, -1),
+                    rew=self._buffer[REWARDS][t_idx, b_idx].reshape(mini_batch_size, -1),
+                    done=self._buffer[DONES][t_idx, b_idx].reshape(mini_batch_size, -1),
+                    value=self._buffer[VALUES][t_idx, b_idx].reshape(mini_batch_size, -1),
+                    log_prob=self._buffer[ACTION_LOGPROBS][t_idx, b_idx].reshape(mini_batch_size, -1),
+                    advantage=advantages[t_idx, b_idx].reshape(mini_batch_size, -1),
+                    returns=returns[t_idx, b_idx].reshape(mini_batch_size, -1),
+                )

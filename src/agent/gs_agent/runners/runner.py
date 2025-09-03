@@ -68,8 +68,8 @@ class Runner(BaseRunner):
             train_one_episode_metrics = self.algorithm.train_one_episode()
 
             total_episodes += 1
-            total_steps += train_one_episode_metrics.speed.rollout_steps
-            reward_list.append(train_one_episode_metrics.rollout.mean_reward)
+            # total_steps += train_one_episode_metrics.speed.rollout_steps
+            # reward_list.append(train_one_episode_metrics.rollout.mean_reward)
 
             # Logging
             if episode % self.args.log_interval == 0:
@@ -113,7 +113,7 @@ class Runner(BaseRunner):
                     metric_logger.record(f"{metric_name}/{k}", v)
                 else:
                     print(f"Invalid metric type: {type(value)}")
-        metric_logger.log(step=step)
+        metric_logger.dump(step=step)
 
     def _save_checkpoint(self, filename: str) -> None:
         """Save a checkpoint of the algorithm.

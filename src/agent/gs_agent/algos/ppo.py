@@ -130,7 +130,7 @@ class PPO(BaseAlgo):
         #
         with torch.no_grad():
             last_value = self._critic(self.env.get_observations())
-        self._rollouts.compute_gae(last_value)
+            self._rollouts.set_final_value(last_value.unsqueeze(-1))
 
     def train_one_batch(self, mini_batch: OnPolicyMiniBatch) -> dict[str, Any]:
         old_log_probs = torch.squeeze(mini_batch.log_prob)
@@ -140,7 +140,7 @@ class PPO(BaseAlgo):
         ratio = torch.exp(new_log_probs - old_log_probs)
         surr1 = -torch.squeeze(batch_adv) * ratio
         surr2 = -torch.squeeze(batch_adv) * torch.clamp(
-            ratio, 1.0 - self.cfg.policy.clip_ratio, 1.0 + self.cfg.policy.clip_ratio
+            ratio, 1.0 - self.cfg.clip_ratio, 1.0 + self.cfg.clip_ratio
         )
         policy_loss = torch.max(surr1, surr2).mean()
 
@@ -165,16 +165,8 @@ class PPO(BaseAlgo):
         #             param_group["lr"] = self.learning_rate
 
         # Calculate value loss
-        values = self._critic(mini_batch.critic_obs)
-        if self.cfg.critic.clip_value_loss:
-            value_clipped = mini_batch.value + (values - mini_batch.value).clamp(
-                -self.cfg.clip_param, self.cfg.clip_param
-            )
-            value_losses = (values - mini_batch.returns).pow(2)
-            value_losses_clipped = (value_clipped - mini_batch.returns).pow(2)
-            value_loss = torch.max(value_losses, value_losses_clipped).mean()
-        else:
-            value_loss = (mini_batch.returns - values).pow(2).mean()
+        values = self._critic(mini_batch.obs)
+        value_loss = (mini_batch.returns - values).pow(2).mean()
 
         # Calculate entropy loss
         entropy = self._actor.entropy_on(mini_batch.obs)
@@ -183,7 +175,7 @@ class PPO(BaseAlgo):
         # Total loss
         total_loss = (
             policy_loss
-            + self.cfg.critic.value_loss_coef * value_loss
+            + self.cfg.value_loss_coef * value_loss
             - self.cfg.entropy_coef * entropy_loss
         )
 
@@ -219,8 +211,6 @@ class PPO(BaseAlgo):
         return metrics
 
 
-
-
     def save(self, path, infos=None):
         saved_dict = {
             "model_state_dict": self._actor.state_dict(),
@@ -228,9 +218,6 @@ class PPO(BaseAlgo):
             "critic_optimizer_state_dict": self._critic_optimizer.state_dict(),
             "iter": self.current_iter,
         }
-        if self.cfg.norm_obs:
-            saved_dict["actor_obs_normalizer"] = self.actor_obs_normalizer.state_dict()
-            saved_dict["critic_obs_normalizer"] = self.critic_obs_normalizer.state_dict()
         if infos is not None:
             saved_dict.update(infos)
         torch.save(saved_dict, path)
