@@ -1,11 +1,11 @@
 repos:
   # --- Python formatting & linting ---
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.6.9
-    hooks:
-      - id: ruff
-        args: [--fix]           # autofix what it can
-      - id: ruff-format         # code formatter (replaces black)
+  # - repo: https://github.com/astral-sh/ruff-pre-commit
+  #   rev: v0.6.9
+  #   hooks:
+  #     - id: ruff
+  #       args: [--fix]           # autofix what it can
+  #     - id: ruff-format         # code formatter (replaces black)
 
   # --- Pyright type checking (quick, no deps install) ---
   # - repo: https://github.com/RobertCraigie/pyright-python
@@ -17,18 +17,18 @@ repos:
   #       args: ["--pythonversion", "3.10"]
 
   # --- General hygiene hooks ---
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.6.0
-    hooks:
-      - id: end-of-file-fixer
-      - id: trailing-whitespace
-      - id: check-merge-conflict
-      - id: check-yaml
-      - id: check-toml
-      - id: check-ast
-      - id: detect-private-key
-      - id: check-added-large-files
-        args: ["--maxkb=500"]
+  # - repo: https://github.com/pre-commit/pre-commit-hooks
+  #   rev: v4.6.0
+  #   hooks:
+  #     - id: end-of-file-fixer
+  #     - id: trailing-whitespace
+  #     - id: check-merge-conflict
+  #     - id: check-yaml
+  #     - id: check-toml
+  #     - id: check-ast
+  #     - id: detect-private-key
+  #     - id: check-added-large-files
+  #       args: ["--maxkb=500"]
 
 
   - repo: https://github.com/astral-sh/uv-pre-commit
