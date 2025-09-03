@@ -1,16 +1,12 @@
-import os
+
 import statistics
 import time
 from collections import deque
 from typing import Final, Any
-import numpy as np
 import torch
 import torch.nn as nn
-from tensordict import TensorDict
 
 from gs_agent.buffers.gae_buffer import GAEBuffer
-from gs_agent.buffers.transition import OnPolicyTransition
-from gs_agent.buffers.mini_batches import OnPolicyMiniBatch
 from gs_agent.configs.schema import PPOArgs
 from gs_agent.modules.policies import GaussianPolicy
 from gs_agent.modules.critics import StateValueFunction
@@ -198,7 +194,7 @@ class PPO(BaseAlgo):
         rollout_infos = self._collect_rollouts(num_steps=self._num_steps)
         t1 = time.time()
         rollouts_time = t1 - t0
-        fps = (self._num_steps / rollouts_time) if rollouts_time > 0 else 0
+        fps = (self._num_steps * self._num_envs / rollouts_time) if rollouts_time > 0 else 0
 
         train_metrics_list: list[dict[str, Any]] = []
         for mini_batch in self._rollouts.minibatch_gen(
@@ -227,6 +223,7 @@ class PPO(BaseAlgo):
                 "rollout_time": rollouts_time,
                 "rollout_fps": fps,
                 "train_time": train_time,
+                "rollout_step": self._num_steps * self._num_envs,
             },
         }
         return episode_infos

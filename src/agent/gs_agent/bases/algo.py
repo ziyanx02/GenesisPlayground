@@ -3,6 +3,7 @@ from typing import Any
 from typing import Final
 from gs_agent.bases.env_wrapper import BaseEnvWrapper
 from gs_agent.bases.policy import Policy
+from pathlib import Path
 
 import torch
 
@@ -39,14 +40,14 @@ class BaseAlgo(ABC):
         ...
     
     @abstractmethod
-    def save(self, path: str) -> None:
+    def save(self, path: Path) -> None:
         """
         Save the algorithm to a file.
         """
         ...
     
     @abstractmethod
-    def load(self, path: str) -> None:
+    def load(self, path: Path) -> None:
         """
         Load the algorithm from a file.
         """

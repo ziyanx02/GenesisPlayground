@@ -3,7 +3,7 @@ from tensordict import TensorDict
 
 from gs_agent.bases.buffer import BaseBuffer
 from typing import Final
-from typing import Generator
+from typing import Iterator
 
 
 _DEFAULT_DEVICE: Final[torch.device] = torch.device("cpu")
@@ -179,7 +179,7 @@ class GAEBuffer(BaseBuffer):
     def __len__(self):
         return self._idx * self._num_envs
 
-    def minibatch_gen(self, num_mini_batches: int, num_epochs: int, shuffle: bool = True) -> Generator[dict[str, torch.Tensor]]:
+    def minibatch_gen(self, num_mini_batches: int, num_epochs: int, shuffle: bool = True) -> Iterator[dict[str, torch.Tensor]]:
         advantages, returns = compute_gae(
             rewards=self._buffer[REWARDS],
             values=self._buffer[VALUES],

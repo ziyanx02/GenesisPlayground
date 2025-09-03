@@ -12,7 +12,7 @@ from gs_agent.bases.policy import Policy
 
 _DEFAULT_DEVICE: Final[torch.device] = torch.device("cpu")
 
-class Runner(BaseRunner):
+class OnPolicyRunner(BaseRunner):
     """Abstract base class for on-policy algorithm runners.
 
     This class provides a high-level interface for training on-policy algorithms
@@ -68,7 +68,7 @@ class Runner(BaseRunner):
             train_one_episode_metrics = self.algorithm.train_one_episode()
 
             total_episodes += 1
-            total_steps += train_one_episode_metrics["rollout"]["rollout_steps"]
+            total_steps += train_one_episode_metrics["speed"]["rollout_step"]
             reward_list.append(train_one_episode_metrics["rollout"]["mean_reward"])
 
             # Logging
@@ -115,7 +115,7 @@ class Runner(BaseRunner):
                     print(f"Invalid metric type: {type(value)}")
         metric_logger.dump(step=step)
 
-    def _save_checkpoint(self, filename: str) -> None:
+    def _save_checkpoint(self, filename: Path) -> None:
         """Save a checkpoint of the algorithm.
 
         Args:
@@ -126,15 +126,15 @@ class Runner(BaseRunner):
         self.algorithm.save(checkpoint_path)
         print(f"Checkpoint saved: {checkpoint_path}")
 
-    def load_checkpoint(self, checkpoint_path: str | Path) -> None:
+    def load_checkpoint(self, path: Path) -> None:
         """Load a checkpoint of the algorithm.
 
         Args:
             checkpoint_path: Path to the checkpoint file
         """
-        self.algorithm.load(Path(checkpoint_path))
-        print(f"Checkpoint loaded: {checkpoint_path}")
+        self.algorithm.load(path)
+        print(f"Checkpoint loaded: {path}")
 
-    def get_policy(self) -> Policy:
+    def get_inference_policy(self) -> Policy:
         """Get the trained policy for inference."""
-        return self.algorithm.get_policy()
+        return self.algorithm.get_inference_policy()
