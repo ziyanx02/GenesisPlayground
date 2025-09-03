@@ -8,9 +8,10 @@ from loguru import logger
 
 from gs_agent.bases.algo import BaseAlgo
 from gs_agent.bases.runner import BaseRunner
+from gs_agent.configs.schema import RunnerArgs
+from gs_agent.bases.policy import Policy
 
 _DEFAULT_DEVICE: Final[torch.device] = torch.device("cpu")
-
 
 class Runner(BaseRunner):
     """Abstract base class for on-policy algorithm runners.
@@ -22,7 +23,7 @@ class Runner(BaseRunner):
     def __init__(
         self,
         algorithm: BaseAlgo,
-        runner_args: RunnerConfig,
+        runner_args: RunnerArgs,
         device: torch.device = _DEFAULT_DEVICE,
     ) -> None:
         """Initialize the on-policy runner.
@@ -33,7 +34,7 @@ class Runner(BaseRunner):
             device: Device to run training on
         """
         super().__init__()
-        self.args: Final[RunnerConfig] = runner_args
+        self.args: Final[RunnerArgs] = runner_args
 
         # Create save directory
         self.save_dir: Final[Path] = self.args.save_path / datetime.datetime.now().strftime(
@@ -45,7 +46,7 @@ class Runner(BaseRunner):
 
         logger.info(f"OnPolicyRunner initialized with save path: {self.args.save_path}")
 
-    def train(self, metric_logger: Any) -> dict:
+    def train(self, metric_logger: Any) -> dict[str, Any]:
         """Train the algorithm for a specified number of episodes.
 
         Args:
@@ -90,7 +91,7 @@ class Runner(BaseRunner):
     def _log_metrics(
         self,
         metric_logger: Any,
-        metrics: TrainOneEpisodeInfo,
+        metrics: dict[str, Any],
         step: int,
         prefix: str = "",
     ) -> None:
@@ -102,8 +103,7 @@ class Runner(BaseRunner):
             step: Current training step
             prefix: Optional prefix for metric names
         """
-        data_dict = metrics.model_dump()
-        for key, value in data_dict.items():
+        for key, value in metrics.items():
             metric_name = f"{prefix}{key}" if prefix else key
             if not isinstance(value, dict):
                 continue

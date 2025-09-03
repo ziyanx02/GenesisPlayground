@@ -1,14 +1,14 @@
 from abc import ABC, abstractmethod
 from gs_agent.bases.env_wrapper import BaseEnvWrapper
 from typing import Any
-import torch
+from gs_agent.bases.policy import Policy
 
 class BaseRunner(ABC):
     def __init__(self):
         ...
 
     @abstractmethod
-    def train(self, metric_logger: Any) -> dict:
+    def train(self, metric_logger: Any) -> dict[str, Any]:
         """
         Train the algorithm for a given number of episodes.
         """

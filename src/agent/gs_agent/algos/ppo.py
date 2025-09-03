@@ -2,7 +2,7 @@ import os
 import statistics
 import time
 from collections import deque
-
+from typing import Final
 import numpy as np
 import torch
 import torch.nn as nn
@@ -10,22 +10,25 @@ from tensordict import TensorDict
 
 from gs_agent.buffers.gae_buffer import GAEBuffer
 from gs_agent.buffers.transition import PPOTransition
-from gs_agent.configs.ppo_cfg import PPOConfig
-from gs_agent.modules.actor_critic import ActorCritic, ActorCriticRecurrent
-from gs_agent.modules.normalizer import EmpiricalNormalization
+from gs_agent.configs.schema import PPOArgs
+from gs_agent.modules.policies import GaussianPolicy
+from gs_agent.modules.critics import StateValueFunction, QValueFunction
+from gs_agent.modules.models import NetworkFactory
 from gs_agent.utils.logger import configure as logger_configure
 from gs_agent.bases.algo import BaseAlgo
 from gs_agent.bases.env_wrapper import BaseEnvWrapper
 
+_DEFAULT_DEVICE: Final[torch.device] = torch.device("cpu")
+_DEQUE_MAXLEN: Final[int] = 100
+"""Max length of the deque for storing episode statistics."""
 
 class PPO(BaseAlgo):
     """
     Proximal Policy Optimization (PPO) algorithm implementation.
     """
 
-    def __init__(self, env: BaseEnvWrapper, cfg: PPOConfig, device: torch.device):
+    def __init__(self, env: BaseEnvWrapper, cfg: PPOArgs, device: torch.device = _DEFAULT_DEVICE):
         super().__init__(env, cfg, device)
-
         self._actor_obs_dim = self.env.actor_obs_dim
         self._critic_obs_dim = self.env.critic_obs_dim
         self._action_dim = self.env.action_dim
@@ -33,32 +36,44 @@ class PPO(BaseAlgo):
         self._rgb_shape = self.env.rgb_shape
 
         self._num_envs = self.env.num_envs
-        self._num_steps = cfg.runner.num_steps_per_env
+        self._num_steps = cfg.rollout_length
 
         self.current_iter = 0
-        self.desired_kl = self.cfg.algo.desired_kl
+        self.desired_kl = self.cfg.target_kl
 
-        self._init()
+        #
+        self._build_actor_critic()
+        self._build_rollouts()
 
-    def _init(self):
-        if not self.cfg.policy.use_rnn:
-            self._actor_critic = ActorCritic(
-                actor_input_dim=self._actor_obs_dim,
-                critic_input_dim=self._critic_obs_dim,
-                act_dim=self._action_dim,
-                cfg=self.cfg,
-            ).to(self.device) # type: ignore
-        else:
-            self._actor_critic = ActorCriticRecurrent(
-                actor_input_dim=self._actor_obs_dim,
-                critic_input_dim=self._critic_obs_dim,
-                act_dim=self._action_dim,
-                cfg=self.cfg,
-                rnn_type=self.cfg.policy.rnn_type,
-                rnn_num_layers=self.cfg.policy.rnn_num_layers,
-                rnn_hidden_size=self.cfg.policy.rnn_hidden_size,
-            ).to(self.device)
+    def _build_actor_critic(self):
+        policy_backbone = NetworkFactory.create_network(
+            network_backbone_args=self.cfg.policy.policy_backbone,
+            input_dim=self._actor_obs_dim,
+            output_dim=self._action_dim,
+            device=self.device,
+        )
+        print(f"Policy backbone: {policy_backbone}")
 
+        self._actor_critic = GaussianPolicy(
+            policy_backbone=policy_backbone,
+            action_dim=self._action_dim,
+        ).to(self.device) # type: ignore
+        self._actor_optimizer = torch.optim.Adam(self._actor_critic.parameters(), lr=self.cfg.lr)
+
+        critic_backbone = NetworkFactory.create_network(
+            network_backbone_args=self.cfg.critic.critic_backbone,
+            input_dim=self._critic_obs_dim,
+            output_dim=1,
+            device=self.device,
+        )
+        print(f"Critic backbone: {critic_backbone}")
+        self._critic = StateValueFunction(critic_backbone).to(self.device)
+        self._critic_optimizer = torch.optim.Adam(self._critic.parameters(), lr=self.cfg.value_lr)
+
+        self.actor_obs_normalizer = torch.nn.Identity().to(self.device)  # no normalization
+        self.critic_obs_normalizer = torch.nn.Identity().to(self.device)  # no normalization
+
+    def _build_rollouts(self):
         self._rollouts = GAEBuffer(
             num_envs=self._num_envs,
             max_steps=self._num_steps,
@@ -66,31 +81,11 @@ class PPO(BaseAlgo):
             critic_obs_size=self._critic_obs_dim,
             action_size=self._action_dim,
             device=self.device,
-            gae_gamma=self.cfg.algo.gae_gamma,
-            gae_lam=self.cfg.algo.gae_lambda,
-            img_res=self.env.img_resolution,
-        )
-
-        if self.cfg.policy.norm_obs:
-            print("Using Empirical Normalization!")
-            self.actor_obs_normalizer = EmpiricalNormalization(
-                shape=(self._actor_obs_dim,), until=1e6
-            ).to(self.device)
-            self.critic_obs_normalizer = EmpiricalNormalization(
-                shape=(self._critic_obs_dim,), until=1e6
-            ).to(self.device)
-        else:
-            self.actor_obs_normalizer = torch.nn.Identity().to(self.device)  # no normalization
-            self.critic_obs_normalizer = torch.nn.Identity().to(self.device)  # no normalization
-
-        # Initialize optimizer
-        self._optimizer = torch.optim.Adam(
-            self.actor_critic.parameters(), lr=self.cfg.algo.learning_rate
         )
 
     def train(self, num_iters: int, log_dir: str | None = None):
         self._lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            self._optimizer, T_max=num_iters, eta_min=self.cfg.algo.learning_rate * 0.1
+            self._actor_optimizer, T_max=num_iters, eta_min=self.cfg.lr * 0.1
         )
 
         # initialize writer
@@ -138,7 +133,7 @@ class PPO(BaseAlgo):
 
                     self._update_transition(reward, done, extra_infos, transition)
 
-                    if logger is not None:
+                    if logger is not None: # type: ignore
                         curr_reward_sum += reward
                         curr_ep_len += 1
                         new_ids = (done > 0).nonzero(as_tuple=False)
@@ -151,7 +146,7 @@ class PPO(BaseAlgo):
                 collection_time = stop - start
                 #
                 start = stop
-                last_value = self._actor_critic.get_value(critic_obs).detach()
+                last_value = self._critic(critic_obs).detach()
                 self._rollouts.compute_gae(last_value)
 
             # Update policy by optimizing PPO objective
@@ -334,10 +329,10 @@ class PPO(BaseAlgo):
             )
 
             # Optimization step
-            self._optimizer.zero_grad()
+            self._actor_optimizer.zero_grad()
             total_loss.backward()
-            nn.utils.clip_grad_norm_(self.actor_critic.parameters(), self.cfg.algo.max_grad_norm)
-            self._optimizer.step()
+            nn.utils.clip_grad_norm_(self._actor_critic.parameters(), self.cfg.algo.max_grad_norm)
+            self._actor_optimizer.step()
 
             # Log losses
             total_pg_loss += [policy_loss.item()]
@@ -356,7 +351,7 @@ class PPO(BaseAlgo):
             "optimizer_state_dict": self._optimizer.state_dict(),
             "iter": self.current_iter,
         }
-        if self.cfg.policy.norm_obs:
+        if self.cfg.norm_obs:
             saved_dict["actor_obs_normalizer"] = self.actor_obs_normalizer.state_dict()
             saved_dict["critic_obs_normalizer"] = self.critic_obs_normalizer.state_dict()
         if infos is not None:
@@ -367,9 +362,9 @@ class PPO(BaseAlgo):
         checkpoint = torch.load(path)
         self._actor_critic.load_state_dict(checkpoint["model_state_dict"])
         if load_optimizer:
-            self._optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+            self._actor_optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         self._current_iter = checkpoint["iter"]
-        if self.cfg.policy.norm_obs:
+        if self.cfg.norm_obs:
             self.actor_obs_normalizer.load_state_dict(checkpoint["actor_obs_normalizer"])
             self.critic_obs_normalizer.load_state_dict(checkpoint["critic_obs_normalizer"])
         return checkpoint.get("infos", None)
