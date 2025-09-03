@@ -1,8 +1,8 @@
 import abc
+from typing import Any
 
 import torch
 
-import gs_env.common.bases.spaces as spaces
 
 
 class BaseGymRobot(abc.ABC):
@@ -10,7 +10,8 @@ class BaseGymRobot(abc.ABC):
     Abstract base class for robots in a gym-like environment.
     """
 
-    _action_space: spaces.Space
+    # TODO
+    _action_space: Any
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)  # calls AgentHostMixin.__init__
@@ -34,5 +35,5 @@ class BaseGymRobot(abc.ABC):
         """
 
     @property
-    def action_space(self) -> spaces.Space:
+    def action_space(self) -> Any:
         return self._action_space

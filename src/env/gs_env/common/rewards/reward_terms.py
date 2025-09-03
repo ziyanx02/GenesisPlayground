@@ -110,17 +110,11 @@ class PoseDist(RewardTerm):
     required_keys = ("pose_a", "pose_b")
 
     def _compute(self, pose_a: torch.Tensor, pose_b: torch.Tensor) -> torch.Tensor:
-        # pos_a, quat_a = pose_a[:, :3], pose_a[:, 3:]
-        # pos_b, quat_b = pose_b[:, :3], pose_b[:, 3:]
-
-        # dist_pos = torch.norm(pos_a - pos_b, p=2, dim=-1)
-        # dist_quat = self._quat_err(quat_a, quat_b)
-        raise NotImplementedError("Quaternion distance calculation is not implemented yet.")
+        ...
 
     @staticmethod
     def _quat_err(quat_a: torch.Tensor, quat_b: torch.Tensor) -> torch.Tensor:
         """
         Compute the quaternion error between two quaternions.
         """
-        # proper calculation of quaternion distance
-        # TODO:
+        ...

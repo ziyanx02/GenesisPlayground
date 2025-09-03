@@ -1,8 +1,7 @@
 from abc import ABC, abstractmethod
 
 import torch
-
-import gs_env.common.bases.spaces as spaces
+from typing import Any
 
 
 class BaseGymEnv(ABC):
@@ -10,24 +9,25 @@ class BaseGymEnv(ABC):
     Abstract base class for Gym-like environments using TensorDict.
     """
 
-    _observation_space: spaces.Space
-    _action_space: spaces.Space
-    _info_space: spaces.Space
+    # TODO
+    _observation_space: Any
+    _action_space: Any
+    _info_space: Any
     _num_env: int
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
 
     @property
-    def observation_space(self) -> spaces.Space:
+    def observation_space(self) -> Any:
         return self._observation_space
 
     @property
-    def action_space(self) -> spaces.Space:
+    def action_space(self) -> Any:
         return self._action_space
 
     @property
-    def info_space(self) -> spaces.Space:
+    def info_space(self) -> Any:
         return self._info_space
 
     @property
@@ -39,7 +39,7 @@ class BaseGymEnv(ABC):
         """
         Reset the environment and return the initial observation as a TensorDict.
         """
-        pass
+        ...
 
     @abstractmethod
     def step(self, action: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, dict]:
@@ -50,7 +50,7 @@ class BaseGymEnv(ABC):
         - 'done'
         - 'info'
         """
-        pass
+        ...
 
     @property
     @abstractmethod
@@ -58,7 +58,7 @@ class BaseGymEnv(ABC):
         """
         The number of actions available in the action space.
         """
-        pass
+        ...
 
     @property
     @abstractmethod
@@ -66,7 +66,7 @@ class BaseGymEnv(ABC):
         """
         The dimension of the actor's observation space.
         """
-        pass
+        ...
 
     @property
     @abstractmethod
@@ -74,4 +74,4 @@ class BaseGymEnv(ABC):
         """
         The dimension of the critic's observation space.
         """
-        pass
+        ...

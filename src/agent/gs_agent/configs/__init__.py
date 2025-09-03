@@ -1,7 +1,7 @@
-from .bc_cfg import get_bc_config
-from .ppo_cfg import get_ppo_config
+from .registry import *
 
 __all__ = [
-    "get_ppo_config",
-    "get_bc_config",
+    "PPO_DEFAULT",
+    "RUNNER_DEFAULT",
+    "RUNNER_PENDULUM_MLP",
 ]

@@ -12,7 +12,7 @@ from gs_agent.bases.runner import BaseRunner
 _DEFAULT_DEVICE: Final[torch.device] = torch.device("cpu")
 
 
-class OnPolicyRunner(BaseRunner):
+class Runner(BaseRunner):
     """Abstract base class for on-policy algorithm runners.
 
     This class provides a high-level interface for training on-policy algorithms

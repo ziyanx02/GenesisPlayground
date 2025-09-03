@@ -1,67 +1,168 @@
-from pydantic.dataclasses import dataclass
+"""Core configuration schemas for the Genesis RL library.
 
-from gs_agent.configs.schema import genesis_pydantic_config
+This module defines the fundamental Pydantic dataclasses for configuring
+RL algorithms, environments, networks, and training parameters.
+"""
 
+from pathlib import Path
+from typing import Literal
 
-@dataclass(config=genesis_pydantic_config(frozen=False))
-class AlgoConfig:
-    value_coef: float = 1.0  # Value loss coefficient
-    ent_coef: float = 0.0  # Entropy coefficient
-    clip_param: float = 0.2
-    clip_value_loss: bool = True
-    gae_gamma: float = 0.98
-    gae_lambda: float = 0.95
-    max_grad_norm: float = 1.0
-    learning_rate: float = 3e-4
-    schedule: str = "fixed"
-    desired_kl: float = 0.01
-    num_epochs: int = 10
-    num_mini_batches: int = 4
+from gs_schemas.base_types import GenesisEnum, genesis_pydantic_config
+from pydantic import BaseModel, Field, NonNegativeFloat, NonNegativeInt, PositiveFloat
+
+# ============================================================================
+# Enums
+# ============================================================================
 
 
-@dataclass(config=genesis_pydantic_config(frozen=False))
-class PolicyConfig:
-    # actor-critic (mlp head)
-    activation: str = "relu"
-    actor_hidden: tuple[int, ...] = (256, 256, 128)
-    critic_hidden: tuple[int, ...] = (256, 256, 128)
-    init_noise_std: float = 1.0
-    norm_obs: bool = False
+class BackendType(GenesisEnum):
+    """Backend types for RL computations."""
 
-    # rnn
-    use_rnn: bool = False
-    rnn_type: str = "gru"  # "lstm" / "gru"
-    rnn_hidden_size: int = 256
-    rnn_num_layers: int = 1
-
-    # cnn
-    use_cnn: bool = False
+    CPU = "cpu"
+    CUDA = "cuda"
+    MPS = "mps"
 
 
-@dataclass(config=genesis_pydantic_config(frozen=False))
-class RunnerConfig:
-    num_steps_per_env: int = 24
-    max_iterations: int = 1000
-    save_interval: int = 100
-    log_interval: int = 10
-    logger: str = "tensorboard"
+class AlgorithmType(GenesisEnum):
+    """Supported RL algorithm types."""
+
+    PPO = "ppo"
+
+
+class NetworkBackboneType(GenesisEnum):
+    MLP = "mlp"
+    RNN = "rnn"
+    CNN = "cnn"
+
+
+class OptimizerType(GenesisEnum):
+    ADAM = "adam"
+    ADAMW = "adamw"
+    SGD = "sgd"
+
+
+class ActivationType(GenesisEnum):
+    RELU = "relu"
+    TANH = "tanh"
+    GELU = "gelu"
+    SWISH = "swish"
+
+
+class PolicyType(GenesisEnum):
+    GAUSSIAN = "gaussian"
+
+
+class ValueFunctionType(GenesisEnum):
+    STATE_VALUE = "state_value"
+    Q_VALUE = "state_action_value"
+
+
+class ActorCriticType(GenesisEnum):
+    PPO = "ppo"
+
+
+# ============================================================================
+# Base Configuration
+# ============================================================================
+
+
+class GenesisRLInitArgs(BaseModel):
+    """Initialization arguments for Genesis RL library."""
+
+    model_config = genesis_pydantic_config(frozen=True)
+
+    seed: int = 0
+    precision: Literal["float32", "float64"] = "float32"
+    backend: BackendType | None = None
+    """None means auto-detect"""
+
+
+# ============================================================================
+# Network Configuration
+# ============================================================================
+
+
+class MLPConfig(BaseModel):
+    """Configuration for Multi-Layer Perceptron networks."""
+
+    model_config = genesis_pydantic_config(frozen=True)
+
+    hidden_dims: tuple[int, ...] = (256, 256, 128)
+    activation: ActivationType = ActivationType.RELU
 
     #
-    video_record: bool = False
-    video_interval: int = 100
-    RESOLUTION: tuple[int, int] = (320, 240)
-    video_folder: str = "videos"
+    network_type: NetworkBackboneType = NetworkBackboneType.MLP
 
 
-@dataclass(config=genesis_pydantic_config(frozen=False))
-class PPOConfig:
-    algo: AlgoConfig = AlgoConfig()
-    policy: PolicyConfig = PolicyConfig()
-    runner: RunnerConfig = RunnerConfig()
+NetworkBackboneConfig = MLPConfig
 
 
-def get_ppo_config() -> PPOConfig:
-    """
-    Returns a default PPO configuration.
-    """
-    return PPOConfig()
+# ============================================================================
+# Algorithm Configuration
+# ============================================================================
+
+
+class PPOArgs(BaseModel):
+    """Configuration for PPO algorithm."""
+
+    model_config = genesis_pydantic_config(frozen=True)
+
+    # Algorithm type
+    algorithm_type: AlgorithmType = AlgorithmType.PPO
+
+    # Network architecture
+    policy_backbone: NetworkBackboneConfig = MLPConfig()
+    critic_backbone: NetworkBackboneConfig = MLPConfig()
+
+    # Learning rates
+    lr: PositiveFloat = 3e-4
+    """Policy learning rate"""
+
+    # Value function learning rate
+    value_lr: PositiveFloat | None = None
+    """None means use the same learning rate as the policy"""
+
+    # Discount and GAE
+    gamma: PositiveFloat = Field(default=0.99, ge=0, le=1)
+    gae_lambda: PositiveFloat = Field(default=0.95, ge=0, le=1)
+
+    # PPO specific
+    clip_ratio: PositiveFloat = 0.2
+    value_loss_coef: PositiveFloat = 1.0
+    entropy_coef: NonNegativeFloat = 0.0
+    max_grad_norm: PositiveFloat = 1.0
+    target_kl: PositiveFloat = 0.02
+
+    # Training
+    num_epochs: NonNegativeInt = 10
+    num_mini_batches: NonNegativeInt = 4
+    rollout_length: NonNegativeInt = 1000
+
+    # Optimizer
+    optimizer_type: OptimizerType = OptimizerType.ADAM
+    weight_decay: NonNegativeFloat = 0.0
+
+
+
+AlgorithmArgs = PPOArgs
+
+
+# ============================================================================
+# Runner Configuration
+# ============================================================================
+
+
+class RunnerArgs(BaseModel):
+    """Configuration for on-policy runners."""
+
+    model_config = genesis_pydantic_config(frozen=True)
+
+    #
+    total_episodes: NonNegativeInt = 1000
+
+    # Training intervals
+    log_interval: NonNegativeInt = 10
+    save_interval: NonNegativeInt = 100
+
+    #
+    save_path: Path = Path(".")

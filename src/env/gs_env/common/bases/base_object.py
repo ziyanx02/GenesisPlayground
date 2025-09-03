@@ -15,6 +15,7 @@ class BaseObject(abc.ABC):
         """
         Reset the object.
         """
+        ...
 
     @property
     def name(self) -> str:
