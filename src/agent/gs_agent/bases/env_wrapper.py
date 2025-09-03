@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from typing import Any
+from typing import Any, Final
 import torch
 
 class BaseEnvWrapper(ABC):
@@ -9,7 +9,7 @@ class BaseEnvWrapper(ABC):
     """
 
     def __init__(self, env: Any) -> None:
-        ...
+        self.env: Final[Any] = env
 
         
     @abstractmethod

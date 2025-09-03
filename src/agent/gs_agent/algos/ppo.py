@@ -14,8 +14,8 @@ from gs_agent.configs.ppo_cfg import PPOConfig
 from gs_agent.modules.actor_critic import ActorCritic, ActorCriticRecurrent
 from gs_agent.modules.normalizer import EmpiricalNormalization
 from gs_agent.utils.logger import configure as logger_configure
-from gs_agent.bases.base_algo import BaseAlgo
-from gs_agent.bases.base_env_wrapper import BaseEnvWrapper
+from gs_agent.bases.algo import BaseAlgo
+from gs_agent.bases.env_wrapper import BaseEnvWrapper
 
 
 class PPO(BaseAlgo):
@@ -47,7 +47,7 @@ class PPO(BaseAlgo):
                 critic_input_dim=self._critic_obs_dim,
                 act_dim=self._action_dim,
                 cfg=self.cfg,
-            ).to(self.device)
+            ).to(self.device) # type: ignore
         else:
             self._actor_critic = ActorCriticRecurrent(
                 actor_input_dim=self._actor_obs_dim,
@@ -95,9 +95,6 @@ class PPO(BaseAlgo):
 
         # initialize writer
         logger = logger_configure(folder=log_dir, format_strings=["stdout", "csv", "wandb"])
-
-        # # Initialize episode tracking
-        # episode_stats = EpisodeStats(maxlen=100, num_envs=self._env.num_envs, device=self._device)
 
         # Get initial observations
         obs, extra_infos = self.env.get_observations()

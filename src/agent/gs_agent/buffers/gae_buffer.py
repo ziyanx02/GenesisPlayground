@@ -1,7 +1,7 @@
 import torch
 from tensordict import TensorDict
 
-from gs_agent.bases.base_buffer import BaseBuffer
+from gs_agent.bases.buffer import BaseBuffer
 from gs_agent.buffers.transition import PPOTransition
 from gs_agent.utils.misc import split_and_pad_trajectories
 
@@ -37,7 +37,7 @@ class GAEBuffer(BaseBuffer):
         critic_obs_size: int,
         action_size: int,
         img_res: tuple[int, int] | None = None,
-        device: str = "cpu",
+        device: torch.device = torch.device("cpu"),
         gae_gamma=0.98,
         gae_lam=0.95,
     ) -> None:
