@@ -32,8 +32,6 @@ class PPO(BaseAlgo):
         self._actor_obs_dim = self.env.actor_obs_dim
         self._critic_obs_dim = self.env.critic_obs_dim
         self._action_dim = self.env.action_dim
-        self._depth_shape = self.env.depth_shape
-        self._rgb_shape = self.env.rgb_shape
 
         self._num_envs = self.env.num_envs
         self._num_steps = cfg.rollout_length

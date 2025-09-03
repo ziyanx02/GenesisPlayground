@@ -11,8 +11,7 @@ from gs_agent.algos.ppo import PPO
 from gs_agent.configs import PPO_PENDULUM_MLP, RUNNER_PENDULUM_MLP
 from gs_agent.envs.gym_wrapper import GymEnvWrapper
 from gs_agent.runners.runner import Runner
-from loguru import logger
-
+from gs_agent.utils.logger import configure as logger_configure
 
 def create_gym_env(
     env_name: str = "Pendulum-v1", render_mode: str | None = None
@@ -60,7 +59,7 @@ def evaluate_policy(checkpoint_path: Path, num_episodes: int = 10) -> None:
 
     # Load checkpoint
     ppo.load(checkpoint_path)
-    logger.info(f"Loaded checkpoint from {checkpoint_path}")
+    print(f"Loaded checkpoint from {checkpoint_path}")
 
     # Set to evaluation mode
     ppo.eval_mode()
@@ -90,23 +89,22 @@ def evaluate_policy(checkpoint_path: Path, num_episodes: int = 10) -> None:
 
         episode_rewards.append(episode_reward)
         episode_lengths.append(episode_length)
-        logger.info(f"Episode {episode + 1}: reward={episode_reward:.3f}, length={episode_length}")
+        print(f"Episode {episode + 1}: reward={episode_reward:.3f}, length={episode_length}")
 
     # Print results
     mean_reward = sum(episode_rewards) / len(episode_rewards)
     std_reward = torch.std(torch.tensor(episode_rewards)).item()
     mean_length = sum(episode_lengths) / len(episode_lengths)
 
-    logger.info("Evaluation Results:")
-    logger.info(f"  Mean reward: {mean_reward:.3f} ± {std_reward:.3f}")
-    logger.info(f"  Mean episode length: {mean_length:.1f}")
-    logger.info(f"  Min reward: {min(episode_rewards):.3f}")
-    logger.info(f"  Max reward: {max(episode_rewards):.3f}")
+    print("Evaluation Results:")
+    print(f"  Mean reward: {mean_reward:.3f} ± {std_reward:.3f}")
+    print(f"  Mean episode length: {mean_length:.1f}")
+    print(f"  Min reward: {min(episode_rewards):.3f}")
+    print(f"  Max reward: {max(episode_rewards):.3f}")
 
 
 def main(
     train: bool = True,
-    use_wandb: bool = True,
     config_name: str = "Pendulum-v1-mlp",
 ) -> None:
     """Main function demonstrating proper registry usage."""
@@ -122,8 +120,10 @@ def main(
         # Set up logging with proper configuration
         print("Setting up metric logging...")
 
+        logger = logger_configure(folder=log_dir, format_strings=["stdout", "csv", "wandb"])
+
         # Train using Runner
-        train_summary_info = runner.train(metric_logger=metric_logger) # type: ignore
+        train_summary_info = runner.train(metric_logger=logger) 
 
         print("Training completed successfully!")
         print(f"Training completed in {train_summary_info.total_time:.2f} seconds.")

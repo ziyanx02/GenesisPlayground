@@ -1,9 +1,7 @@
 from typing import Any, Final
 
 import gymnasium as gym
-import numpy.typing as npt
 import torch
-from gymnasium.spaces import Box, Discrete
 
 from gs_agent.bases.env_wrapper import BaseEnvWrapper
 
@@ -50,9 +48,17 @@ class GymEnvWrapper(BaseEnvWrapper):
         return self._curr_obs
 
     @property
-    def env_spec(self) -> gym.Env[Any, Any]:
-        return self.env
-
+    def action_dim(self) -> int:
+        return self.env.action_space.shape[0]
+    
+    @property
+    def actor_obs_dim(self) -> int:
+        return self.env.observation_space.shape[0]
+    
+    @property
+    def critic_obs_dim(self) -> int:
+        return self.env.observation_space.shape[0]
+    
     @property
     def num_envs(self) -> int:
         return 1
