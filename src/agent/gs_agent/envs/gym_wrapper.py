@@ -16,7 +16,7 @@ class GymEnvWrapper(BaseEnvWrapper):
     """
 
     def __init__(
-        self, env: gym.Env, device: torch.device = _DEFAULT_DEVICE
+        self, env: gym.Env[Any, Any], device: torch.device = _DEFAULT_DEVICE
     ) -> None:
         super().__init__(env)
         self._curr_obs: torch.Tensor = torch.tensor(self.env.reset()[0])
@@ -24,14 +24,14 @@ class GymEnvWrapper(BaseEnvWrapper):
     # ---------------------------
     # BatchEnvWrapper API (batch)
     # ---------------------------
-    def reset(self) -> tuple[torch.Tensor, dict]:
+    def reset(self) -> tuple[torch.Tensor, dict[str, Any]]:
         obs, info = self.env.reset()
         self._curr_obs = torch.tensor(obs)
         return self._curr_obs, info
 
     def step(
         self, action: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, dict]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, dict[str, Any]]:
         gym_actions = action.clone().cpu().numpy().squeeze()
         obs, reward, terminated, truncated, info = self.env.step(gym_actions)
 
@@ -50,7 +50,7 @@ class GymEnvWrapper(BaseEnvWrapper):
         return self._curr_obs
 
     @property
-    def env_spec(self) -> gym.Env:
+    def env_spec(self) -> gym.Env[Any, Any]:
         return self.env
 
     @property
