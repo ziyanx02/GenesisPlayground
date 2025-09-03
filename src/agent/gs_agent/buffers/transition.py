@@ -1,9 +1,6 @@
 import torch
 from gs_schemas.base_types import genesis_pydantic_config
 from pydantic import BaseModel
-from typing import TypeVar
-
-TTransition = TypeVar("TTransition", bound="Transition")
 class OnPolicyTransition(BaseModel):
     """A complete transition for on-policy training.
 
