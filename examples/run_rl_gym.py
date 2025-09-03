@@ -10,7 +10,7 @@ import torch
 from gs_agent.algos.ppo import PPO
 from gs_agent.configs import PPO_PENDULUM_MLP, RUNNER_PENDULUM_MLP
 from gs_agent.envs.gym_wrapper import GymEnvWrapper
-from gs_agent.runners.runner import Runner
+from gs_agent.runners.onpolicy_runner import OnPolicyRunner
 from gs_agent.utils.logger import configure as logger_configure
 
 def create_gym_env(
@@ -22,9 +22,7 @@ def create_gym_env(
     return GymEnvWrapper(gym_env, device=device)
 
 
-def create_ppo_runner_from_registry(
-    config_name: str = "Pendulum-v1",
-) -> Runner:
+def create_ppo_runner_from_registry() -> OnPolicyRunner:
     """Create PPO runner using configuration from the registry."""
     # Environment setup
     wrapped_env = create_gym_env()
@@ -37,7 +35,7 @@ def create_ppo_runner_from_registry(
     )
 
     # Create PPO runner
-    runner = Runner(
+    runner = OnPolicyRunner(
         algorithm=ppo,
         runner_args=RUNNER_PENDULUM_MLP,
         device=wrapped_env.device,
@@ -103,25 +101,13 @@ def evaluate_policy(checkpoint_path: Path, num_episodes: int = 10) -> None:
     print(f"  Max reward: {max(episode_rewards):.3f}")
 
 
-def main(
-    train: bool = True,
-    config_name: str = "Pendulum-v1-mlp",
-) -> None:
+def main(train: bool = True) -> None:
     """Main function demonstrating proper registry usage."""
     if train:
         # Get configuration and runner from registry
-        print(f"Getting configuration '{config_name}' from registry...")
-        runner = create_ppo_runner_from_registry(
-            config_name=config_name,
-        )
-        #
-        log_dir = runner.save_dir
-
+        runner = create_ppo_runner_from_registry()
         # Set up logging with proper configuration
-        print("Setting up metric logging...")
-
-        logger = logger_configure(folder=str(log_dir), format_strings=["stdout", "csv", "wandb"])
-
+        logger = logger_configure(folder=str(runner.save_dir), format_strings=["stdout", "csv", "wandb"])
         # Train using Runner
         train_summary_info = runner.train(metric_logger=logger) 
 
