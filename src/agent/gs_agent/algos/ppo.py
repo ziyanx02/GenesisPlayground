@@ -9,7 +9,8 @@ import torch.nn as nn
 from tensordict import TensorDict
 
 from gs_agent.buffers.gae_buffer import GAEBuffer
-from gs_agent.buffers.transition import PPOTransition
+from gs_agent.buffers.transition import OnPolicyTransition
+from gs_agent.buffers.mini_batches import OnPolicyMiniBatch
 from gs_agent.configs.schema import PPOArgs
 from gs_agent.modules.policies import GaussianPolicy
 from gs_agent.modules.critics import StateValueFunction, QValueFunction
@@ -36,8 +37,6 @@ class PPO(BaseAlgo):
         self._num_steps = cfg.rollout_length
 
         self.current_iter = 0
-        self.desired_kl = self.cfg.target_kl
-
         self._rewbuffer = deque(maxlen=_DEQUE_MAXLEN)
         self._lenbuffer = deque(maxlen=_DEQUE_MAXLEN)
         self._curr_reward_sum = torch.zeros(self.env.num_envs, device=self.device, dtype=torch.float)
@@ -79,56 +78,59 @@ class PPO(BaseAlgo):
             num_envs=self._num_envs,
             max_steps=self._num_steps,
             actor_obs_size=self._actor_obs_dim,
-            critic_obs_size=self._critic_obs_dim,
             action_size=self._action_dim,
             device=self.device,
         )
 
-    def _collect_rollouts(self, num_steps: int) -> dict[str, Any]:
+    def _collect_rollouts(self, num_steps: int) -> None:
         with torch.inference_mode():
             # collect rollouts and compute returns & advantages
             start = time.time()
             for step in range(self._num_steps):
                 #
-                transition = PPOTransition(
-                    actor_obs=self.actor_obs_normalizer(mini_batch["actor_obs"]),
-                    critic_obs=self.critic_obs_normalizer(critic_obs),
-                )
+                norm_obs = self.actor_obs_normalizer(self.env.get_observations())
+                action, log_prob = self._actor(norm_obs)
                 # Step environment
-                next_obs, reward, done, extra_infos = self.env.step(transition.actions)
-                reward_dict[step] = extra_infos["reward_dict"]
+                next_obs, reward, done, extra_infos = self.env.step(action)
+                critic_obs = self.env.get_critic_observations()
 
-                # normalize observations
-                critic_obs = extra_infos["observations"].get("critic", obs)
                 obs = next_obs
 
-                self._update_transition(reward, done, extra_infos, transition)
+                self._rollouts.append(OnPolicyTransition(
+                    obs=next_obs,
+                    act=action,
+                    rew=reward,
+                    done=done,
+                    value=self._critic(critic_obs),
+                    log_prob=log_prob,
+                ))
+
 
                 if logger is not None: # type: ignore
-                    curr_reward_sum += reward
-                    curr_ep_len += 1
+                    self._curr_reward_sum += reward
+                    self._curr_ep_len += 1
                     new_ids = (done > 0).nonzero(as_tuple=False)
-                    rewbuffer.extend(curr_reward_sum[new_ids][:, 0].cpu().numpy().tolist())
-                    lenbuffer.extend(curr_ep_len[new_ids][:, 0].cpu().numpy().tolist())
-                    curr_reward_sum[new_ids] = 0
-                    curr_ep_len[new_ids] = 0
+                    self._rewbuffer.extend(self._curr_reward_sum[new_ids][:, 0].cpu().numpy().tolist())
+                    self._lenbuffer.extend(self._curr_ep_len[new_ids][:, 0].cpu().numpy().tolist())
+                    self._curr_reward_sum[new_ids] = 0
+                    self._curr_ep_len[new_ids] = 0
             #
             stop = time.time()
             collection_time = stop - start
             #
             start = stop
-            last_value = self._critic(critic_obs).detach()
+            last_value = self._critic(self.env.get_critic_observations()).detach()
             self._rollouts.compute_gae(last_value)
 
-    def train_one_batch(self, mini_batch: dict[str, Any]) -> dict[str, Any]:
-        old_log_probs = torch.squeeze(mini_batch["action_logprobs"])
+    def train_one_batch(self, mini_batch: OnPolicyMiniBatch) -> dict[str, Any]:
+        old_log_probs = torch.squeeze(mini_batch.log_prob)
 
-        new_log_probs = self._actor.evaluate_log_prob(mini_batch["actor_obs"], mini_batch["actions"])
-        batch_adv = mini_batch["advantages"]
+        new_log_probs = self._actor.evaluate_log_prob(mini_batch.obs, mini_batch.act)
+        batch_adv = mini_batch.advantage
         ratio = torch.exp(new_log_probs - old_log_probs)
         surr1 = -torch.squeeze(batch_adv) * ratio
         surr2 = -torch.squeeze(batch_adv) * torch.clamp(
-            ratio, 1.0 - self.cfg.clip_ratio, 1.0 + self.cfg.clip_ratio
+            ratio, 1.0 - self.cfg.policy.clip_ratio, 1.0 + self.cfg.policy.clip_ratio
         )
         policy_loss = torch.max(surr1, surr2).mean()
 
@@ -153,25 +155,25 @@ class PPO(BaseAlgo):
         #             param_group["lr"] = self.learning_rate
 
         # Calculate value loss
-        values = self._critic(mini_batch["critic_obs"])
-        if self.cfg.clip_value_loss:
-            value_clipped = mini_batch["values"] + (values - mini_batch["values"]).clamp(
+        values = self._critic(mini_batch.critic_obs)
+        if self.cfg.critic.clip_value_loss:
+            value_clipped = mini_batch.value + (values - mini_batch.value).clamp(
                 -self.cfg.clip_param, self.cfg.clip_param
             )
-            value_losses = (values - mini_batch["returns"]).pow(2)
-            value_losses_clipped = (value_clipped - mini_batch["returns"]).pow(2)
+            value_losses = (values - mini_batch.returns).pow(2)
+            value_losses_clipped = (value_clipped - mini_batch.returns).pow(2)
             value_loss = torch.max(value_losses, value_losses_clipped).mean()
         else:
-            value_loss = (mini_batch["returns"] - values).pow(2).mean()
+            value_loss = (mini_batch.returns - values).pow(2).mean()
 
         # Calculate entropy loss
-        entropy = self._actor.entropy_on(mini_batch["actor_obs"])
+        entropy = self._actor.entropy_on(mini_batch.obs)
         entropy_loss = entropy.mean()
 
         # Total loss
         total_loss = (
             policy_loss
-            + self.cfg.value_loss_coef * value_loss
+            + self.cfg.critic.value_loss_coef * value_loss
             - self.cfg.entropy_coef * entropy_loss
         )
 

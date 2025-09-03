@@ -1,23 +1,45 @@
 import torch
+from gs_schemas.base_types import genesis_pydantic_config
+from pydantic import BaseModel
+from typing import TypeVar
+
+TTransition = TypeVar("TTransition", bound="Transition")
+class OnPolicyTransition(BaseModel):
+    """A complete transition for on-policy training.
+
+    This transition is used for on-policy training, where the policy is updated based on the
+    observed transitions and auxiliary tensors such as value, log_prob.
+    """
+
+    model_config = genesis_pydantic_config(arbitrary_types_allowed=True)
+
+    obs: torch.Tensor # [batch, obs_dim]
+    act: torch.Tensor # [batch, act_dim]
+    rew: torch.Tensor # [batch, 1]
+    done: torch.Tensor # [batch, 1]
+
+    # auxiliary tensors
+    value: torch.Tensor # [batch, 1]
+    log_prob: torch.Tensor # [batch, 1]
+
+    # optional tensors
+    critic_obs: torch.Tensor | None = None # [batch, critic_obs_dim]
+    rgb_obs: torch.Tensor | None = None # [batch, 3, h, w]
+    depth_obs: torch.Tensor | None = None # [batch, 1, h, w]
 
 
-class PPOTransition:
-    def __init__(self):
-        self.actor_obs: torch.Tensor
-        self.actions: torch.Tensor
-        self.critic_obs: torch.Tensor
-        self.rewards: torch.Tensor
-        self.dones: torch.Tensor
-        self.values: torch.Tensor
-        self.actions_log_prob: torch.Tensor
-        self.action_mean: torch.Tensor
-        self.action_sigma: torch.Tensor
 
-        #
-        self.actor_hidden = None
-        self.critic_hidden = None
-        self.depth_obs = None
-        self.rgb_obs = None
+class ImitationTransition(BaseModel):
+    """A complete transition for imitation learning.
 
-    def clear(self):
-        self.__init__()
+    This transition is used for imitation learning, where the policy is updated based on the
+    expert demonstrations.
+    """
+
+    model_config = genesis_pydantic_config(arbitrary_types_allowed=True)
+
+    obs: torch.Tensor # [batch, obs_dim]
+    act: torch.Tensor # [batch, act_dim]        
+
+
+Transition = OnPolicyTransition | ImitationTransition

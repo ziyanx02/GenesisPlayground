@@ -1,7 +1,10 @@
 from abc import ABC, abstractmethod
 
+from typing import TypeVar, Generic
 
-class BaseBuffer(ABC):
+TTransition = TypeVar("TTransition")
+
+class BaseBuffer(ABC, Generic[TTransition]):
     """
     Abstract base class for on-policy and imitation learning buffers.
     """
@@ -12,6 +15,11 @@ class BaseBuffer(ABC):
     @abstractmethod
     def reset(self) -> None:
         """Reset the buffer state."""
+        ...
+
+    @abstractmethod
+    def append(self, transition: TTransition) -> None:
+        """Append a transition to the buffer."""
         ...
 
     @abstractmethod
