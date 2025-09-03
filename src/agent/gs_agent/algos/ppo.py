@@ -14,53 +14,49 @@ from gs_agent.configs.ppo_cfg import PPOConfig
 from gs_agent.modules.actor_critic import ActorCritic, ActorCriticRecurrent
 from gs_agent.modules.normalizer import EmpiricalNormalization
 from gs_agent.utils.logger import configure as logger_configure
+from gs_agent.bases.base_algo import BaseAlgo
+from gs_agent.bases.base_env_wrapper import BaseEnvWrapper
 
 
-class PPO:
+class PPO(BaseAlgo):
     """
     Proximal Policy Optimization (PPO) algorithm implementation.
     """
 
-    def __init__(self, env, cfg: PPOConfig, device="cpu"):
-        self._env = env
-        self._cfg = cfg
-        self._device = device
+    def __init__(self, env: BaseEnvWrapper, cfg: PPOConfig, device: torch.device):
+        super().__init__(env, cfg, device)
 
-        #
-        self._actor_obs_dim = self._env.actor_obs_dim
-        self._critic_obs_dim = self._env.critic_obs_dim
-        self._action_dim = self._env.action_dim
-        self._depth_shape = self._env.depth_shape
-        self._rgb_shape = self._env.rgb_shape
+        self._actor_obs_dim = self.env.actor_obs_dim
+        self._critic_obs_dim = self.env.critic_obs_dim
+        self._action_dim = self.env.action_dim
+        self._depth_shape = self.env.depth_shape
+        self._rgb_shape = self.env.rgb_shape
 
-        #
-        self._num_envs = env.num_envs
+        self._num_envs = self.env.num_envs
         self._num_steps = cfg.runner.num_steps_per_env
 
         self.current_iter = 0
-        self.desired_kl = self._cfg.algo.desired_kl
+        self.desired_kl = self.cfg.algo.desired_kl
 
         self._init()
 
     def _init(self):
-        #
-        if not self._cfg.policy.use_rnn:
+        if not self.cfg.policy.use_rnn:
             self._actor_critic = ActorCritic(
                 actor_input_dim=self._actor_obs_dim,
                 critic_input_dim=self._critic_obs_dim,
                 act_dim=self._action_dim,
-                cfg=self._cfg,
-            ).to(self._device)
-            #
+                cfg=self.cfg,
+            ).to(self.device)
         else:
             self._actor_critic = ActorCriticRecurrent(
                 actor_input_dim=self._actor_obs_dim,
                 critic_input_dim=self._critic_obs_dim,
                 act_dim=self._action_dim,
-                cfg=self._cfg,
-                rnn_type=self._cfg.policy.rnn_type,
-                rnn_num_layers=self._cfg.policy.rnn_num_layers,
-                rnn_hidden_size=self._cfg.policy.rnn_hidden_size,
+                cfg=self.cfg,
+                rnn_type=self.cfg.policy.rnn_type,
+                rnn_num_layers=self.cfg.policy.rnn_num_layers,
+                rnn_hidden_size=self.cfg.policy.rnn_hidden_size,
             ).to(self._device)
 
         self._rollouts = GAEBuffer(
@@ -70,12 +66,12 @@ class PPO:
             critic_obs_size=self._critic_obs_dim,
             action_size=self._action_dim,
             device=self._device,
-            gae_gamma=self._cfg.algo.gae_gamma,
-            gae_lam=self._cfg.algo.gae_lambda,
+            gae_gamma=self.cfg.algo.gae_gamma,
+            gae_lam=self.cfg.algo.gae_lambda,
             img_res=self._env.img_resolution,
         )
 
-        if self._cfg.policy.norm_obs:
+        if self.cfg.policy.norm_obs:
             print("Using Empirical Normalization!")
             self.actor_obs_normalizer = EmpiricalNormalization(
                 shape=(self._actor_obs_dim,), until=1e6
@@ -89,14 +85,14 @@ class PPO:
 
         # Initialize optimizer
         self._optimizer = torch.optim.Adam(
-            self._actor_critic.parameters(), lr=self._cfg.algo.learning_rate
+            self._actor_critic.parameters(), lr=self.cfg.algo.learning_rate
         )
         # if hasattr(torch, "compile"):
         #     self._actor_critic = torch.compile(self.actor_critic)  # Requires PyTorch 2.0+
 
     def train(self, num_iters: int, log_dir: str | None = None):
         self._lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            self._optimizer, T_max=num_iters, eta_min=self._cfg.algo.learning_rate * 0.1
+            self._optimizer, T_max=num_iters, eta_min=self.cfg.algo.learning_rate * 0.1
         )
 
         # initialize writer
@@ -106,13 +102,13 @@ class PPO:
         # episode_stats = EpisodeStats(maxlen=100, num_envs=self._env.num_envs, device=self._device)
 
         # Get initial observations
-        obs, extra_infos = self._env.get_observations()
+        obs, extra_infos = self.env.get_observations()
         critic_obs = extra_infos["observations"].get("critic", obs)
 
         rewbuffer = deque(maxlen=100)
         lenbuffer = deque(maxlen=100)
-        curr_reward_sum = torch.zeros(self._env.num_envs, device=self._device, dtype=torch.float)
-        curr_ep_len = torch.zeros(self._env.num_envs, device=self._device, dtype=torch.float)
+        curr_reward_sum = torch.zeros(self.env.num_envs, device=self.device, dtype=torch.float)
+        curr_ep_len = torch.zeros(self.env.num_envs, device=self.device, dtype=torch.float)
 
         # Main training loop
         start_iter = self.current_iter
@@ -120,7 +116,7 @@ class PPO:
         for it in range(start_iter, self.current_iter + num_iters):
             reward_dict = TensorDict(
                 {},
-                device=self._device,
+                device=self.device,
                 batch_size=[self._num_steps, self._num_envs],
             )
             self.train_mode()  # switch to train mode (for dropout for example)
@@ -129,8 +125,8 @@ class PPO:
                 start = time.time()
                 for step in range(self._num_steps):
                     depth_obs = None
-                    if self._cfg.policy.use_cnn:
-                        depth_obs = self._env.get_depth_image(normalize=True)
+                    if self.cfg.policy.use_cnn:
+                        depth_obs = self.env.get_depth_image(normalize=True)
                     #
                     transition = self._get_transition(
                         actor_obs=self.actor_obs_normalizer(obs),
@@ -138,7 +134,7 @@ class PPO:
                         depth_obs=depth_obs,
                     )
                     # Step environment
-                    next_obs, reward, done, extra_infos = self._env.step(transition.actions)
+                    next_obs, reward, done, extra_infos = self.env.step(transition.actions)
                     reward_dict[step] = extra_infos["reward_dict"]
 
                     # normalize observations
