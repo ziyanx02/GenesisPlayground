@@ -22,6 +22,10 @@ class BaseEnvWrapper(ABC):
     @abstractmethod
     def get_observations(self) -> torch.Tensor:
         ...
+        
+    @abstractmethod
+    def get_critic_observations(self) -> torch.Tensor:
+        ...
          
     @property
     @abstractmethod

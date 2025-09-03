@@ -14,7 +14,6 @@ from gs_agent.configs.schema import PPOArgs
 from gs_agent.modules.policies import GaussianPolicy
 from gs_agent.modules.critics import StateValueFunction, QValueFunction
 from gs_agent.modules.models import NetworkFactory
-from gs_agent.utils.logger import configure as logger_configure
 from gs_agent.bases.algo import BaseAlgo
 from gs_agent.bases.env_wrapper import BaseEnvWrapper
 
@@ -87,11 +86,9 @@ class PPO(BaseAlgo):
         )
 
         # initialize writer
-        logger = logger_configure(folder=log_dir, format_strings=["stdout", "csv", "wandb"])
-
         # Get initial observations
-        obs, extra_infos = self.env.get_observations()
-        critic_obs = extra_infos["observations"].get("critic", obs)
+        obs = self.env.get_observations()
+        critic_obs = self.env.get_critic_observations()
 
         rewbuffer = deque(maxlen=100)
         lenbuffer = deque(maxlen=100)
@@ -112,14 +109,10 @@ class PPO(BaseAlgo):
                 # collect rollouts and compute returns & advantages
                 start = time.time()
                 for step in range(self._num_steps):
-                    depth_obs = None
-                    if self.cfg.policy.use_cnn:
-                        depth_obs = self.env.get_depth_image(normalize=True)
                     #
                     transition = self._get_transition(
                         actor_obs=self.actor_obs_normalizer(obs),
                         critic_obs=self.critic_obs_normalizer(critic_obs),
-                        depth_obs=depth_obs,
                     )
                     # Step environment
                     next_obs, reward, done, extra_infos = self.env.step(transition.actions)
@@ -154,27 +147,10 @@ class PPO(BaseAlgo):
             learn_time = stop - start
             self._current_iter = it
 
-            # Log training statistics
-            logger.record("Summary/iters", it)
-            if len(rewbuffer) > 0:
-                logger.record("Summary/reward_mean", statistics.mean(rewbuffer))
-                logger.record("Summary/length_mean", statistics.mean(lenbuffer))
-            #
-            logger.record("speed/fps", fps)
-            logger.record("speed/forward_time", collection_time)
-            logger.record("speed/backward_time", learn_time)
-            #
-            logger.record("train/lr", self._lr_scheduler.get_last_lr()[0])
-            logger.record("train/policy_loss", mean_pg_loss)
-            logger.record("train/value_loss", mean_value_loss)
-            for reward_key in reward_dict.keys():
-                reward = torch.mean(reward_dict[reward_key]).item()
-                logger.record("train/" + reward_key, reward)
+            if it % self.cfg.runner.log_interval == 0:
+                logger.dump(step=it) # type: ignore
 
-            if it % self._cfg.runner.log_interval == 0:
-                logger.dump(step=it)
-
-            if it % self._cfg.runner.save_interval == 0 or it == num_iters - 1:
+            if it % self.cfg.runner.save_interval == 0 or it == num_iters - 1:
                 # save model
                 print(f"Saving model at iteration {it} to {logger.get_dir()}")
                 checkpoint_dir = os.path.join(logger.get_dir(), "checkpoints")
@@ -346,7 +322,8 @@ class PPO(BaseAlgo):
     def save(self, path, infos=None):
         saved_dict = {
             "model_state_dict": self._actor_critic.state_dict(),
-            "optimizer_state_dict": self._optimizer.state_dict(),
+            "actor_optimizer_state_dict": self._actor_optimizer.state_dict(),
+            "critic_optimizer_state_dict": self._critic_optimizer.state_dict(),
             "iter": self.current_iter,
         }
         if self.cfg.norm_obs:
@@ -360,7 +337,8 @@ class PPO(BaseAlgo):
         checkpoint = torch.load(path)
         self._actor_critic.load_state_dict(checkpoint["model_state_dict"])
         if load_optimizer:
-            self._actor_optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+            self._actor_optimizer.load_state_dict(checkpoint["actor_optimizer_state_dict"])
+            self._critic_optimizer.load_state_dict(checkpoint["critic_optimizer_state_dict"])
         self._current_iter = checkpoint["iter"]
         if self.cfg.norm_obs:
             self.actor_obs_normalizer.load_state_dict(checkpoint["actor_obs_normalizer"])
