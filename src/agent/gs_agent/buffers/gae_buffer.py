@@ -1,7 +1,7 @@
 import torch
 from tensordict import TensorDict
 
-from gs_agent.buffers import base_buffer
+from gs_agent.bases.base_buffer import BaseBuffer
 from gs_agent.buffers.transition import PPOTransition
 from gs_agent.utils.misc import split_and_pad_trajectories
 
@@ -23,7 +23,7 @@ CRITIC_HIDDEN = "critic_hidden"
 MASKS = "masks"
 
 
-class GAEBuffer(base_buffer.BaseBuffer):
+class GAEBuffer(BaseBuffer):
     """
     A fixed-size buffer for storing rollouts for multi-env on-policy training,
     with GAE/Generalized Advantage Estimation.
@@ -52,6 +52,7 @@ class GAEBuffer(base_buffer.BaseBuffer):
             gae_gamma (float): Discount factor for GAE.
             gae_lam (float): Lambda parameter for GAE.
         """
+        super().__init__()
         self._num_envs = num_envs
         self._max_steps = max_steps
         self._actor_obs_dim = actor_obs_size

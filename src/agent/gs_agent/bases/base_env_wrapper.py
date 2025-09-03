@@ -3,8 +3,6 @@ from abc import ABC, abstractmethod
 from typing import Any
 import torch
 
-
-
 class BaseEnvWrapper(ABC):
     """
     Base class for all environment wrappers.
@@ -41,6 +39,7 @@ class BaseEnvWrapper(ABC):
         ...
         
         
+    @property
     @abstractmethod
     def critic_obs_dim(self) -> int:
         ...

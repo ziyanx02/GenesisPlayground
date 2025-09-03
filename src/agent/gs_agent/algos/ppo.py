@@ -57,7 +57,7 @@ class PPO(BaseAlgo):
                 rnn_type=self.cfg.policy.rnn_type,
                 rnn_num_layers=self.cfg.policy.rnn_num_layers,
                 rnn_hidden_size=self.cfg.policy.rnn_hidden_size,
-            ).to(self._device)
+            ).to(self.device)
 
         self._rollouts = GAEBuffer(
             num_envs=self._num_envs,
@@ -65,30 +65,28 @@ class PPO(BaseAlgo):
             actor_obs_size=self._actor_obs_dim,
             critic_obs_size=self._critic_obs_dim,
             action_size=self._action_dim,
-            device=self._device,
+            device=self.device,
             gae_gamma=self.cfg.algo.gae_gamma,
             gae_lam=self.cfg.algo.gae_lambda,
-            img_res=self._env.img_resolution,
+            img_res=self.env.img_resolution,
         )
 
         if self.cfg.policy.norm_obs:
             print("Using Empirical Normalization!")
             self.actor_obs_normalizer = EmpiricalNormalization(
                 shape=(self._actor_obs_dim,), until=1e6
-            ).to(self._device)
+            ).to(self.device)
             self.critic_obs_normalizer = EmpiricalNormalization(
                 shape=(self._critic_obs_dim,), until=1e6
-            ).to(self._device)
+            ).to(self.device)
         else:
-            self.actor_obs_normalizer = torch.nn.Identity().to(self._device)  # no normalization
-            self.critic_obs_normalizer = torch.nn.Identity().to(self._device)  # no normalization
+            self.actor_obs_normalizer = torch.nn.Identity().to(self.device)  # no normalization
+            self.critic_obs_normalizer = torch.nn.Identity().to(self.device)  # no normalization
 
         # Initialize optimizer
         self._optimizer = torch.optim.Adam(
-            self._actor_critic.parameters(), lr=self.cfg.algo.learning_rate
+            self.actor_critic.parameters(), lr=self.cfg.algo.learning_rate
         )
-        # if hasattr(torch, "compile"):
-        #     self._actor_critic = torch.compile(self.actor_critic)  # Requires PyTorch 2.0+
 
     def train(self, num_iters: int, log_dir: str | None = None):
         self._lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
@@ -334,14 +332,14 @@ class PPO(BaseAlgo):
             # Total loss
             total_loss = (
                 policy_loss
-                + self._cfg.algo.value_coef * value_loss
-                - self._cfg.algo.ent_coef * entropy_loss
+                + self.cfg.algo.value_coef * value_loss
+                - self.cfg.algo.ent_coef * entropy_loss
             )
 
             # Optimization step
             self._optimizer.zero_grad()
             total_loss.backward()
-            nn.utils.clip_grad_norm_(self._actor_critic.parameters(), self._cfg.algo.max_grad_norm)
+            nn.utils.clip_grad_norm_(self.actor_critic.parameters(), self.cfg.algo.max_grad_norm)
             self._optimizer.step()
 
             # Log losses
@@ -361,7 +359,7 @@ class PPO(BaseAlgo):
             "optimizer_state_dict": self._optimizer.state_dict(),
             "iter": self.current_iter,
         }
-        if self._cfg.policy.norm_obs:
+        if self.cfg.policy.norm_obs:
             saved_dict["actor_obs_normalizer"] = self.actor_obs_normalizer.state_dict()
             saved_dict["critic_obs_normalizer"] = self.critic_obs_normalizer.state_dict()
         if infos is not None:
@@ -374,7 +372,7 @@ class PPO(BaseAlgo):
         if load_optimizer:
             self._optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         self._current_iter = checkpoint["iter"]
-        if self._cfg.policy.norm_obs:
+        if self.cfg.policy.norm_obs:
             self.actor_obs_normalizer.load_state_dict(checkpoint["actor_obs_normalizer"])
             self.critic_obs_normalizer.load_state_dict(checkpoint["critic_obs_normalizer"])
         return checkpoint.get("infos", None)
@@ -396,7 +394,7 @@ class PPO(BaseAlgo):
             self._actor_critic.to(device)
         # policy = self._actor_critic.act_inference
         policy = self._actor_critic
-        if self._cfg.policy.norm_obs:
+        if self.cfg.policy.norm_obs:
             self.actor_obs_normalizer.to(device)
             return policy, self.actor_obs_normalizer
         else:

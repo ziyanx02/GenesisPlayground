@@ -21,18 +21,3 @@ class PPOTransition:
 
     def clear(self):
         self.__init__()
-
-
-class BCTransition:
-    def __init__(self):
-        self.state_obs: torch.Tensor
-        self.actions: torch.Tensor
-        self.dones = torch.Tensor()
-
-        #
-        self.actor_hidden = None
-        self.depth_obs = None
-        self.rgb_obs = None
-
-    def clear(self):
-        self.__init__()
