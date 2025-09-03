@@ -1,5 +1,5 @@
 [project]
-name = "gs-schema"
+name = "gs-schemas"
 version = "0.1.0"
 description = "Shared typed interfaces for Genesis Playground"
 readme = "README.md"

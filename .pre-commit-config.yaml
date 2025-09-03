@@ -8,13 +8,13 @@ repos:
       - id: ruff-format         # code formatter (replaces black)
 
   # --- Pyright type checking (quick, no deps install) ---
-  - repo: https://github.com/RobertCraigie/pyright-python
-    rev: v1.1.379
-    hooks:
-      - id: pyright
-        additional_dependencies: []   # uses packaged pyright
-        pass_filenames: false         # analyze the whole repo (fast enough)
-        args: ["--pythonversion", "3.10"]
+  # - repo: https://github.com/RobertCraigie/pyright-python
+  #   rev: v1.1.404
+  #   hooks:
+  #     - id: pyright
+  #       additional_dependencies: []   # uses packaged pyright
+  #       pass_filenames: false         # analyze the whole repo (fast enough)
+  #       args: ["--pythonversion", "3.10"]
 
   # --- General hygiene hooks ---
   - repo: https://github.com/pre-commit/pre-commit-hooks

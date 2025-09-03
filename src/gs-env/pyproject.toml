@@ -1,15 +1,32 @@
 [project]
 name = "gs-env"
-version = "0.1.0"
-description = "Genesis-based simulation environments."
+version = "0.0.1"
+description = "Simulation and real robot environments"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
-dependencies = ["gs-schema>=0.1,<0.2"]
+dependencies = [
+  "fire>=0.7.0",
+  "genesis-world ; sys_platform != 'linux' or platform_machine != 'aarch64'",
+  "gs-schemas",
+  "gs-agent",
+  "loguru>=0.7.3",
+  "numpy>=2.2.5",
+  "torch>=2.6.0",
+  "huggingface-hub>=0.24.7",
+]
+
+
+[dependency-groups]
+dev = [
+  "pre-commit>=4.2.0",
+  "pyright[nodejs]>=1.1.402",
+  "pytest-asyncio>=1.0.0",
+  "pytest>=8.3.5",
+  "ruff>=0.11.9",
+]
 
 [build-system]
-requires = ["hatchling>=1.25"]
+requires = [
+  "hatchling",
+]
 build-backend = "hatchling.build"
-
-[tool.hatch.version]
-path = "../../VERSION"

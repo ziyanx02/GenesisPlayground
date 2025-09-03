@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 dependencies = [
-  "gs-schema>=0.1,<0.2",
+  "gs-schemas>=0.1,<0.2",
   "torch>=2.2",
 ]
 

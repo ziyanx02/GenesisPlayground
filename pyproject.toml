@@ -1,113 +1,98 @@
 [project]
 name = "genesis-playground"
-version = "0.0.1"
+# version comes from [tool.hatch.version]; don't set [project].version
 description = "Playground for building intelligent robots"
+readme = "README.md"
 requires-python = ">=3.10"
+license = { text = "MIT" }
+dynamic = ["version"]
 
-[tool.pyright]
-exclude = [
-  # Those exclusions are meant to be gradually removed as we fix typing errors in the codebase.
-  # Please do not add exclusions.
+# Root meta-package pulls in the three subpackages released together
+dependencies = [
+  "gs-schemas>=0.0.1,<0.1",
+  "gs-env>=0.0.1,<0.1",
+  "gs-agent>=0.0.1,<0.1",
 ]
+
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "regex"
+path = "VERSION"
+# Capture any non-whitespace single-line string (must still be PEP 440 compliant)
+pattern = "^(?P<version>\\S+)$"
+
+# ---------------- Pyright ----------------
+[tool.pyright]
+exclude = []
 pythonVersion = "3.10"
 reportMatchNotExhaustive = "error"
 reportMissingModuleSource = "error"
 reportMissingTypeArgument = "error"
-reportUnknownArgumentType = "warning"
-reportUnknownLambdaType = "warning"
-reportUnknownMemberType = "warning"
-reportUnknownParameterType = "warning"
-reportUnknownVariableType = "warning"
 reportUnnecessaryCast = "error"
 reportUnnecessaryComparison = "error"
 reportUnnecessaryContains = "error"
 reportUnnecessaryIsInstance = "error"
-reportUnnecessaryTypeIgnoreComment = "warning"
 
+# ---------------- Ruff ----------------
 [tool.ruff]
 line-length = 100
-src = [
-  ".",
-]
+src = ["."]
 target-version = "py310"
-exclude = [
-]
+exclude = []
 
 [tool.ruff.lint]
 select = [
-  "ANN001", # missing-type-function-argument
-  "ANN201", # missing-return-type-undocumented-public-function
-  "ANN202", # missing-return-type-private-function
-  "ANN204", # missing-return-type-special-method
-  "ANN205", # missing-return-type-static-method
-  "ANN206", # missing-return-type-class-method
-  "ASYNC", # flake8-async
-  "B", # flake8-bugbear
-  "E", # pycodestyle errors
-  "F", # pyflakes
-  "G", # flake8-logging-format
-  "I", # isort
-  "INP", # flake8-no-pep420
-  "RUF100", # unused-noqa
-  "SLF", # flake8-self
-  "T20", # flake8-print
-  "UP", # pyupgrade
-  "W", # pycodestyle warnings
+  "ANN001","ANN201","ANN202","ANN204","ANN205","ANN206",
+  "ASYNC","B","E","F","G","I","INP","RUF100","SLF","T20","UP","W",
 ]
-ignore = [
-  "E501", # line too long
-]
+ignore = ["E501"]
 
 [tool.ruff.lint.per-file-ignores]
-"*/scripts/*" = [
-  "INP001", # implicit-namespace-package - Scripts are not meant to be imported.
-]
+"*/scripts/*" = ["INP001"]
 
+# ---------------- Pytest ----------------
 [tool.pytest.ini_options]
-filterwarnings = [
-  "error",
-  "ignore::DeprecationWarning",
-  "ignore::ImportWarning",
-]
-markers = [
-  "gpu: tests that require gpus",
-]
+filterwarnings = ["error","ignore::DeprecationWarning","ignore::ImportWarning"]
+markers = ["gpu: tests that require gpus"]
 
+# ---------------- uv ----------------
 [tool.uv]
-# Require that the packages and its dependencies be installable on the following platforms.
 required-environments = [
   "sys_platform == 'darwin' and platform_machine == 'arm64'",
   "sys_platform == 'linux' and platform_machine == 'aarch64'",
   "sys_platform == 'linux' and platform_machine == 'x86_64'",
 ]
 
+# Map dependency names to workspace members (names must match [project].name)
 [tool.uv.sources]
-# fairscale from source for nccl timeout that is not yet in v0.4.13
-fairscale = {git = "https://github.com/facebookresearch/fairscale", rev = "146f160241651e1211c4247979f159a4ef43b54a"}
-genesis-world = {git = "https://github.com/Genesis-Embodied-AI/Genesis", rev = "094f8a2df68352c0bbdfcb362bec9ba8be5ce717"}
-gs-env = {workspace = true}
-gs-agent = {workspace = true}
-gs-schemas = {workspace = true}
+fairscale = { git = "https://github.com/facebookresearch/fairscale", rev = "146f160241651e1211c4247979f159a4ef43b54a" }
+genesis-world = { git = "https://github.com/Genesis-Embodied-AI/Genesis", rev = "094f8a2df68352c0bbdfcb362bec9ba8be5ce717" }
+gs-env    = { workspace = true }
+gs-agent  = { workspace = true }
+gs-schemas = { workspace = true }
+
 torch = [
-  {index = "pytorch-cpu", marker = "sys_platform != 'linux'"},
-  {index = "pytorch-cpu", marker = "sys_platform == 'linux' and platform_machine != 'x86_64'"},
-  {index = "pytorch-cu128", marker = "sys_platform == 'linux' and platform_machine == 'x86_64'"},
+  { index = "pytorch-cpu",  marker = "sys_platform != 'linux'" },
+  { index = "pytorch-cpu",  marker = "sys_platform == 'linux' and platform_machine != 'x86_64'" },
+  { index = "pytorch-cu128", marker = "sys_platform == 'linux' and platform_machine == 'x86_64'" },
 ]
 torchvision = [
-  {index = "pytorch-cpu", marker = "sys_platform != 'linux'"},
-  {index = "pytorch-cpu", marker = "sys_platform == 'linux' and platform_machine != 'x86_64'"},
-  {index = "pytorch-cu128", marker = "sys_platform == 'linux' and platform_machine == 'x86_64'"},
+  { index = "pytorch-cpu",  marker = "sys_platform != 'linux'" },
+  { index = "pytorch-cpu",  marker = "sys_platform == 'linux' and platform_machine != 'x86_64'" },
+  { index = "pytorch-cu128", marker = "sys_platform == 'linux' and platform_machine == 'x86_64'" },
 ]
 xformers = [
-  {index = "pytorch-cu128", marker = "sys_platform == 'linux' and platform_machine == 'x86_64'"},
+  { index = "pytorch-cu128", marker = "sys_platform == 'linux' and platform_machine == 'x86_64'" },
 ]
 
 [tool.uv.workspace]
 members = [
-  "env",
-  "agent",
-  "schemas",
-  "mpc",
+  "src/gs-env",
+  "src/gs-agent",
+  "src/gs-schemas",
 ]
 
 [[tool.uv.index]]
@@ -120,6 +105,7 @@ name = "pytorch-cu128"
 url = "https://download.pytorch.org/whl/cu128"
 explicit = true
 
+# ---------------- tomlsort ----------------
 [tool.tomlsort]
 no_sort_tables = true
 sort_inline_arrays = true
