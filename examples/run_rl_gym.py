@@ -126,20 +126,21 @@ def main(
         train_summary_info = runner.train(metric_logger=logger) 
 
         print("Training completed successfully!")
-        print(f"Training completed in {train_summary_info.total_time:.2f} seconds.")
-        print(f"Total episodes: {train_summary_info.total_episodes}.")
-        print(f"Total steps: {train_summary_info.total_steps}.")
-        print(f"Total reward: {train_summary_info.final_reward:.2f}.")
+        print(f"Training completed in {train_summary_info['total_time']:.2f} seconds.")
+        print(f"Total episodes: {train_summary_info['total_episodes']}.")
+        print(f"Total steps: {train_summary_info['total_steps']}.")
+        print(f"Total reward: {train_summary_info['final_reward']:.2f}.")
 
     else:
-        # Evaluation mode
-        checkpoint = find_latest_checkpoint_if_exists()
-        if checkpoint is None:
-            raise ValueError("No checkpoints found in ./logs directory")
-
-        print(f"Evaluating policy from {checkpoint}")
-        eval_episodes = 10
-        evaluate_policy(checkpoint, eval_episodes)
+        # TODO: add evaluation mode
+        raise NotImplementedError("Evaluation mode is not implemented")
+        # checkpoint = find_latest_checkpoint_if_exists()
+        # if checkpoint is None:
+        #     raise ValueError("No checkpoints found in ./logs directory")
+        #
+        # print(f"Evaluating policy from {checkpoint}")
+        # eval_episodes = 10
+        # evaluate_policy(checkpoint, eval_episodes)
 
 
 if __name__ == "__main__":

@@ -94,14 +94,15 @@ class PPO(BaseAlgo):
                 # Step environment
                 next_obs, reward, done, _extra_infos = self.env.step(action)
 
-                self._rollouts.append(OnPolicyTransition(
-                    obs=obs,
-                    act=action,
-                    rew=reward,
-                    done=done,
-                    value=self._critic(obs),
-                    log_prob=log_prob,
-                ))
+                transition = {
+                    "obs": obs,
+                    "act": action,
+                    "rew": reward,
+                    "done": done,
+                    "value": self._critic(obs),
+                    "log_prob": log_prob,
+                }
+                self._rollouts.append(transition)
 
                 # Update episode tracking - handle reward and done sequences
                 # Extract tensors from reward and done objects
@@ -145,9 +146,6 @@ class PPO(BaseAlgo):
     def train_one_batch(self, mini_batch: dict[str, torch.Tensor]) -> dict[str, Any]:
         obs = mini_batch["obs"]
         act = mini_batch["act"]
-        rew = mini_batch["rew"]
-        done = mini_batch["done"]
-        value = mini_batch["value"]
         old_log_prob = mini_batch["log_prob"]
         advantage = mini_batch["advantage"]
         returns = mini_batch["returns"]
@@ -161,24 +159,7 @@ class PPO(BaseAlgo):
         )
         policy_loss = torch.max(surr1, surr2).mean()
 
-        if self.cfg.target_kl is not None and self.cfg.schedule == "adaptive":
-            with torch.inference_mode():
-                kl = torch.sum(
-                    torch.log(sigma_batch / old_sigma_batch + 1.0e-5)
-                    + (torch.square(old_sigma_batch) + torch.square(old_mu_batch - mu_batch))
-                    / (2.0 * torch.square(sigma_batch))
-                    - 0.5,
-                    axis=-1,
-                )
-                kl_mean = torch.mean(kl)
-
-                if kl_mean > self.cfg.target_kl * 2.0:
-                    self.learning_rate = max(1e-5, self.learning_rate / 1.5)
-                elif kl_mean < self.cfg.target_kl / 2.0 and kl_mean > 0.0:
-                    self.learning_rate = min(1e-2, self.learning_rate * 1.5)
-
-                for param_group in self._actor_optimizer.param_groups:
-                    param_group["lr"] = self.cfg.lr
+        approx_kl = (new_log_prob - old_log_prob).mean()
 
         # Calculate value loss
         values = self._critic(obs)
@@ -208,6 +189,7 @@ class PPO(BaseAlgo):
             "policy_loss": policy_loss.item(),
             "value_loss": value_loss.item(),
             "entropy_loss": entropy_loss.item(),
+            "approx_kl": approx_kl.item(),
         }
 
     def train_one_episode(self) -> dict[str, Any]:
@@ -239,6 +221,7 @@ class PPO(BaseAlgo):
                 "policy_loss": statistics.mean([metrics["policy_loss"] for metrics in train_metrics_list]),
                 "value_loss": statistics.mean([metrics["value_loss"] for metrics in train_metrics_list]),
                 "entropy_loss": statistics.mean([metrics["entropy_loss"] for metrics in train_metrics_list]),
+                "approx_kl": statistics.mean([metrics["approx_kl"] for metrics in train_metrics_list]),
             },
             "speed" : {
                 "rollout_time": rollouts_time,

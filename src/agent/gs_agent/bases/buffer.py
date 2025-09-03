@@ -1,10 +1,9 @@
 from abc import ABC, abstractmethod
 
-from typing import TypeVar, Generic
+import torch
 
-TTransition = TypeVar("TTransition")
 
-class BaseBuffer(ABC, Generic[TTransition]):
+class BaseBuffer(ABC):
     """
     Abstract base class for on-policy and imitation learning buffers.
     """
@@ -18,7 +17,7 @@ class BaseBuffer(ABC, Generic[TTransition]):
         ...
 
     @abstractmethod
-    def append(self, transition: TTransition) -> None:
+    def append(self, transition: dict[str, torch.Tensor]) -> None:
         """Append a transition to the buffer."""
         ...
 

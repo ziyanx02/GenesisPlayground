@@ -2,8 +2,6 @@ import torch
 from tensordict import TensorDict
 
 from gs_agent.bases.buffer import BaseBuffer
-from gs_agent.buffers.transition import OnPolicyTransition
-from gs_agent.buffers.mini_batches import OnPolicyMiniBatch
 from typing import Final
 from typing import Generator
 
@@ -81,7 +79,7 @@ def compute_gae(
         advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
 
     return advantages, returns
-class GAEBuffer(BaseBuffer[OnPolicyTransition]):
+class GAEBuffer(BaseBuffer):
     """
     A fixed-size buffer for storing rollouts for multi-env on-policy training,
     with GAE/Generalized Advantage Estimation.
@@ -149,16 +147,16 @@ class GAEBuffer(BaseBuffer[OnPolicyTransition]):
         self._idx = 0
         self._final_value = None
 
-    def append(self, transition: OnPolicyTransition) -> None:
+    def append(self, transition: dict[str, torch.Tensor]) -> None:
         if self._idx >= self._max_steps:
             raise ValueError(f"Buffer full! Cannot append more than {self._max_steps} steps.")
         idx = self._idx
-        self._buffer[ACTOR_OBS][idx] = transition.obs   
-        self._buffer[ACTIONS][idx] = transition.act
-        self._buffer[REWARDS][idx] = transition.rew
-        self._buffer[DONES][idx] = transition.done
-        self._buffer[VALUES][idx] = transition.value
-        self._buffer[ACTION_LOGPROBS][idx] = transition.log_prob.unsqueeze(-1)
+        self._buffer[ACTOR_OBS][idx] = transition["obs"]   
+        self._buffer[ACTIONS][idx] = transition["act"]
+        self._buffer[REWARDS][idx] = transition["rew"]
+        self._buffer[DONES][idx] = transition["done"]
+        self._buffer[VALUES][idx] = transition["value"]
+        self._buffer[ACTION_LOGPROBS][idx] = transition["log_prob"].unsqueeze(-1)
 
         # Increment index
         self._idx += 1

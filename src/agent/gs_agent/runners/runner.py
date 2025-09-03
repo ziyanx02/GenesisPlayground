@@ -47,7 +47,7 @@ class Runner(BaseRunner):
 
         print(f"OnPolicyRunner initialized with save path: {self.args.save_path}")
 
-    def train(self, metric_logger: Any) -> dict[str, Any]:
+    def train(self, metric_logger: Any) -> dict[str, int | float | str]:
         """Train the algorithm for a specified number of episodes.
 
         Args:
@@ -68,8 +68,8 @@ class Runner(BaseRunner):
             train_one_episode_metrics = self.algorithm.train_one_episode()
 
             total_episodes += 1
-            # total_steps += train_one_episode_metrics.speed.rollout_steps
-            # reward_list.append(train_one_episode_metrics.rollout.mean_reward)
+            total_steps += train_one_episode_metrics["rollout"]["rollout_steps"]
+            reward_list.append(train_one_episode_metrics["rollout"]["mean_reward"])
 
             # Logging
             if episode % self.args.log_interval == 0:
@@ -82,12 +82,12 @@ class Runner(BaseRunner):
         # Training summary
         training_time = time.time() - start_time
 
-        return dict(
-            total_episodes=total_episodes,
-            total_steps=total_steps,
-            total_time=training_time,
-            final_reward=reward_list[-1],
-        )
+        return {
+            "total_episodes": total_episodes,
+            "total_steps": total_steps,
+            "total_time": training_time,
+            "final_reward": reward_list[-1],
+        } 
 
     def _log_metrics(
         self,
