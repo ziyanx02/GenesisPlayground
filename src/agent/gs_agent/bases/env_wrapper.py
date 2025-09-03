@@ -12,11 +12,15 @@ class BaseEnvWrapper(ABC):
         self.env: Final[Any] = env
         
     @abstractmethod
-    def get_observations(self) -> tuple[torch.Tensor, dict[str, Any]]:
+    def reset(self) -> tuple[torch.Tensor, dict[str, Any]]:
         ...
     
     @abstractmethod
-    def step(self, action: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, dict]:
+    def step(self, action: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, dict[str, Any]]:
+        ...
+        
+    @abstractmethod
+    def get_observations(self) -> torch.Tensor:
         ...
          
     @property

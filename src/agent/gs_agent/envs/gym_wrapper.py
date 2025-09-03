@@ -46,7 +46,7 @@ class GymEnvWrapper(BaseEnvWrapper):
         done_batch = torch.as_tensor([[1.0 if done else 0.0]])
         return self._curr_obs, reward_batch, done_batch, info
 
-    def get_observation(self) -> torch.Tensor:
+    def get_observations(self) -> torch.Tensor:
         return self._curr_obs
 
     @property
