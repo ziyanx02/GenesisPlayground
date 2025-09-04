@@ -27,6 +27,8 @@ pattern = "^(?P<version>\\S+)$"
 # ---------------- Pyright ----------------
 [tool.pyright]
 exclude = []
+venvPath = "."
+venv = ".venv"
 pythonVersion = "3.10"
 reportMatchNotExhaustive = "error"
 reportMissingModuleSource = "error"
