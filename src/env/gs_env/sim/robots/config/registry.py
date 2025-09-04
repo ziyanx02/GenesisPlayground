@@ -1,11 +1,11 @@
 from typing import TypeAlias
 
-from gs_env.common.utils.asset_utils import get_urdf_path
 from gs_env.sim.robots.config.schema import (
     CtrlType,
     IKSolver,
     ManipulatorRobotArgs,
     RigidMaterialArgs,
+    MJCFMorphArgs,
     URDFMorphArgs,
 )
 
@@ -37,48 +37,16 @@ MaterialArgsRegistry["default"] = RigidMaterialArgs(
 # Morph
 # ------------------------------------------------------------
 
-MorphArgs: TypeAlias = URDFMorphArgs
+MorphArgs: TypeAlias = URDFMorphArgs | MJCFMorphArgs
 
 
 MorphArgsRegistry: dict[str, MorphArgs] = {}
 
 
-MorphArgsRegistry["piper_default"] = URDFMorphArgs(
+MorphArgsRegistry["franka_default"] = MJCFMorphArgs(
     pos=(0.0, 0.0, 0.0),
-    euler=(0, 0, 0),
-    quat=None,
-    visualization=True,
-    collision=True,
-    requires_jac_and_IK=True,
-    is_free=True,
-    file=get_urdf_path("piper", "piper"),
-    scale=1.0,
-    convexify=False,
-    recompute_inertia=False,
-    fixed=True,
-    prioritize_urdf_material=False,
-    merge_fixed_links=False,
-    links_to_keep=[],
-    decimate=True,
-)
-
-MorphArgsRegistry["franka_default"] = URDFMorphArgs(
-    pos=(0.0, 0.0, 0.0),
-    euler=(0, 0, 0),
-    quat=None,
-    visualization=True,
-    collision=True,
-    requires_jac_and_IK=True,
-    is_free=True,
-    file=get_urdf_path("piper", "piper"),
-    scale=1.0,
-    convexify=False,
-    recompute_inertia=False,
-    fixed=True,
-    prioritize_urdf_material=False,
-    merge_fixed_links=False,
-    links_to_keep=[],
-    decimate=True,
+    quat=(1.0, 0.0, 0.0, 0.0),
+    file="xml/franka_emika_panda/panda.xml",
 )
 
 
@@ -89,29 +57,30 @@ MorphArgsRegistry["franka_default"] = URDFMorphArgs(
 
 RobotArgsRegistry: dict[str, ManipulatorRobotArgs] = {}
 
-RobotArgsRegistry["piper_default"] = ManipulatorRobotArgs(
+RobotArgsRegistry["franka_default"] = ManipulatorRobotArgs(
     material_args=MaterialArgsRegistry["default"],
-    morph_args=MorphArgsRegistry["piper_default"],
+    morph_args=MorphArgsRegistry["franka_default"],
     visualize_contact=False,
     vis_mode="visual",
     ctrl_type=CtrlType.EE_POSE_REL,
     ik_solver=IKSolver.GS,  # TODO: need to be aligned with real
-    ee_link_name="gripper_base",  # or "gripper_tip"
+    ee_link_name="hand",  # or "gripper_tip"
     show_target=True,
     gripper_link_names=[
-        "link7",
-        "link8",
+        "left_finger",
+        "right_finger",
     ],
     default_arm_dof={
         "joint1": 0.0,
-        "joint2": 0.0,
+        "joint2": -0.785,
         "joint3": 0.0,
-        "joint4": -2.27,
+        "joint4": -2.356,
         "joint5": 0.0,
-        "joint6": 2.27,
+        "joint6": 1.57,
+        "joint7": 0.785,
     },
     default_gripper_dof={
-        "joint7": 0.03,
-        "joint8": -0.03,
+        "joint7": 0.04,
+        "joint8": -0.04,
     },  # open gripper
 )

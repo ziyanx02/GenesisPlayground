@@ -2,14 +2,12 @@ from typing import TypeAlias
 
 import genesis as gs
 from gs_schemas.base_types import genesis_pydantic_config
-from pydantic.dataclasses import dataclass
-
-from gs_env.common.utils.gs_utils import add_to_gs_method
+from pydantic import BaseModel
 
 
-@add_to_gs_method(gs.materials.Rigid)
-@dataclass(config=genesis_pydantic_config(frozen=True))
-class RigidMaterialArgs:
+
+class RigidMaterialArgs(BaseModel):
+    model_config = genesis_pydantic_config(frozen=True)
     rho: float
     friction: float | None
     needs_coup: bool
@@ -22,11 +20,11 @@ class RigidMaterialArgs:
     gravity_compensation: float
 
 
-@dataclass(config=genesis_pydantic_config(frozen=True))
-class PrimitiveMorphArgs:
+class PrimitiveMorphArgs(BaseModel):
+    model_config = genesis_pydantic_config(frozen=True)
     pos: tuple[float, float, float]
     euler: tuple[int, int, int]
-    quat: tuple | None
+    quat: tuple[float, float, float, float] | None
     visualization: bool
     collision: bool
     requires_jac_and_IK: bool
@@ -35,37 +33,34 @@ class PrimitiveMorphArgs:
     fixed: bool
 
 
-@add_to_gs_method(gs.morphs.Box)
-@dataclass(config=genesis_pydantic_config(frozen=True))
 class BoxMorphArgs(PrimitiveMorphArgs):
-    lower: tuple | None
-    upper: tuple | None
-    size: tuple | None
+    model_config = genesis_pydantic_config(frozen=True, arbitrary_types_allowed=True)
+    lower: tuple[float, float, float] | None
+    upper: tuple[float, float, float] | None
+    size: tuple[float, float, float] | None
 
 
-@add_to_gs_method(gs.morphs.Cylinder)
-@dataclass(config=genesis_pydantic_config(frozen=True))
 class CylinderMorphArgs(PrimitiveMorphArgs):
+    model_config = genesis_pydantic_config(frozen=True)
     height: float
     radius: float
 
 
-@add_to_gs_method(gs.morphs.Sphere)
-@dataclass(config=genesis_pydantic_config(frozen=True))
 class SphereMorphArgs(PrimitiveMorphArgs):
+    model_config = genesis_pydantic_config(frozen=True)
     radius: float
 
 
-@dataclass(config=genesis_pydantic_config(frozen=True))
-class PrimitiveObjectArgs:
+class PrimitiveObjectArgs(BaseModel):
+    model_config = genesis_pydantic_config(frozen=True, arbitrary_types_allowed=True)
     material_args: RigidMaterialArgs
     morph_args: PrimitiveMorphArgs
     visualize_contact: bool
     vis_mode: str
 
 
-@dataclass(config=genesis_pydantic_config(frozen=True))
-class MeshObjectArgs:
+class MeshObjectArgs(BaseModel):
+    model_config = genesis_pydantic_config(frozen=True, arbitrary_types_allowed=True)
     file: str
     up: tuple[int, int, int]
     front: tuple[int, int, int]
@@ -73,16 +68,16 @@ class MeshObjectArgs:
     coacd_options: gs.options.misc.CoacdOptions
 
 
-@dataclass(config=genesis_pydantic_config(frozen=True))
-class PartNetMobilityObjectArgs(MeshObjectArgs): ...  # TODO
+class PartNetMobilityObjectArgs(MeshObjectArgs):
+    model_config = genesis_pydantic_config(frozen=True)
 
 
-@dataclass(config=genesis_pydantic_config(frozen=True))
-class ObjaverseObjectArgs: ...  # TODO
+class ObjaverseObjectArgs(BaseModel):
+    model_config = genesis_pydantic_config(frozen=True)
 
 
-@dataclass(config=genesis_pydantic_config(frozen=True))
-class BlenderkitObjectArgs: ...  # TODO
+class BlenderkitObjectArgs(BaseModel):
+    model_config = genesis_pydantic_config(frozen=True)
 
 
 ObjectArgs: TypeAlias = (

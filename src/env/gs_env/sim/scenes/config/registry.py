@@ -25,23 +25,6 @@ SimArgsRegistry["default"] = gs.options.SimOptions(
 )
 
 
-# ------------------------------------------------------------
-# Coupler
-# ------------------------------------------------------------
-
-
-CouplerArgsRegistry: dict[str, gs.options.CouplerOptions] = {}
-
-CouplerArgsRegistry["default"] = gs.options.CouplerOptions(
-    rigid_mpm=True,
-    rigid_sph=True,
-    rigid_pbd=True,
-    rigid_fem=True,
-    mpm_sph=True,
-    mpm_pbd=True,
-    fem_mpm=True,
-    fem_sph=True,
-)
 
 
 # ------------------------------------------------------------
@@ -126,22 +109,22 @@ MPMArgsRegistry["default"] = gs.options.MPMOptions(
 # SPH
 # ------------------------------------------------------------
 
-SPHArgsRegistry: dict[str, gs.options.SPHOptions] = {}
-
-SPHArgsRegistry["default"] = gs.options.SPHOptions(
-    dt=None,
-    gravity=None,
-    particle_size=0.02,
-    pressure_solver="WCSPH",
-    lower_bound=(-100.0, -100.0, 0.0),
-    upper_bound=(100.0, 100.0, 100.0),
-    hash_grid_res=None,
-    hash_grid_cell_size=None,
-    max_divergence_error=0.1,
-    max_density_error_percent=0.05,
-    max_divergence_solver_iterations=100,
-    max_density_solver_iterations=100,
-)
+# SPHArgsRegistry: dict[str, gs.options.SPHOptions] = {}
+#
+# SPHArgsRegistry["default"] = gs.options.SPHOptions(
+#     dt=None,
+#     gravity=None,
+#     particle_size=0.02,
+#     pressure_solver="WCSPH",
+#     lower_bound=(-100.0, -100.0, 0.0),
+#     upper_bound=(100.0, 100.0, 100.0),
+#     hash_grid_res=None,
+#     hash_grid_cell_size=None,
+#     max_divergence_error=0.1,
+#     max_density_error_percent=0.05,
+#     max_divergence_solver_iterations=100,
+#     max_density_solver_iterations=100,
+# )
 
 
 # ------------------------------------------------------------
@@ -181,23 +164,23 @@ SFArgsRegistry["default"] = gs.options.SFOptions(
 # ------------------------------------------------------------
 # PBD
 # ------------------------------------------------------------
-
-PBDArgsRegistry: dict[str, gs.options.PBDOptions] = {}
-
-PBDArgsRegistry["default"] = gs.options.PBDOptions(
-    dt=None,
-    gravity=None,
-    max_stretch_solver_iterations=4,
-    max_bending_solver_iterations=1,
-    max_volume_solver_iterations=1,
-    max_density_solver_iterations=1,
-    max_viscosity_solver_iterations=1,
-    particle_size=1e-2,
-    hash_grid_res=None,
-    hash_grid_cell_size=None,
-    lower_bound=(-100.0, -100.0, 0.0),
-    upper_bound=(100.0, 100.0, 100.0),
-)
+#
+# PBDArgsRegistry: dict[str, gs.options.PBDOptions] = {}
+#
+# PBDArgsRegistry["default"] = gs.options.PBDOptions(
+#     dt=None,
+#     gravity=None,
+#     max_stretch_solver_iterations=4,
+#     max_bending_solver_iterations=1,
+#     max_volume_solver_iterations=1,
+#     max_density_solver_iterations=1,
+#     max_viscosity_solver_iterations=1,
+#     particle_size=1e-2,
+#     hash_grid_res=None,
+#     hash_grid_cell_size=None,
+#     lower_bound=(-100.0, -100.0, 0.0),
+#     upper_bound=(100.0, 100.0, 100.0),
+# )
 
 
 # ------------------------------------------------------------
@@ -263,7 +246,6 @@ SceneArgsRegistry["flat_scene_default"] = FlatSceneArgs(
     center_envs_at_origin=True,
     compile_kernels=True,
     sim_options=SimArgsRegistry["default"],
-    coupler_options=CouplerArgsRegistry["default"],
     tool_options=ToolArgsRegistry["default"],
     rigid_options=gs.options.RigidOptions(
         enable_joint_limit=True,
@@ -273,40 +255,10 @@ SceneArgsRegistry["flat_scene_default"] = FlatSceneArgs(
     ),
     avatar_options=AvatarArgsRegistry["default"],
     mpm_options=MPMArgsRegistry["default"],
-    sph_options=SPHArgsRegistry["default"],
+    # sph_options=SPHArgsRegistry["default"],
     fem_options=FEMArgsRegistry["default"],
     sf_options=SFArgsRegistry["default"],
-    pbd_options=PBDArgsRegistry["default"],
-    vis_options=VisArgsRegistry["default"],
-    viewer_options=gs.options.ViewerOptions(
-        camera_pos=(-0.6, 0.0, 0.7),
-        camera_lookat=(0.2, 0.0, 0.1),
-        camera_fov=50,
-        max_FPS=60,
-    ),
-    normal=(0.0, 0.0, 1.0),
-)
-
-
-SceneArgsRegistry["simple_scene_default"] = FlatSceneArgs(
-    show_viewer=True,
-    show_FPS=False,
-    center_envs_at_origin=True,
-    compile_kernels=True,
-    sim_options=SimArgsRegistry["default"],
-    coupler_options=CouplerArgsRegistry["default"],
-    tool_options=ToolArgsRegistry["default"],
-    rigid_options=gs.options.RigidOptions(
-        enable_joint_limit=True,
-        enable_collision=True,
-        gravity=(0, 0, -9.8),
-    ),
-    avatar_options=AvatarArgsRegistry["default"],
-    mpm_options=MPMArgsRegistry["default"],
-    sph_options=SPHArgsRegistry["default"],
-    fem_options=FEMArgsRegistry["default"],
-    sf_options=SFArgsRegistry["default"],
-    pbd_options=PBDArgsRegistry["default"],
+    # pbd_options=PBDArgsRegistry["default"],
     vis_options=VisArgsRegistry["default"],
     viewer_options=gs.options.ViewerOptions(
         camera_pos=(-0.6, 0.0, 0.7),

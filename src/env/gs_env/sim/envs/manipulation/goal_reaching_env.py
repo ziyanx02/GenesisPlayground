@@ -8,7 +8,7 @@ from gs_env.common.rewards import ActionL2Penalty, KeypointsAlign
 from gs_env.common.utils.math_utils import quat_mul
 from gs_env.common.utils.misc_utils import get_space_dim
 from gs_env.sim.envs.config.schema import EnvArgs
-from gs_env.sim.robots.manipulators import PiperRobot
+from gs_env.sim.robots.manipulators import FrankaRobot
 from gs_env.sim.scenes import FlatScene
 
 
@@ -31,6 +31,9 @@ class GoalReachingEnv(BaseEnv):
         self._device = device
         self._show_viewer = show_viewer
         self._args = args
+        
+        if not gs._initialized:
+            gs.init()
 
         # == setup the scene ==
         self._scene = FlatScene(
@@ -41,7 +44,7 @@ class GoalReachingEnv(BaseEnv):
         )
 
         # == setup the robot ==
-        self._robot = PiperRobot(
+        self._robot = FrankaRobot(
             num_envs=self._num_envs,
             scene=self._scene.scene,
             args=args.robot_args,
@@ -93,6 +96,8 @@ class GoalReachingEnv(BaseEnv):
         self.action_buf = torch.zeros((self.num_envs, self.action_dim), device=self._device)
 
     def reset_idx(self, envs_idx: torch.IntTensor) -> None:
+        if len(envs_idx) == 0:
+            return
         self._robot.reset(envs_idx=envs_idx)
         # Generate random goal positions
         num_reset = len(envs_idx)
@@ -127,8 +132,7 @@ class GoalReachingEnv(BaseEnv):
 
         #
         self.time_since_reset[envs_idx] = 0.0
-        self._target.set_pos(self.goal_pose[envs_idx], envs_idx=envs_idx) # type: ignore
-        self._target.set_quat(self.goal_pose[envs_idx, 3:7], envs_idx=envs_idx) # type: ignore
+        self._target.set_qpos(self.goal_pose[envs_idx], envs_idx=envs_idx) # type: ignore
     
     def get_terminated(self) -> torch.Tensor:
         reset_buf = self.get_truncated()

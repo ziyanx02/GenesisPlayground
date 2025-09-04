@@ -5,7 +5,6 @@ import genesis as gs
 from gymnasium import spaces
 import torch
 from gs_env.common.bases.base_robot import BaseGymRobot
-from gs_env.common.utils.gs_utils import to_gs_and_assert
 from gs_env.common.utils.math_utils import quat_from_angle_axis, quat_mul, quat_mul
 from gs_env.sim.robots.config.schema import (
     CtrlType,
@@ -32,9 +31,12 @@ class ManipulatorBase(BaseGymRobot):
         self._args = args
 
         # == Genesis configurations ==
-        material: gs.materials.Rigid = to_gs_and_assert(args.material_args, gs.materials.Rigid)
-        morph: gs.morphs.URDF = to_gs_and_assert(args.morph_args, gs.morphs.URDF)
-        
+        material: gs.materials.Rigid =  gs.materials.Rigid()
+        morph: gs.morphs.MJCF = gs.morphs.MJCF(
+            file=args.morph_args.file,
+            pos=args.morph_args.pos,
+            quat=args.morph_args.quat,
+        )
         #
         self._robot = scene.add_entity(
             material=material,
@@ -65,6 +67,8 @@ class ManipulatorBase(BaseGymRobot):
                 )
             case _:  # type: ignore
                 raise ValueError(f"Unknown control type: {args.ctrl_type}")
+                
+        self._action_space = spaces.Dict(action_space_dict)
 
         # == some buffer initialization ==
         self._init()
@@ -128,8 +132,8 @@ class ManipulatorBase(BaseGymRobot):
                     )
                 case CtrlType.EE_POSE_REL:
                     action = EEPoseRelAction(
-                        ee_link_pos=action[:, :3],
-                        ee_link_quat=action[:, 3:7],
+                        ee_link_pos_delta=action[:, :3],
+                        ee_link_ang_delta=action[:, 3:6],
                         gripper_width=0.0,
                     )
                 case _:
@@ -177,40 +181,34 @@ class ManipulatorBase(BaseGymRobot):
         """
         Apply relative end-effector pose control to the robot.
         """
-        assert act.ee_link_pos.shape == (
+        assert act.ee_link_pos_delta.shape == (
             self._num_envs,
             3,
         ), "End-effector position delta must be a 3D vector."
-        assert act.ee_link_quat.shape == (
+        assert act.ee_link_ang_delta.shape == (
             self._num_envs,
             3,
         ), "End-effector angle delta must be a 3D vector."
-
-        current_pos = self._ee_link.get_pos()
-        current_quat = self._ee_link.get_quat()
-
-        target_pos = current_pos + act.ee_link_pos.to(self._device)
-        target_quat = quat_mul(
-            quat_from_angle_axis(
-                torch.linalg.vector_norm(act.ee_link_quat, dim=-1),
-                act.ee_link_quat
-                / (torch.linalg.vector_norm(act.ee_link_ang_delta, dim=-1).unsqueeze(-1) + 1e-6),
-            ),
-            current_quat,
-        )
-
-        q_pos = self._robot.inverse_kinematics(
-            link=self._ee_link,
-            pos=target_pos,
-            quat=target_quat,
-            dofs_idx_local=self._arm_dof_idx,
-            max_samples=10,
-            max_solver_iters=20,
-        )
+        q_pos = self._dls_ik(act)
+        # set gripper width
         q_pos[:, self._fingers_dof] = torch.tensor(
             [act.gripper_width, -act.gripper_width], device=self._device
         )
         self._robot.control_dofs_position(position=q_pos)
+
+    def _dls_ik(self, action: EEPoseRelAction) -> torch.Tensor:
+        """
+        Damped least squares inverse kinematics
+        """
+        delta_pose = torch.cat([action.ee_link_pos_delta, action.ee_link_ang_delta], dim=-1)
+        lambda_val = 0.01
+        jacobian = self._robot.get_jacobian(link=self._ee_link)
+        jacobian_T = jacobian.transpose(1, 2)
+        lambda_matrix = (lambda_val**2) * torch.eye(n=jacobian.shape[1], device=self._device)
+        delta_joint_pos = (
+            jacobian_T @ torch.inverse(jacobian @ jacobian_T + lambda_matrix) @ delta_pose.unsqueeze(-1)
+        ).squeeze(-1)
+        return self._robot.get_qpos() + delta_joint_pos
 
     @property
     def base_pos(self) -> torch.Tensor:
@@ -244,7 +242,7 @@ class ManipulatorBase(BaseGymRobot):
         return self._args.ctrl_type
 
 
-class PiperRobot(ManipulatorBase):
+class FrankaRobot(ManipulatorBase):
     def __init__(
         self, num_envs: int, scene: gs.Scene, args: ManipulatorRobotArgs, device: torch.device
     ) -> None:

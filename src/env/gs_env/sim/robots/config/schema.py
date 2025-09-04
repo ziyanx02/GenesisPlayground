@@ -49,6 +49,13 @@ class URDFMorphArgs(BaseModel):
 
     decimate: bool
 
+class MJCFMorphArgs(BaseModel):
+    model_config = genesis_pydantic_config(frozen=True)
+    file: str
+    pos: tuple[float, float, float]
+    quat: tuple[float, float, float, float]
+
+
 
 class CtrlType(GenesisEnum):
     # Arm Control Types
@@ -66,7 +73,7 @@ class ManipulatorRobotArgs(BaseModel):
     model_config = genesis_pydantic_config(frozen=True)
 
     material_args: RigidMaterialArgs
-    morph_args: URDFMorphArgs
+    morph_args: URDFMorphArgs | MJCFMorphArgs
     visualize_contact: bool
     vis_mode: str
     ctrl_type: CtrlType
@@ -77,28 +84,17 @@ class ManipulatorRobotArgs(BaseModel):
     default_arm_dof: dict[str, float]
     default_gripper_dof: dict[str, float] | None = None
 
-    @field_validator("morph_args")
-    def check_morph_args(cls, morph_args: URDFMorphArgs) -> URDFMorphArgs:
-        expected_file = get_urdf_path("piper", "piper")
-        assert (
-            morph_args.file == expected_file
-        ), f"File in morph args {morph_args.file} is not consistent with the expected {expected_file}"
-
-        return morph_args
-
-
-
 
 
 class JointPosAction(BaseModel):
-    model_config = genesis_pydantic_config(frozen=True)
+    model_config = genesis_pydantic_config(frozen=True, arbitrary_types_allowed=True)
 
     gripper_width: float
     joint_pos: torch.Tensor  # (n_dof,)
 
 
 class EEPoseAbsAction(BaseModel):
-    model_config = genesis_pydantic_config(frozen=True)
+    model_config = genesis_pydantic_config(frozen=True, arbitrary_types_allowed=True)
 
     gripper_width: float
     ee_link_pos: torch.Tensor  # (3,)
@@ -106,11 +102,11 @@ class EEPoseAbsAction(BaseModel):
 
 
 class EEPoseRelAction(BaseModel):
-    model_config = genesis_pydantic_config(frozen=True)
+    model_config = genesis_pydantic_config(frozen=True, arbitrary_types_allowed=True)
 
     gripper_width: float
-    ee_link_pos: torch.Tensor  # (3,)
-    ee_link_quat: torch.Tensor  # (4,)
+    ee_link_pos_delta: torch.Tensor  # (3,)
+    ee_link_ang_delta: torch.Tensor  # (3,)
 
 
 BaseAction: TypeAlias = (

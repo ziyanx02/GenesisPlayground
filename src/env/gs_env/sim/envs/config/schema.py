@@ -19,7 +19,7 @@ class GenesisInitArgs(BaseModel):
 
 
 class EnvArgs(BaseModel):
-    model_config = genesis_pydantic_config(frozen=True)
+    model_config = genesis_pydantic_config(frozen=True, arbitrary_types_allowed=True)
 
     gs_init_args: GenesisInitArgs
     scene_args: SceneArgs

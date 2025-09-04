@@ -20,30 +20,24 @@ class FlatScene(BaseSimScene):
     ) -> None:
         super().__init__()
         #
-        _renderer = (
-            gs.options.renderers.BatchRenderer(
-                use_rasterizer=False,
-                batch_render_res=img_resolution,
-            )
-            if img_resolution
-            else None
-        )
+        # _renderer = (
+        #     gs.options.renderers.BatchRenderer(
+        #         use_rasterizer=False,
+        #     )
+        # )
         self._scene = gs.Scene(
             sim_options=args.sim_options,
-            coupler_options=args.coupler_options,
             tool_options=args.tool_options,
             rigid_options=args.rigid_options,
             avatar_options=args.avatar_options,
             mpm_options=args.mpm_options,
-            sph_options=args.sph_options,
             fem_options=args.fem_options,
             sf_options=args.sf_options,
-            pbd_options=args.pbd_options,
             vis_options=args.vis_options,
             viewer_options=args.viewer_options,
             show_FPS=show_fps,
             show_viewer=show_viewer,
-            renderer=_renderer,
+            # renderer=_renderer,
         )
         #
         self._plane = self._scene.add_entity(

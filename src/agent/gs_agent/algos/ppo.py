@@ -91,12 +91,12 @@ class PPO(BaseAlgo):
                 next_obs, reward, terminated, truncated, _extra_infos = self.env.step(action)
 
                 transition = {
-                    "obs": obs,
-                    "act": action,
-                    "rew": reward,
-                    "done": terminated,
-                    "value": self._critic(obs),
-                    "log_prob": log_prob,
+                    "obs": obs,   #shape: [num_envs, obs_dim]
+                    "act": action,   #shape: [num_envs, action_dim]
+                    "rew": reward,   #shape: [num_envs, 1]
+                    "done": terminated,   #shape: [num_envs, 1]
+                    "value": self._critic(obs),   #shape: [num_envs, 1]
+                    "log_prob": log_prob,   #shape: [num_envs, 1]
                 }
                 self._rollouts.append(transition)
 
@@ -122,7 +122,7 @@ class PPO(BaseAlgo):
                 obs = next_obs
         with torch.no_grad():
             last_value = self._critic(self.env.get_observations())
-            self._rollouts.set_final_value(last_value.unsqueeze(-1))
+            self._rollouts.set_final_value(last_value)
             
         mean_reward = 0.0
         mean_ep_len = 0.0

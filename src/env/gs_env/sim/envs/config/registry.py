@@ -30,7 +30,7 @@ EnvArgsRegistry: dict[str, EnvArgs] = {}
 EnvArgsRegistry["goal_reach_default"] = EnvArgs(
     gs_init_args=GenesisInitArgsRegistry["default"],
     scene_args=SceneArgsRegistry["flat_scene_default"],
-    robot_args=RobotArgsRegistry["piper_default"],
+    robot_args=RobotArgsRegistry["franka_default"],
     objects_args=[ObjectArgsRegistry["box_default"]],
     sensors_args=[
         SensorArgsRegistry["oak_camera_default"],

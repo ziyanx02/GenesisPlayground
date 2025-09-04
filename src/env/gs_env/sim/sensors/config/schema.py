@@ -1,15 +1,15 @@
 from typing import TypeAlias
 
 from gs_schemas.base_types import GenesisEnum, genesis_pydantic_config
-from pydantic.dataclasses import dataclass
+from pydantic import BaseModel
 
 # ------------------------------------------------------------
 # Camera
 # ------------------------------------------------------------
 
 
-@dataclass(config=genesis_pydantic_config(frozen=True))
-class OakCameraArgs:
+class OakCameraArgs(BaseModel):
+    model_config = genesis_pydantic_config(frozen=True)
     # aligned with real
     silent: bool
     resolution: tuple[int, int]
@@ -26,12 +26,12 @@ class OakCameraArgs:
     GUI: bool
 
 
-@dataclass(config=genesis_pydantic_config(frozen=True))
-class RealSenseCameraArgs: ...
+class RealSenseCameraArgs(BaseModel):
+    model_config = genesis_pydantic_config(frozen=True)
 
 
-@dataclass(config=genesis_pydantic_config(frozen=True))
-class ZEDCameraArgs: ...
+class ZEDCameraArgs(BaseModel):
+    model_config = genesis_pydantic_config(frozen=True)
 
 
 CameraArgs: TypeAlias = OakCameraArgs | RealSenseCameraArgs | ZEDCameraArgs
@@ -49,8 +49,8 @@ class ProprioceptiveSensorType(GenesisEnum):
     GRIPPER_WIDTH = "GRIPPER_WIDTH"
 
 
-@dataclass(config=genesis_pydantic_config(frozen=True))
-class ProprioceptiveSensorArgs:
+class ProprioceptiveSensorArgs(BaseModel):
+    model_config = genesis_pydantic_config(frozen=True)
     sensor_type: ProprioceptiveSensorType
 
 

@@ -13,15 +13,17 @@ class GenesisEnvWrapper(BaseEnvWrapper):
         env: TGSEnv, device: torch.device = _DEFAULT_DEVICE,
     ) -> None:
         super().__init__(env, device)
-        self._curr_obs: torch.Tensor = torch.tensor(self.env.reset()[0], device=self.device)
+        self.env.reset()
+        self._curr_obs = self.env.get_observations()
+
 
     # ---------------------------
     # BatchEnvWrapper API (batch)
     # ---------------------------
     def reset(self) -> tuple[torch.Tensor, dict[str, Any]]:
-        obs, info = self.env.reset()
-        self._curr_obs = torch.tensor(obs, device=self.device)
-        return obs, info
+        self.env.reset()
+        self._curr_obs = self.env.get_observations()
+        return self._curr_obs, self.env.get_extra_infos()
 
     def step(self, action: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, dict[str, Any]]:
         # apply action
@@ -30,12 +32,18 @@ class GenesisEnvWrapper(BaseEnvWrapper):
         next_obs = self.env.get_observations()
         # get reward
         reward, reward_terms = self.env.get_reward()
+        if reward.dim() == 1:
+            reward = reward.unsqueeze(-1)
         # get terminated
         terminated = self.env.get_terminated()
+        if terminated.dim() == 1:
+            terminated = terminated.unsqueeze(-1)
         # get truncated
         truncated = self.env.get_truncated()
+        if truncated.dim() == 1:
+            truncated = truncated.unsqueeze(-1)
         # reset if terminated or truncated
-        done_idx = terminated | truncated
+        done_idx = terminated.nonzero(as_tuple=True)[0]
         if len(done_idx) > 0:
             self.env.reset_idx(done_idx)
         # get extra infos

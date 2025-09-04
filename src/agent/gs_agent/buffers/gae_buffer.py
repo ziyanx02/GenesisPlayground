@@ -156,7 +156,7 @@ class GAEBuffer(BaseBuffer):
         self._buffer[REWARDS][idx] = transition["rew"]
         self._buffer[DONES][idx] = transition["done"]
         self._buffer[VALUES][idx] = transition["value"]
-        self._buffer[ACTION_LOGPROBS][idx] = transition["log_prob"].unsqueeze(-1)
+        self._buffer[ACTION_LOGPROBS][idx] = transition["log_prob"]
 
         # Increment index
         self._idx += 1
