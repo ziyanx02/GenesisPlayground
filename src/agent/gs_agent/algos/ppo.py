@@ -106,8 +106,7 @@ class PPO(BaseAlgo):
                 self._curr_ep_len += 1
 
                 # Check for episode completions and reset tracking
-                done = terminated | truncated
-                done_mask = done.squeeze(-1)  # Remove last dimension if present
+                done_mask = terminated.unsqueeze(-1) | truncated.unsqueeze(-1)
                 new_ids = (done_mask > 0).nonzero(as_tuple=False)
                 if len(new_ids) > 0:
                     # Vectorized environment

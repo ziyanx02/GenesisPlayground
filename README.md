@@ -24,8 +24,8 @@ graph TD
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Clone and setup the playground
-git clone <your-repo-url>
-cd gs-playground
+git clone git@github.com:yun-long/GenesisPlayground.git
+cd GenesisPlayground 
 ```
 
 ### 2. Install the `gs-env` package and its dependencies in an isolated environment:
@@ -44,5 +44,10 @@ source .venv/bin/activate
 ### 4. Run RL training for a simple `inverted pendulum` task in simulation:
 
 ```bash
-python3 examples/run_ppo_gym.py # gym inverted pendulum 
+python3 examples/run_ppo_gym.py # OpenAI gym inverted pendulum 
+```
+
+or
+```bash
+python3 examples/run_ppo_gs.py # Genesis example 
 ```
