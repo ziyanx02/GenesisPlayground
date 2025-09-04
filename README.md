@@ -51,3 +51,10 @@ or
 ```bash
 python3 examples/run_ppo_gs.py # Genesis example
 ```
+
+## TODO
+
+- [ ] Address CI errors
+- [ ] Add coding guidelines 
+- [ ] Add teleop interface and examples
+- [ ] Add BC algorithms 
