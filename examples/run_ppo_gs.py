@@ -17,7 +17,14 @@ def create_gs_env(
     env_name: str = "goal_reach_default", show_viewer: bool = False
 ) -> GenesisEnvWrapper:
     """Create gym environment wrapper."""
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    elif torch.backends.mps.is_available():
+        device = torch.device("mps")
+    else:
+        device = torch.device("cpu")
+    print(f"Using device: {device}")
+    
     env = GoalReachingEnv(args=EnvArgsRegistry[env_name], num_envs=2048, show_viewer=show_viewer, device=device)
     return GenesisEnvWrapper(env, device=device)
 

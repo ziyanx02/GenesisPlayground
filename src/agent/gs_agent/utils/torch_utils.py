@@ -32,11 +32,14 @@ def get_activation(activation: str | type[nn.Module] | nn.Module) -> nn.Module:
 
 
 def get_torch_device():
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    if device.type != "cuda":
-        print("CUDA is not available")
-    else:
+    # Properly detect available device (CUDA, MPS, or CPU)
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
         print("CUDA is available")
-        print(f"CUDA device count: {torch.cuda.device_count()}")
-        print(f"CUDA device name: {torch.cuda.get_device_name(0)}")
+    elif torch.backends.mps.is_available():
+        device = torch.device("mps")
+        print("MPS is available")
+    else:
+        device = torch.device("cpu")
+        print("Using CPU")
     return device

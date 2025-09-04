@@ -17,7 +17,14 @@ def create_gym_env(
     env_name: str = "Pendulum-v1", render_mode: str | None = None
 ) -> GymEnvWrapper:
     """Create gym environment wrapper."""
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # Properly detect available device (CUDA, MPS, or CPU)
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    elif torch.backends.mps.is_available():
+        device = torch.device("mps")
+    else:
+        device = torch.device("cpu")
+    
     gym_env = gym.make(env_name, render_mode=render_mode)
     return GymEnvWrapper(gym_env, device=device)
 
