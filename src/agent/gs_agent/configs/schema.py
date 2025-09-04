@@ -18,48 +18,43 @@ from pydantic import BaseModel, Field, NonNegativeFloat, NonNegativeInt, Positiv
 class BackendType(GenesisEnum):
     """Backend types for RL computations."""
 
-    CPU = "cpu"
-    CUDA = "cuda"
-    MPS = "mps"
+    CPU = "CPU"
+    CUDA = "CUDA"
+    MPS = "MPS"
 
 
 class AlgorithmType(GenesisEnum):
     """Supported RL algorithm types."""
 
-    PPO = "ppo"
+    PPO = "PPO"
 
 
 class NetworkBackboneType(GenesisEnum):
-    MLP = "mlp"
-    RNN = "rnn"
-    CNN = "cnn"
+    MLP = "MLP"
+    RNN = "RNN"
+    CNN = "CNN"
 
 
 class OptimizerType(GenesisEnum):
-    ADAM = "adam"
-    ADAMW = "adamw"
-    SGD = "sgd"
+    ADAM = "ADAM"
+    ADAMW = "ADAMW"
+    SGD = "SGD"
 
 
 class ActivationType(GenesisEnum):
-    RELU = "relu"
-    TANH = "tanh"
-    GELU = "gelu"
-    SWISH = "swish"
+    RELU = "RELU"
+    TANH = "TANH"
+    GELU = "GELU"
+    SWISH = "SWISH"
 
 
 class PolicyType(GenesisEnum):
-    GAUSSIAN = "gaussian"
+    GAUSSIAN = "GAUSSIAN"
 
 
 class ValueFunctionType(GenesisEnum):
-    STATE_VALUE = "state_value"
-    Q_VALUE = "state_action_value"
-
-
-class ActorCriticType(GenesisEnum):
-    PPO = "ppo"
-
+    STATE_VALUE = "STATE_VALUE"
+    Q_VALUE = "Q_VALUE"
 
 # ============================================================================
 # Base Configuration
