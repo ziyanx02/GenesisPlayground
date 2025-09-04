@@ -1,10 +1,10 @@
+from collections.abc import Iterator
+from typing import Final
+
 import torch
 from tensordict import TensorDict
 
 from gs_agent.bases.buffer import BaseBuffer
-from typing import Final
-from typing import Iterator
-
 
 _DEFAULT_DEVICE: Final[torch.device] = torch.device("cpu")
 
@@ -16,6 +16,7 @@ VALUES = "values"
 ACTION_LOGPROBS = "action_logprobs"
 ADVANTAGES = "advantages"
 RETURNS = "returns"
+
 
 def compute_gae(
     rewards: torch.Tensor,
@@ -79,6 +80,8 @@ def compute_gae(
         advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
 
     return advantages, returns
+
+
 class GAEBuffer(BaseBuffer):
     """
     A fixed-size buffer for storing rollouts for multi-env on-policy training,
@@ -92,8 +95,8 @@ class GAEBuffer(BaseBuffer):
         actor_obs_size: int,
         action_size: int,
         device: torch.device = _DEFAULT_DEVICE,
-        gae_gamma=0.98,
-        gae_lam=0.95,
+        gae_gamma: float = 0.98,
+        gae_lam: float = 0.95,
     ) -> None:
         """
         Args:
@@ -142,8 +145,7 @@ class GAEBuffer(BaseBuffer):
         )
         return buffer
 
-
-    def reset(self):
+    def reset(self) -> None:
         self._idx = 0
         self._final_value = None
 
@@ -151,7 +153,7 @@ class GAEBuffer(BaseBuffer):
         if self._idx >= self._max_steps:
             raise ValueError(f"Buffer full! Cannot append more than {self._max_steps} steps.")
         idx = self._idx
-        self._buffer[ACTOR_OBS][idx] = transition["obs"]   
+        self._buffer[ACTOR_OBS][idx] = transition["obs"]
         self._buffer[ACTIONS][idx] = transition["act"]
         self._buffer[REWARDS][idx] = transition["rew"]
         self._buffer[DONES][idx] = transition["done"]
@@ -160,7 +162,6 @@ class GAEBuffer(BaseBuffer):
 
         # Increment index
         self._idx += 1
-
 
     def set_final_value(self, final_value: torch.Tensor) -> None:
         """Set the final value for bootstrapping incomplete episodes.
@@ -173,13 +174,15 @@ class GAEBuffer(BaseBuffer):
         """
         self._final_value = final_value
 
-    def is_full(self):
+    def is_full(self) -> bool:
         return self._idx >= self._max_steps
 
-    def __len__(self):
+    def __len__(self) -> int:
         return self._idx * self._num_envs
 
-    def minibatch_gen(self, num_mini_batches: int, num_epochs: int, shuffle: bool = True) -> Iterator[dict[str, torch.Tensor]]:
+    def minibatch_gen(
+        self, num_mini_batches: int, num_epochs: int, shuffle: bool = True
+    ) -> Iterator[dict[str, torch.Tensor]]:
         advantages, returns = compute_gae(
             rewards=self._buffer[REWARDS],
             values=self._buffer[VALUES],
@@ -215,8 +218,9 @@ class GAEBuffer(BaseBuffer):
                     "rew": self._buffer[REWARDS][t_idx, b_idx].reshape(mini_batch_size, -1),
                     "done": self._buffer[DONES][t_idx, b_idx].reshape(mini_batch_size, -1),
                     "value": self._buffer[VALUES][t_idx, b_idx].reshape(mini_batch_size, -1),
-                    "log_prob": self._buffer[ACTION_LOGPROBS][t_idx, b_idx].reshape(mini_batch_size, -1),
+                    "log_prob": self._buffer[ACTION_LOGPROBS][t_idx, b_idx].reshape(
+                        mini_batch_size, -1
+                    ),
                     "advantage": advantages[t_idx, b_idx].reshape(mini_batch_size, -1),
                     "returns": returns[t_idx, b_idx].reshape(mini_batch_size, -1),
                 }
-

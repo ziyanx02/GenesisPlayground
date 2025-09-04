@@ -1,21 +1,23 @@
+from typing import Any, Final, TypeVar
+
 import torch
-from typing import Any, Mapping, TypeVar, Final
+
 from gs_agent.bases.env_wrapper import BaseEnvWrapper
 
 _DEFAULT_DEVICE: Final[torch.device] = torch.device("cpu")
 
 TGSEnv = TypeVar("TGSEnv")
 
-class GenesisEnvWrapper(BaseEnvWrapper):
 
+class GenesisEnvWrapper(BaseEnvWrapper):
     def __init__(
         self,
-        env: TGSEnv, device: torch.device = _DEFAULT_DEVICE,
+        env: TGSEnv,
+        device: torch.device = _DEFAULT_DEVICE,
     ) -> None:
         super().__init__(env, device)
         self.env.reset()
         self._curr_obs = self.env.get_observations()
-
 
     # ---------------------------
     # BatchEnvWrapper API (batch)
@@ -25,7 +27,9 @@ class GenesisEnvWrapper(BaseEnvWrapper):
         self._curr_obs = self.env.get_observations()
         return self._curr_obs, self.env.get_extra_infos()
 
-    def step(self, action: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, dict[str, Any]]:
+    def step(
+        self, action: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, dict[str, Any]]:
         # apply action
         self.env.apply_action(action)
         # get observations
@@ -47,7 +51,7 @@ class GenesisEnvWrapper(BaseEnvWrapper):
         if len(done_idx) > 0:
             self.env.reset_idx(done_idx)
         # get extra infos
-        extra_infos = self.env.get_extra_infos() 
+        extra_infos = self.env.get_extra_infos()
         extra_infos["reward_terms"] = reward_terms
         return next_obs, reward, terminated, truncated, extra_infos
 
@@ -57,11 +61,11 @@ class GenesisEnvWrapper(BaseEnvWrapper):
     @property
     def action_dim(self) -> int:
         return self.env.action_dim
-    
+
     @property
     def actor_obs_dim(self) -> int:
         return self.env.actor_obs_dim
-    
+
     @property
     def critic_obs_dim(self) -> int:
         return self.env.critic_obs_dim

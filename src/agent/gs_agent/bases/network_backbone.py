@@ -1,9 +1,7 @@
-
 from abc import ABC, abstractmethod
 
 import torch
 from torch import nn
-
 
 
 class NetworkBackbone(nn.Module, ABC):

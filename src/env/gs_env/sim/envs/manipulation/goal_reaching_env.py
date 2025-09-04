@@ -1,8 +1,10 @@
+from typing import Any
+
 import genesis as gs
 import gymnasium as gym
 import numpy as np
 import torch
-from typing import Any
+
 from gs_env.common.bases.base_env import BaseEnv
 from gs_env.common.rewards import ActionL2Penalty, KeypointsAlign
 from gs_env.common.utils.math_utils import quat_mul
@@ -11,8 +13,8 @@ from gs_env.sim.envs.config.schema import EnvArgs
 from gs_env.sim.robots.manipulators import FrankaRobot
 from gs_env.sim.scenes import FlatScene
 
-
 _DEFAULT_DEVICE = torch.device("cpu")
+
 
 class GoalReachingEnv(BaseEnv):
     """
@@ -31,8 +33,8 @@ class GoalReachingEnv(BaseEnv):
         self._device = device
         self._show_viewer = show_viewer
         self._args = args
-        
-        if not gs._initialized:
+
+        if not gs._initialized:  # noqa: SLF001
             gs.init(performance_mode=True)
 
         # == setup the scene ==
@@ -113,9 +115,9 @@ class GoalReachingEnv(BaseEnv):
         self.goal_pose[envs_idx] = torch.tensor(
             [0.2, 0.0, 0.2, 1.0, 0.0, 0.0, 0.0], dtype=torch.float32, device=self._device
         )
-        q_down = torch.tensor([0.0, 0.0, 1.0, 0.0], dtype=torch.float32, device=self._device).repeat(
-            num_reset, 1
-        )
+        q_down = torch.tensor(
+            [0.0, 0.0, 1.0, 0.0], dtype=torch.float32, device=self._device
+        ).repeat(num_reset, 1)
         random_yaw = torch.rand(num_reset, device=self._device) * 2 * np.pi - np.pi  # -pi to pi
         random_yaw *= 0.25  # reduce the range to [-pi/4, pi/4]
         # random_yaw *= 0.0  # reduce the range to [-pi/4, pi/4]
@@ -132,12 +134,12 @@ class GoalReachingEnv(BaseEnv):
 
         #
         self.time_since_reset[envs_idx] = 0.0
-        self._target.set_qpos(self.goal_pose[envs_idx], envs_idx=envs_idx) # type: ignore
-    
+        self._target.set_qpos(self.goal_pose[envs_idx], envs_idx=envs_idx)  # type: ignore
+
     def get_terminated(self) -> torch.Tensor:
         reset_buf = self.get_truncated()
         return reset_buf
-    
+
     def get_truncated(self) -> torch.Tensor:
         time_out_buf = self.time_since_reset > self._max_sim_time
         return time_out_buf
@@ -153,14 +155,13 @@ class GoalReachingEnv(BaseEnv):
             self.goal_pose,  # goal pose (7D: pos + quat)
         ]
         return torch.cat(obs_components, dim=-1)
-    
+
     def apply_action(self, action: torch.Tensor) -> None:
         action = self.rescale_action(action)
         self.action_buf[:] = action.clone().to(self._device)
         self.time_since_reset += self._scene.scene.dt
         self._robot.apply_action(action=action)
         self._scene.scene.step()
-
 
     def get_extra_infos(self) -> dict[str, Any]:
         return dict()
@@ -225,7 +226,6 @@ class GoalReachingEnv(BaseEnv):
         )
         return keypoint_offsets.unsqueeze(0).repeat(batch_size, 1, 1)
 
-
     @property
     def action_dim(self) -> int:
         act_dim = get_space_dim(self._action_space) - 1  # -1 for the gripper actio
@@ -239,4 +239,3 @@ class GoalReachingEnv(BaseEnv):
     def critic_obs_dim(self) -> int:
         num_critic_obs = get_space_dim(self._observation_space)
         return num_critic_obs
-

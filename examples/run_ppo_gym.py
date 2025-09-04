@@ -9,13 +9,12 @@ import gymnasium as gym
 import torch
 from gs_agent.algos.ppo import PPO
 from gs_agent.configs import PPO_PENDULUM_MLP, RUNNER_PENDULUM_MLP
-from gs_agent.wrappers.gym_env_wrapper import GymEnvWrapper
 from gs_agent.runners.onpolicy_runner import OnPolicyRunner
 from gs_agent.utils.logger import configure as logger_configure
+from gs_agent.wrappers.gym_env_wrapper import GymEnvWrapper
 
-def create_gym_env(
-    env_name: str = "Pendulum-v1", render_mode: str | None = None
-) -> GymEnvWrapper:
+
+def create_gym_env(env_name: str = "Pendulum-v1", render_mode: str | None = None) -> GymEnvWrapper:
     """Create gym environment wrapper."""
     # Properly detect available device (CUDA, MPS, or CPU)
     if torch.cuda.is_available():
@@ -24,7 +23,7 @@ def create_gym_env(
         device = torch.device("mps")
     else:
         device = torch.device("cpu")
-    
+
     gym_env = gym.make(env_name, render_mode=render_mode)
     return GymEnvWrapper(gym_env, device=device)
 
@@ -81,8 +80,8 @@ def evaluate_policy(checkpoint_path: Path, num_episodes: int = 10) -> None:
 
         while True:
             with torch.no_grad():
-                policy_output = inference_policy(obs, deterministic=True) # type: ignore
-                obs, reward, done, _ = wrapped_env.step(policy_output.action) # type: ignore
+                policy_output = inference_policy(obs, deterministic=True)  # type: ignore
+                obs, reward, done, _ = wrapped_env.step(policy_output.action)  # type: ignore
 
             episode_reward += reward.item()
             episode_length += 1
@@ -114,9 +113,11 @@ def main(train: bool = True) -> None:
         # Get configuration and runner from registry
         runner = create_ppo_runner_from_registry()
         # Set up logging with proper configuration
-        logger = logger_configure(folder=str(runner.save_dir), format_strings=["stdout", "csv", "wandb"])
+        logger = logger_configure(
+            folder=str(runner.save_dir), format_strings=["stdout", "csv", "wandb"]
+        )
         # Train using Runner
-        train_summary_info = runner.train(metric_logger=logger) 
+        train_summary_info = runner.train(metric_logger=logger)
 
         print("Training completed successfully!")
         print(f"Training completed in {train_summary_info['total_time']:.2f} seconds.")

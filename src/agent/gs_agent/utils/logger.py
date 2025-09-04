@@ -50,7 +50,7 @@ DISABLED = 50
 
 
 class Video:
-    def __init__(self, frames: th.Tensor, fps: float):
+    def __init__(self, frames: th.Tensor, fps: float) -> None:
         """
         Args:
             frames (th.Tensor): the video frames, of shape (T, H, W, C)
@@ -61,7 +61,7 @@ class Video:
 
 
 class Figure:
-    def __init__(self, figure: plt.figure, close: bool):
+    def __init__(self, figure: plt.figure, close: bool) -> None:  # type: ignore
         """
         Args:
             figure (plt.figure): the figure to log
@@ -72,7 +72,7 @@ class Figure:
 
 
 class Image:
-    def __init__(self, image: th.Tensor | np.ndarray | str, dataformats: str):
+    def __init__(self, image: th.Tensor | np.ndarray | str, dataformats: str) -> None:  # type: ignore
         """
         Args:
             image (Union[th.Tensor, np.ndarray, str]): the image to log
@@ -87,7 +87,7 @@ class HParam:
         self,
         hparam_dict: Mapping[str, bool | str | float | None],
         metric_dict: Mapping[str, float],
-    ):
+    ) -> None:
         self.hparam_dict = hparam_dict
         if not metric_dict:
             raise Exception(
@@ -97,7 +97,7 @@ class HParam:
 
 
 class FormatUnsupportedError(NotImplementedError):
-    def __init__(self, unsupported_formats: Sequence[str], value_description: str):
+    def __init__(self, unsupported_formats: Sequence[str], value_description: str) -> None:
         if len(unsupported_formats) > 1:
             format_str = f"formats {', '.join(unsupported_formats)} are"
         else:
@@ -116,7 +116,7 @@ class KVWriter:
     def write(
         self,
         key_values: dict[str, Any],
-        key_excluded: dict[str, tuple[str, ...]],
+        key_excluded: dict[str, tuple[str, ...] | None],
         step: int = 0,
     ) -> None:
         """
@@ -154,7 +154,7 @@ class HumanOutputFormat(KVWriter, SeqWriter):
         no longer than 79 characters wide.
     """
 
-    def __init__(self, filename_or_file: str | TextIO, max_length: int = 36):
+    def __init__(self, filename_or_file: str | TextIO, max_length: int = 36) -> None:
         self.max_length = max_length
         if isinstance(filename_or_file, str):
             self.file = open(filename_or_file, "w")
@@ -170,7 +170,7 @@ class HumanOutputFormat(KVWriter, SeqWriter):
     def write(
         self,
         key_values: dict[str, Any],
-        key_excluded: dict[str, tuple[str, ...]],
+        key_excluded: dict[str, tuple[str, ...] | None],
         step: int = 0,
     ) -> None:
         # Create strings for printing
@@ -263,7 +263,7 @@ class HumanOutputFormat(KVWriter, SeqWriter):
 
 
 def filter_excluded_keys(
-    key_values: dict[str, Any], key_excluded: dict[str, tuple[str, ...]], _format: str
+    key_values: dict[str, Any], key_excluded: dict[str, tuple[str, ...] | None], _format: str
 ) -> dict[str, Any]:
     """
     Filters the keys specified by ``key_exclude`` for the specified format
@@ -295,7 +295,7 @@ class JSONOutputFormat(KVWriter):
     def write(
         self,
         key_values: dict[str, Any],
-        key_excluded: dict[str, tuple[str, ...]],
+        key_excluded: dict[str, tuple[str, ...] | None],
         step: int = 0,
     ) -> None:
         def cast_to_json_serializable(value: Any):
@@ -347,7 +347,7 @@ class CSVOutputFormat(KVWriter):
     def write(
         self,
         key_values: dict[str, Any],
-        key_excluded: dict[str, tuple[str, ...]],
+        key_excluded: dict[str, tuple[str, ...] | None],
         step: int = 0,
     ) -> None:
         # Add our current row to the history
@@ -420,7 +420,7 @@ class TensorBoardOutputFormat(KVWriter):
     def write(
         self,
         key_values: dict[str, Any],
-        key_excluded: dict[str, tuple[str, ...]],
+        key_excluded: dict[str, tuple[str, ...] | None],
         step: int = 0,
     ) -> None:
         assert not self._is_closed, "The SummaryWriter was closed, please re-create one."
@@ -494,7 +494,7 @@ class WandbOutputFormat(KVWriter):
     def write(
         self,
         key_values: dict[str, Any],
-        key_excluded: dict[str, tuple[str, ...]],
+        key_excluded: dict[str, tuple[str, ...] | None],
         step: int = 0,
     ) -> None:
         log_dict = filter_excluded_keys(key_values, key_excluded, "wandb")
@@ -555,7 +555,7 @@ class Logger:
     :param output_formats: the list of output formats
     """
 
-    def __init__(self, folder: str | None, output_formats: list[KVWriter]):
+    def __init__(self, folder: str | None, output_formats: list[KVWriter]) -> None:
         self.name_to_value: dict[str, float] = defaultdict(float)  # values this iteration
         self.name_to_count: dict[str, int] = defaultdict(int)
         self.name_to_excluded: dict[str, tuple[str, ...]] = {}
@@ -566,7 +566,7 @@ class Logger:
     @staticmethod
     def to_tuple(
         string_or_tuple: str | tuple[str, ...] | None,
-    ) -> tuple[str, ...]:
+    ) -> tuple[str, ...] | tuple[str]:
         """
         Helper function to convert str to tuple of str.
         """

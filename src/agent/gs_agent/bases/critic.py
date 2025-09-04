@@ -1,9 +1,7 @@
-
 from abc import ABC, abstractmethod
 
-from torch import nn
 import torch
-
+from torch import nn
 
 
 class BaseStateValueFunction(nn.Module, ABC):

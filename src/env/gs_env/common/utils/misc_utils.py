@@ -1,8 +1,9 @@
-import numpy as np
 from typing import Any
+
+import numpy as np
+
 #
 from gymnasium import spaces
-from gs_env.sim.robots.config.schema import CtrlType
 
 
 def get_space_dim(space: spaces.Space[Any]) -> int:
@@ -14,4 +15,3 @@ def get_space_dim(space: spaces.Space[Any]) -> int:
         return sum(get_space_dim(subspace) for subspace in space.spaces.values())
     else:
         raise NotImplementedError(f"Unsupported space type: {type(space)}")
-

@@ -1,8 +1,3 @@
-
-
-import math
-from typing import Final
-
 import torch
 from torch import nn
 from torch.distributions import Normal
@@ -83,7 +78,6 @@ class GaussianPolicy(Policy):
 
     def get_action_shape(self) -> tuple[int, ...]:
         return (self.action_dim,)
-
 
 
 # === Categorical Policy === #

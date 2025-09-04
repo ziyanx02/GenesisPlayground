@@ -1,5 +1,5 @@
-
 import enum
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
@@ -68,7 +68,7 @@ class GenesisEnum(str, enum.Enum):
             BAR = "BAR"
     """
 
-    def __init_subclass__(cls, **kwargs):
+    def __init_subclass__(cls, **kwargs) -> None:
         # ensure values are unique and match with names
         unique_values = set()
         for name, member in cls.__members__.items():
@@ -81,7 +81,7 @@ class GenesisEnum(str, enum.Enum):
             unique_values.add(member.value)
         super().__init_subclass__(**kwargs)
 
-    def __eq__(self, other):
+    def __eq__(self, other: Any) -> bool:
         # allow comparison with string values directly
         if isinstance(other, str):
             return self.value == other

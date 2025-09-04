@@ -1,7 +1,8 @@
-from .registry import *
+from .registry import PPO_DEFAULT, RUNNER_DEFAULT, RUNNER_GOAL_REACHING_MLP, RUNNER_PENDULUM_MLP
 
 __all__ = [
     "PPO_DEFAULT",
     "RUNNER_DEFAULT",
     "RUNNER_PENDULUM_MLP",
+    "RUNNER_GOAL_REACHING_MLP",
 ]

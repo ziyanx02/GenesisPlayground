@@ -26,11 +26,9 @@ class BaseSceneArgs(BaseModel):
     show_FPS: bool
 
 
-
 class FlatSceneArgs(BaseSceneArgs):
     model_config = genesis_pydantic_config(frozen=True)
     normal: tuple[float, float, float] = (0.0, 0.0, 1.0)
-
 
 
 SceneArgs: TypeAlias = FlatSceneArgs

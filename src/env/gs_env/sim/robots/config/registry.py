@@ -4,8 +4,8 @@ from gs_env.sim.robots.config.schema import (
     CtrlType,
     IKSolver,
     ManipulatorRobotArgs,
-    RigidMaterialArgs,
     MJCFMorphArgs,
+    RigidMaterialArgs,
     URDFMorphArgs,
 )
 

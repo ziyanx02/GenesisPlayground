@@ -5,7 +5,6 @@ from gs_schemas.base_types import genesis_pydantic_config
 from pydantic import BaseModel
 
 
-
 class RigidMaterialArgs(BaseModel):
     model_config = genesis_pydantic_config(frozen=True)
     rho: float

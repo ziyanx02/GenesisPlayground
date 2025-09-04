@@ -1,6 +1,4 @@
 import random
-import statistics
-from collections import deque
 
 import cv2
 import numpy as np
@@ -30,7 +28,9 @@ def maybe_validate_tensordict(
         validate_tensordict(td, spec, prefix)
 
 
-def split_and_pad_trajectories(tensor, dones):
+def split_and_pad_trajectories(
+    tensor: torch.Tensor, dones: torch.Tensor
+) -> tuple[torch.Tensor, torch.Tensor]:
     """Splits trajectories at done indices. Then concatenates them and pads with zeros up to the length og the longest trajectory.
     Returns masks corresponding to valid parts of the trajectories
     Example:
@@ -75,7 +75,7 @@ def split_and_pad_trajectories(tensor, dones):
     return padded_trajectories, trajectory_masks
 
 
-def unpad_trajectories(trajectories, masks):
+def unpad_trajectories(trajectories: torch.Tensor, masks: torch.Tensor) -> torch.Tensor:
     """Does the inverse operation of  split_and_pad_trajectories()"""
     # Need to transpose before and after the masking to have proper reshaping
     return (
@@ -85,7 +85,7 @@ def unpad_trajectories(trajectories, masks):
     )
 
 
-def set_seed(seed: int):
+def set_seed(seed: int) -> None:
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -96,45 +96,7 @@ def set_seed(seed: int):
     torch.backends.cudnn.benchmark = False
 
 
-class EpisodeStats:
-    """Tracks episode-level statistics for PPO training."""
-
-    def __init__(self, maxlen: int, num_envs: int, device: torch.device):
-        self.ep_infos = []
-        self.rewbuffer = deque(maxlen=maxlen)
-        self.lenbuffer = deque(maxlen=maxlen)
-        self.cur_reward_sum = torch.zeros(num_envs, dtype=torch.float, device=device)
-        self.cur_episode_length = torch.zeros(num_envs, dtype=torch.float, device=device)
-        self.device = device
-
-    def update(self, rewards: torch.Tensor, dones: torch.Tensor, infos: dict):
-        """Update episode statistics with new transition data."""
-        if "episode" in infos:
-            self.ep_infos.extend(infos["episode"])
-
-        # Update running episode stats
-        self.cur_reward_sum += rewards
-        self.cur_episode_length += 1
-
-        # Handle completed episodes
-        new_ids = (dones > 0).nonzero(as_tuple=False)
-        self.rewbuffer.extend(self.cur_reward_sum[new_ids][:, 0].cpu().numpy().tolist())
-        self.lenbuffer.extend(self.cur_episode_length[new_ids][:, 0].cpu().numpy().tolist())
-        self.cur_reward_sum[new_ids] = 0
-        self.cur_episode_length[new_ids] = 0
-
-    @property
-    def stats_dict(self):
-        """Get current episode statistics as a dictionary."""
-        if len(self.rewbuffer) == 0:
-            return {}
-        return {
-            "reward_mean": statistics.mean(self.rewbuffer),
-            "length_mean": statistics.mean(self.lenbuffer),
-        }
-
-
-def save_images_to_video(images, output_path, fps=30):
+def save_images_to_video(images: list[np.ndarray], output_path: str, fps: int = 30) -> None:
     """
     Save a list of images (numpy arrays) as a video.
 

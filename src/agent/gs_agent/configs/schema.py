@@ -56,6 +56,7 @@ class ValueFunctionType(GenesisEnum):
     STATE_VALUE = "STATE_VALUE"
     Q_VALUE = "Q_VALUE"
 
+
 # ============================================================================
 # Base Configuration
 # ============================================================================
@@ -135,7 +136,6 @@ class PPOArgs(BaseModel):
     # Optimizer
     optimizer_type: OptimizerType = OptimizerType.ADAM
     weight_decay: NonNegativeFloat = 0.0
-
 
 
 AlgorithmArgs = PPOArgs

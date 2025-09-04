@@ -8,9 +8,6 @@ class BaseBuffer(ABC):
     Abstract base class for on-policy and imitation learning buffers.
     """
 
-    def __init__(self) -> None:
-        ...
-
     @abstractmethod
     def reset(self) -> None:
         """Reset the buffer state."""

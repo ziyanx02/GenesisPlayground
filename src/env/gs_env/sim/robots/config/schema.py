@@ -2,12 +2,9 @@ from __future__ import annotations
 
 from typing import TypeAlias
 
-import genesis as gs
 import torch
 from gs_schemas.base_types import GenesisEnum, genesis_pydantic_config
-from pydantic import field_validator, BaseModel
-
-from gs_env.common.utils.asset_utils import get_urdf_path
+from pydantic import BaseModel
 
 
 class RigidMaterialArgs(BaseModel):
@@ -49,12 +46,12 @@ class URDFMorphArgs(BaseModel):
 
     decimate: bool
 
+
 class MJCFMorphArgs(BaseModel):
     model_config = genesis_pydantic_config(frozen=True)
     file: str
     pos: tuple[float, float, float]
     quat: tuple[float, float, float, float]
-
 
 
 class CtrlType(GenesisEnum):
@@ -63,10 +60,10 @@ class CtrlType(GenesisEnum):
     EE_POSE_ABS = "EE_POSE_ABS"  # Absolute pose
     EE_POSE_REL = "EE_POSE_REL"  # Delta pose from current EE pose
 
+
 class IKSolver(GenesisEnum):
     GS = "GS"  # Genesis Solver
     PIN = "PIN"  # Pinocchio Solver
-
 
 
 class ManipulatorRobotArgs(BaseModel):
@@ -83,7 +80,6 @@ class ManipulatorRobotArgs(BaseModel):
     gripper_link_names: list[str]
     default_arm_dof: dict[str, float]
     default_gripper_dof: dict[str, float] | None = None
-
 
 
 class JointPosAction(BaseModel):
@@ -109,6 +105,4 @@ class EEPoseRelAction(BaseModel):
     ee_link_ang_delta: torch.Tensor  # (3,)
 
 
-BaseAction: TypeAlias = (
-    JointPosAction | EEPoseAbsAction | EEPoseRelAction
-)
+BaseAction: TypeAlias = JointPosAction | EEPoseAbsAction | EEPoseRelAction

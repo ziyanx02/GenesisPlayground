@@ -1,16 +1,17 @@
 import datetime
 import time
 from pathlib import Path
-from typing import Final, Any
+from typing import Any, Final
 
 import torch
 
 from gs_agent.bases.algo import BaseAlgo
+from gs_agent.bases.policy import Policy
 from gs_agent.bases.runner import BaseRunner
 from gs_agent.configs.schema import RunnerArgs
-from gs_agent.bases.policy import Policy
 
 _DEFAULT_DEVICE: Final[torch.device] = torch.device("cpu")
+
 
 class OnPolicyRunner(BaseRunner):
     """Abstract base class for on-policy algorithm runners.
@@ -87,7 +88,7 @@ class OnPolicyRunner(BaseRunner):
             "total_steps": total_steps,
             "total_time": training_time,
             "final_reward": reward_list[-1],
-        } 
+        }
 
     def _log_metrics(
         self,

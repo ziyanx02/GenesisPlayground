@@ -1,7 +1,8 @@
 from abc import ABC, abstractmethod
-
 from typing import Any, Final
+
 import torch
+
 
 class BaseEnvWrapper(ABC):
     """
@@ -11,35 +12,30 @@ class BaseEnvWrapper(ABC):
     def __init__(self, env: Any, device: torch.device) -> None:
         self.env: Final[Any] = env
         self.device: Final[torch.device] = device
-        
+
     @abstractmethod
-    def reset(self) -> tuple[torch.Tensor, dict[str, Any]]:
-        ...
-    
+    def reset(self) -> tuple[torch.Tensor, dict[str, Any]]: ...
+
     @abstractmethod
-    def step(self, action: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, dict[str, Any]]:
-        ...
-        
+    def step(
+        self, action: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, dict[str, Any]]: ...
+
     @abstractmethod
-    def get_observations(self) -> torch.Tensor:
-        ...
-         
+    def get_observations(self) -> torch.Tensor: ...
+
     @property
     @abstractmethod
-    def action_dim(self) -> int:
-        ...
-        
+    def action_dim(self) -> int: ...
+
     @property
     @abstractmethod
-    def actor_obs_dim(self) -> int:
-        ...
-         
+    def actor_obs_dim(self) -> int: ...
+
     @property
     @abstractmethod
-    def critic_obs_dim(self) -> int:
-        ...
-        
+    def critic_obs_dim(self) -> int: ...
+
     @property
     @abstractmethod
-    def num_envs(self) -> int:
-        ...
+    def num_envs(self) -> int: ...

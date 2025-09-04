@@ -31,7 +31,7 @@ def get_activation(activation: str | type[nn.Module] | nn.Module) -> nn.Module:
     return activations[name]
 
 
-def get_torch_device():
+def get_torch_device() -> torch.device:
     # Properly detect available device (CUDA, MPS, or CPU)
     if torch.cuda.is_available():
         device = torch.device("cuda")

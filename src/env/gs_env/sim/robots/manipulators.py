@@ -1,11 +1,10 @@
-from collections.abc import Callable
 from typing import Any
 
 import genesis as gs
-from gymnasium import spaces
 import torch
+from gymnasium import spaces
+
 from gs_env.common.bases.base_robot import BaseGymRobot
-from gs_env.common.utils.math_utils import quat_from_angle_axis, quat_mul, quat_mul
 from gs_env.sim.robots.config.schema import (
     CtrlType,
     EEPoseAbsAction,
@@ -31,7 +30,7 @@ class ManipulatorBase(BaseGymRobot):
         self._args = args
 
         # == Genesis configurations ==
-        material: gs.materials.Rigid =  gs.materials.Rigid()
+        material: gs.materials.Rigid = gs.materials.Rigid()
         morph: gs.morphs.MJCF = gs.morphs.MJCF(
             file=args.morph_args.file,
             pos=args.morph_args.pos,
@@ -50,7 +49,9 @@ class ManipulatorBase(BaseGymRobot):
         action_space_dict = {"gripper_width": spaces.Box(0.0, 0.08)}
         match args.ctrl_type:
             case CtrlType.JOINT_POSITION:
-                action_space_dict.update({"joint_pos": spaces.Box(shape=(n_dof,), low=-1.0, high=1.0)})
+                action_space_dict.update(
+                    {"joint_pos": spaces.Box(shape=(n_dof,), low=-1.0, high=1.0)}
+                )
             case CtrlType.EE_POSE_ABS:
                 action_space_dict.update(
                     {
@@ -62,12 +63,14 @@ class ManipulatorBase(BaseGymRobot):
                 action_space_dict.update(
                     {
                         "ee_link_pos_delta": spaces.Box(shape=(3,), low=-1.0, high=1.0),
-                        "ee_link_ang_delta": spaces.Box(shape=(3,), low=-1.0, high=1.0),  # roll, pitch, yaw
+                        "ee_link_ang_delta": spaces.Box(
+                            shape=(3,), low=-1.0, high=1.0
+                        ),  # roll, pitch, yaw
                     }
                 )
             case _:  # type: ignore
                 raise ValueError(f"Unknown control type: {args.ctrl_type}")
-                
+
         self._action_space = spaces.Dict(action_space_dict)
 
         # == some buffer initialization ==
@@ -116,7 +119,9 @@ class ManipulatorBase(BaseGymRobot):
         ).repeat(len(envs_idx), 1)
         self._robot.set_qpos(default_joint_angles, envs_idx=envs_idx)
 
-    def apply_action(self, action: JointPosAction | EEPoseAbsAction | EEPoseRelAction | torch.Tensor) -> None:
+    def apply_action(
+        self, action: JointPosAction | EEPoseAbsAction | EEPoseRelAction | torch.Tensor
+    ) -> None:
         """
         Apply the action to the robot.
         """
@@ -149,7 +154,7 @@ class ManipulatorBase(BaseGymRobot):
             self._arm_dof_dim,
         ), "Joint position action must match the number of joints."
         q_target = act.joint_pos.to(self._device)
-        self._robot.control_dofs_position(position=q_target) 
+        self._robot.control_dofs_position(position=q_target)
 
     def _apply_ee_pose_abs(self, act: EEPoseAbsAction) -> None:
         """
@@ -206,7 +211,9 @@ class ManipulatorBase(BaseGymRobot):
         jacobian_T = jacobian.transpose(1, 2)
         lambda_matrix = (lambda_val**2) * torch.eye(n=jacobian.shape[1], device=self._device)
         delta_joint_pos = (
-            jacobian_T @ torch.inverse(jacobian @ jacobian_T + lambda_matrix) @ delta_pose.unsqueeze(-1)
+            jacobian_T
+            @ torch.inverse(jacobian @ jacobian_T + lambda_matrix)
+            @ delta_pose.unsqueeze(-1)
         ).squeeze(-1)
         return self._robot.get_qpos() + delta_joint_pos
 

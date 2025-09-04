@@ -41,12 +41,14 @@ reportUnnecessaryIsInstance = "error"
 line-length = 100
 src = ["."]
 target-version = "py310"
-exclude = []
+exclude = [
+  "src/agent/gs_agent/utils/logger.py"
+]
 
 [tool.ruff.lint]
 select = [
   "ANN001","ANN201","ANN202","ANN204","ANN205","ANN206",
-  "ASYNC","B","E","F","G","I","INP","RUF100","SLF","T20","UP","W",
+  "ASYNC","B","E","F","G","I","INP","RUF100","SLF","UP","W",
 ]
 ignore = ["E501"]
 
