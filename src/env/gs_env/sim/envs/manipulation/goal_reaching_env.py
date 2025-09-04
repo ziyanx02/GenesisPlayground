@@ -33,7 +33,7 @@ class GoalReachingEnv(BaseEnv):
         self._args = args
         
         if not gs._initialized:
-            gs.init()
+            gs.init(performance_mode=True)
 
         # == setup the scene ==
         self._scene = FlatScene(
