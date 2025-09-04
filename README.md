@@ -1,6 +1,11 @@
 # Genesis Playground
 
+
 ## Overview
+**Genesis Playground** is an open-source sandbox for building and sharing Robot Learning applications on top of the [Genesis](https://github.com/Genesis-Embodied-AI/Genesis) simulator. It provides environments, agents, and typed schemas into one cohesive workspace so researchers and students can prototype quickly and compare methods fairly.
+
+> **Note:** This project is for **education and research**. It is **not** an official Genesis product.
+
 
 The playground is built with a modular design that separates concerns:
 
