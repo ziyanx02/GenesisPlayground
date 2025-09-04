@@ -85,7 +85,6 @@ class MLPConfig(BaseModel):
     hidden_dims: tuple[int, ...] = (256, 256, 128)
     activation: ActivationType = ActivationType.RELU
 
-    #
     network_type: NetworkBackboneType = NetworkBackboneType.MLP
 
 
@@ -152,12 +151,10 @@ class RunnerArgs(BaseModel):
 
     model_config = genesis_pydantic_config(frozen=True)
 
-    #
     total_episodes: NonNegativeInt = 1000
 
     # Training intervals
     log_interval: NonNegativeInt = 10
     save_interval: NonNegativeInt = 100
 
-    #
     save_path: Path = Path(".")

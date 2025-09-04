@@ -9,13 +9,14 @@ from gs_agent.algos.ppo import PPO
 from gs_agent.runners.onpolicy_runner import OnPolicyRunner
 from gs_agent.utils.logger import configure as logger_configure
 from gs_env.sim.envs.manipulation.goal_reaching_env import GoalReachingEnv
+from gs_env.common.bases.base_env import BaseEnv
 from gs_agent.wrappers.gs_env_wrapper import GenesisEnvWrapper
 from gs_env.sim.envs.config.registry import EnvArgsRegistry
 from gs_agent.configs import PPO_GOAL_REACHING_MLP, RUNNER_GOAL_REACHING_MLP
 
 def create_gs_env(
-    env_name: str = "goal_reach_default", show_viewer: bool = False
-) -> GenesisEnvWrapper:
+    env_name: str = "goal_reach_default", show_viewer: bool = False, num_envs: int = 2048
+) -> BaseEnv:
     """Create gym environment wrapper."""
     if torch.cuda.is_available():
         device = torch.device("cuda")
@@ -25,14 +26,12 @@ def create_gs_env(
         device = torch.device("cpu")
     print(f"Using device: {device}")
     
-    env = GoalReachingEnv(args=EnvArgsRegistry[env_name], num_envs=2048, show_viewer=show_viewer, device=device)
-    return GenesisEnvWrapper(env, device=device)
+    return GoalReachingEnv(args=EnvArgsRegistry[env_name], num_envs=num_envs, show_viewer=show_viewer, device=device)
 
-
-def create_ppo_runner_from_registry() -> OnPolicyRunner:
+def create_ppo_runner_from_registry(env: BaseEnv) -> OnPolicyRunner:
     """Create PPO runner using configuration from the registry."""
     # Environment setup
-    wrapped_env = create_gs_env()
+    wrapped_env = GenesisEnvWrapper(env, device=env.device)
 
     # Create PPO algorithm
     ppo = PPO(
@@ -50,10 +49,12 @@ def create_ppo_runner_from_registry() -> OnPolicyRunner:
     return runner
 
 
-def main(train: bool = True) -> None:
+def main(num_envs: int = 2048, show_viewer: bool = False) -> None:
     """Main function demonstrating proper registry usage."""
+    # create environment
+    env = create_gs_env(show_viewer=show_viewer, num_envs=num_envs)
     # Get configuration and runner from registry
-    runner = create_ppo_runner_from_registry()
+    runner = create_ppo_runner_from_registry(env)
     # Set up logging with proper configuration
     logger = logger_configure(folder=str(runner.save_dir), format_strings=["stdout", "csv", "wandb"])
     # Train using Runner

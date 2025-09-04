@@ -90,13 +90,14 @@ class PPO(BaseAlgo):
                 # Step environment
                 next_obs, reward, terminated, truncated, _extra_infos = self.env.step(action)
 
+                # all tensors are of shape: [num_envs, dim]
                 transition = {
-                    "obs": obs,   #shape: [num_envs, obs_dim]
-                    "act": action,   #shape: [num_envs, action_dim]
-                    "rew": reward,   #shape: [num_envs, 1]
-                    "done": terminated,   #shape: [num_envs, 1]
-                    "value": self._critic(obs),   #shape: [num_envs, 1]
-                    "log_prob": log_prob,   #shape: [num_envs, 1]
+                    "obs": obs,   
+                    "act": action, 
+                    "rew": reward, 
+                    "done": terminated,  
+                    "value": self._critic(obs),  
+                    "log_prob": log_prob,   
                 }
                 self._rollouts.append(transition)
 
