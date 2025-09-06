@@ -1,0 +1,21 @@
+name: gs-agent
+on:
+  merge_group:
+  push:
+    paths:
+      - "*"
+      - ".github/**"
+      - "src/agent/**"
+      - "src/schemas/**"
+jobs:
+  gs-agent:
+    uses: ./.github/python-package.yml
+    secrets: inherit
+    strategy:
+      fail-fast: false
+
+    with:
+      project-directory: "."
+      package-directory: "./src/agent"
+      package: "gs-agent"
+      runs-on: ${{ matrix.runs-on }}
