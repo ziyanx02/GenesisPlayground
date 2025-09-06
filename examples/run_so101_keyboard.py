@@ -11,8 +11,8 @@ Usage:
     python src/env/gs_env/scripts/run_so101_teleop.py
 """
 
-from gs_agent.wrappers.teleop_wrapper import TeleopWrapper
 from gs_env.sim.envs.so101_cube_env import SO101CubeEnv
+from gs_env.interface.teleop_wrapper import KeyboardWrapper
 
 import time
 
@@ -37,7 +37,7 @@ def main() -> None:
     try:
         # Create teleop wrapper first (without environment)
         print("Creating teleop wrapper...")
-        teleop_wrapper = TeleopWrapper(
+        teleop_wrapper = KeyboardWrapper(
             env=None,
             device=torch.device("cpu"),
             movement_speed=0.01,  # Position movement speed
@@ -45,7 +45,7 @@ def main() -> None:
         )
 
         # Start teleop wrapper (keyboard listener) FIRST, before creating Genesis scene
-        teleop_wrapper.start()
+        teleop_wrapper.start()  # type: ignore
 
         # Create task environment AFTER teleop wrapper is running
         print("Creating SO101 cube environment...")

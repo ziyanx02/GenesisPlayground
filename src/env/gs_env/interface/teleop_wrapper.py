@@ -10,7 +10,7 @@ from pynput import keyboard
 from gs_agent.bases.env_wrapper import BaseEnvWrapper
 
 
-class TeleopCommand:
+class KeyboardCommand:
     """6-DOF end-effector command for robot control."""
 
     def __init__(
@@ -28,8 +28,8 @@ class TeleopCommand:
         self.quit_teleop: bool = quit_teleop
 
 
-class TeleopWrapper(BaseEnvWrapper):
-    """Teleop wrapper that follows the GenesisEnvWrapper pattern."""
+class KeyboardWrapper(BaseEnvWrapper):
+    """Keyboard wrapper that follows the GenesisEnvWrapper pattern."""
     def __init__(
         self,
         env: Any | None = None,
@@ -52,7 +52,7 @@ class TeleopWrapper(BaseEnvWrapper):
         # Current command state
         self.current_position: NDArray[np.float64] | None = None
         self.current_orientation: NDArray[np.float64] | None = None
-        self.last_command: TeleopCommand | None = None
+        self.last_command: KeyboardCommand | None = None
         self.pending_reset: bool = False
 
         # Initialize current pose from environment if available
@@ -200,7 +200,7 @@ class TeleopWrapper(BaseEnvWrapper):
         except Exception as e:
             print(f"Failed to sync teleop pose: {e}")
 
-    def _process_input(self) -> TeleopCommand | None:
+    def _process_input(self) -> KeyboardCommand | None:
         """Process keyboard input and return command."""
         with self.lock:
             pressed_keys = self.pressed_keys.copy()
@@ -228,7 +228,7 @@ class TeleopWrapper(BaseEnvWrapper):
         # If still missing but special keys exist, send special-only command
         if self.current_position is None or self.current_orientation is None:
             if gripper_close or reset_scene or quit_teleop:
-                return TeleopCommand(
+                return KeyboardCommand(
                     position=np.array([0.0, 0.0, 0.0]),
                     orientation=np.array([0.0, 0.0, 0.0]),
                     gripper_close=gripper_close,
@@ -262,7 +262,7 @@ class TeleopWrapper(BaseEnvWrapper):
 
         # If reset is pressed this tick, send only the reset flag (no motion)
         if reset_scene:
-            command = TeleopCommand(
+            command = KeyboardCommand(
                 position=np.array([0.0, 0.0, 0.0]),
                 orientation=np.array([0.0, 0.0, 0.0]),
                 gripper_close=gripper_close,
@@ -270,7 +270,7 @@ class TeleopWrapper(BaseEnvWrapper):
                 quit_teleop=quit_teleop
             )
         else:
-            command = TeleopCommand(
+            command = KeyboardCommand(
                 position=new_position,
                 orientation=new_orientation,
                 gripper_close=gripper_close,
