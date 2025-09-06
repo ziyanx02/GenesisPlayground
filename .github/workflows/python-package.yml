@@ -24,20 +24,15 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-
-      # Python (pin if you care about the version)
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-
-      # uv (with built-in caching)
       - name: Setup uv
         uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
           cache-suffix: ${{ github.workflow }}
           version: "0.8.4"
-
       - name: Type check (pyright)
         run: >
           uv --project "${{ inputs.project-directory }}"
@@ -49,19 +44,15 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-
       - name: Setup uv
         uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
           cache-suffix: ${{ github.workflow }}
           version: "0.8.4"
-
-      # If no tests are found, pytest returns exit code 5; treat that as success.
       - name: Run tests (pytest)
         run: >
           uv --project "${{ inputs.project-directory }}"
