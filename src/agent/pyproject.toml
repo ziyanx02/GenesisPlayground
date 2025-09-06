@@ -19,6 +19,11 @@ dependencies = [
 [project.optional-dependencies]
 env = ["gs-env>=0.1,<0.2"]
 log = ["wandb>=0.17"]
+dev = [
+  "pyright==1.1.405",
+  "pytest==8.3.2",
+]
+
 
 [build-system]
 requires = ["hatchling>=1.25"]
