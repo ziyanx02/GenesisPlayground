@@ -118,48 +118,9 @@ class SO101Robot(BaseGymRobot):
             current_q[4] -= direct_joint_change  # wrist_roll - rotate gripper counter-clockwise
         elif orientation_delta[2] < 0:  # Rotate clockwise
             current_q[4] += direct_joint_change  # wrist_roll - rotate gripper clockwise
-
-        # Apply direct joint control for smooth movement
-        try:
-            self.entity.control_dofs_position(current_q[:-1], self.motors_dof)
-        except Exception as e:
-            print(f"Direct joint control failed: {e}")
-
-        # Update the target visualization to follow the robot's actual end-effector position
-        # This ensures the axis and robot move together (like original script)
-        actual_ee_pos = None
-        actual_ee_quat = None
-        try:
-            actual_ee_pos = np.array(self.ee_link.get_pos())
-            actual_ee_quat = np.array(self.ee_link.get_quat())
-            # Update target entity if it exists (for visualization)
-            # Note: target_entity is managed by the environment, not the robot
-            pass
-        except Exception as e:
-            print(f"Failed to update target visualization: {e}")
-
-        # Optional: Use IK to verify the target is reachable (but don't apply it)
-        # This helps debug IK issues without affecting movement (like original script)
-        if actual_ee_pos is not None and actual_ee_quat is not None:
-            try:
-                q, err = self.entity.inverse_kinematics(
-                    link=self.ee_link,
-                    pos=actual_ee_pos,  # Use actual position instead of target
-                    quat=actual_ee_quat,  # Use actual orientation instead of target
-                    return_error=True,
-                )
-
-                # Handle tensor error - take the maximum error value if it's a tensor
-                if hasattr(err, "shape") and len(err.shape) > 0:
-                    max_err = float(err.max())
-                else:
-                    max_err = float(err)
-
-                # IK error checking (removed debug print)
-                pass
-            except Exception:
-                # IK failure is not critical since we're using direct joint control
-                pass
+        #
+        # # Apply direct joint control for smooth movement
+        self.entity.control_dofs_position(current_q[:-1], self.motors_dof)
 
         # Update previous target for next iteration
         self.previous_target_position = self.target_position.copy()
