@@ -7,6 +7,10 @@ from gs_agent.bases.env_wrapper import BaseEnvWrapper
 from numpy.typing import NDArray
 from pynput import keyboard
 
+_DEFAULT_DEVICE = torch.device("cpu")
+_DEFAULT_MOVEMENT_SPEED = 0.01
+_DEFAULT_ROTATION_SPEED = 0.05
+
 
 class KeyboardCommand:
     """6-DOF end-effector command for robot control."""
@@ -32,9 +36,9 @@ class KeyboardWrapper(BaseEnvWrapper):
     def __init__(
         self,
         env: Any | None = None,
-        device: torch.device = torch.device("cpu"),
-        movement_speed: float = 0.01,
-        rotation_speed: float = 0.05,
+        device: torch.device = _DEFAULT_DEVICE,
+        movement_speed: float = _DEFAULT_MOVEMENT_SPEED,
+        rotation_speed: float = _DEFAULT_ROTATION_SPEED,
     ) -> None:
         super().__init__(env, device)
 

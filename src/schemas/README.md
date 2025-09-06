@@ -84,7 +84,7 @@ from typing import Literal
 class DeviceConfig:
     device_type: Literal["cuda", "mps", "cpu"]
     device_id: int = 0
-    
+
     def __post_init__(self):
         if self.device_type == "cpu" and self.device_id != 0:
             raise ValueError("CPU device ID must be 0")
@@ -143,17 +143,17 @@ from typing import Optional, Literal
 @dataclass(config=genesis_pydantic_config())
 class TrainingConfig:
     """Configuration for RL training sessions."""
-    
+
     # Required fields
     algorithm: Literal["ppo", "sac", "td3"]
     num_epochs: int
     learning_rate: float
-    
+
     # Optional fields with defaults
     batch_size: int = 64
     device: Optional[str] = None
     seed: Optional[int] = None
-    
+
     def __post_init__(self):
         """Validate configuration constraints."""
         if self.num_epochs <= 0:
@@ -228,13 +228,13 @@ from typing import Optional
 @dataclass(config=genesis_pydantic_config())
 class NewSchema:
     """Description of the schema purpose."""
-    
+
     # Required fields
     required_field: str
-    
+
     # Optional fields with defaults
     optional_field: Optional[int] = None
-    
+
     def __post_init__(self):
         """Add validation logic here."""
         pass
