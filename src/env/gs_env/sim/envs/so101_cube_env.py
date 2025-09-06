@@ -87,7 +87,6 @@ class SO101CubeEnv:
         # Randomize cube position
         self._randomize_cube()
 
-
     def apply_command(self, command: Any) -> None:
         """Apply command to the environment."""
         self.last_command = command
@@ -100,7 +99,6 @@ class SO101CubeEnv:
             self.reset_idx(None)
         elif command.quit_teleop:
             print("Quit command received from teleop")
-
 
     def get_observation(self) -> dict[str, Any] | None:
         """Get current observation from the environment."""
@@ -119,13 +117,13 @@ class SO101CubeEnv:
 
         # Create observation
         observation = {
-            'joint_positions': robot_obs['joint_positions'],
-            'end_effector_pos': robot_obs['end_effector_pos'],
-            'end_effector_quat': robot_obs['end_effector_quat'],
-            'cube_pos': cube_pos,
-            'cube_quat': cube_quat,
-            'rgb_images': {},  # No cameras in this simple setup
-            'depth_images': {}  # No depth sensors in this simple setup
+            "joint_positions": robot_obs["joint_positions"],
+            "end_effector_pos": robot_obs["end_effector_pos"],
+            "end_effector_quat": robot_obs["end_effector_quat"],
+            "cube_pos": cube_pos,
+            "cube_quat": cube_quat,
+            "rgb_images": {},  # No cameras in this simple setup
+            "depth_images": {},  # No depth sensors in this simple setup
         }
 
         return observation
@@ -146,7 +144,6 @@ class SO101CubeEnv:
         # Randomize cube position
         self._randomize_cube()
 
-
     def _update_target_visualization(self) -> None:
         """Update target visualization to match robot end-effector."""
         try:
@@ -159,17 +156,12 @@ class SO101CubeEnv:
     def _randomize_cube(self) -> None:
         """Randomize cube position for new episodes."""
         try:
-            cube_pos = (
-                random.uniform(0.2, 0.4),
-                random.uniform(-0.2, 0.2),
-                0.05
-            )
+            cube_pos = (random.uniform(0.2, 0.4), random.uniform(-0.2, 0.2), 0.05)
             cube_quat = R.from_euler("z", random.uniform(0, np.pi * 2)).as_quat()
             self.entities["cube"].set_pos(cube_pos)
             self.entities["cube"].set_quat(cube_quat)
         except Exception as e:
             print(f"Failed to randomize cube: {e}")
-
 
     def step(self) -> None:
         """Step the simulation."""
@@ -178,7 +170,6 @@ class SO101CubeEnv:
 
         # Step Genesis simulation
         self.scene.step()
-
 
     @property
     def num_envs(self) -> int:

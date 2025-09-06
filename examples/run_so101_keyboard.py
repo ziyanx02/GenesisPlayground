@@ -11,13 +11,13 @@ Usage:
     python src/env/gs_env/scripts/run_so101_teleop.py
 """
 
-from gs_env.sim.envs.so101_cube_env import SO101CubeEnv
-from gs_env.interface.teleop_wrapper import KeyboardWrapper
-
 import time
 
-import genesis as gs
 import torch
+from gs_env.interface.teleop_wrapper import KeyboardWrapper
+from gs_env.sim.envs.so101_cube_env import SO101CubeEnv
+
+import genesis as gs
 
 
 def main() -> None:
@@ -29,7 +29,7 @@ def main() -> None:
         seed=0,
         precision="32",
         logging_level="info",
-        backend=gs.cpu  # type: ignore
+        backend=gs.cpu,  # type: ignore
     )
 
     print("Genesis initialized successfully.")
@@ -41,7 +41,7 @@ def main() -> None:
             env=None,
             device=torch.device("cpu"),
             movement_speed=0.01,  # Position movement speed
-            rotation_speed=0.05   # Rotation speed
+            rotation_speed=0.05,  # Rotation speed
         )
 
         # Start teleop wrapper (keyboard listener) FIRST, before creating Genesis scene
@@ -56,10 +56,10 @@ def main() -> None:
 
         print("Environment initialized successfully.")
 
-        print("\n" + "="*50)
+        print("\n" + "=" * 50)
         print("SO101 TELEOP SYSTEM READY")
-        print("="*50)
-        
+        print("=" * 50)
+
         # Run the main control loop in the main thread (Genesis viewer requires this)
         try:
             step_count = 0
@@ -73,9 +73,11 @@ def main() -> None:
                     print(f"Running... Step {step_count}")
 
                 # Check for quit command
-                if (teleop_wrapper.last_command and 
-                    hasattr(teleop_wrapper.last_command, 'quit_teleop') and 
-                    teleop_wrapper.last_command.quit_teleop):
+                if (
+                    teleop_wrapper.last_command
+                    and hasattr(teleop_wrapper.last_command, "quit_teleop")
+                    and teleop_wrapper.last_command.quit_teleop
+                ):
                     print("Quit command received, exiting...")
                     break
 
@@ -98,6 +100,7 @@ def main() -> None:
     except Exception as e:
         print(f"Error during teleop session: {e}")
         import traceback
+
         traceback.print_exc()
     finally:
         print("Cleaning up...")
