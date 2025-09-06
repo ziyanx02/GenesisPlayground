@@ -1,16 +1,14 @@
 import threading
-import time
 from typing import Any
 
 import numpy as np
 import torch
+from gs_agent.bases.env_wrapper import BaseEnvWrapper
 from numpy.typing import NDArray
 from pynput import keyboard
 
-from gs_agent.bases.env_wrapper import BaseEnvWrapper
 
-
-class TeleopCommand:
+class KeyboardCommand:
     """6-DOF end-effector command for robot control."""
 
     def __init__(
@@ -28,8 +26,9 @@ class TeleopCommand:
         self.quit_teleop: bool = quit_teleop
 
 
-class TeleopWrapper(BaseEnvWrapper):
-    """Teleop wrapper that follows the GenesisEnvWrapper pattern."""
+class KeyboardWrapper(BaseEnvWrapper):
+    """Keyboard wrapper that follows the GenesisEnvWrapper pattern."""
+
     def __init__(
         self,
         env: Any | None = None,
@@ -52,7 +51,7 @@ class TeleopWrapper(BaseEnvWrapper):
         # Current command state
         self.current_position: NDArray[np.float64] | None = None
         self.current_orientation: NDArray[np.float64] | None = None
-        self.last_command: TeleopCommand | None = None
+        self.last_command: KeyboardCommand | None = None
         self.pending_reset: bool = False
 
         # Initialize current pose from environment if available
@@ -74,14 +73,16 @@ class TeleopWrapper(BaseEnvWrapper):
                 self.listener = keyboard.Listener(
                     on_press=self._on_press,
                     on_release=self._on_release,
-                    suppress=False  # Don't suppress system keys
+                    suppress=False,  # Don't suppress system keys
                 )
                 self.listener.start()
                 print("Keyboard listener started.")
         except Exception as e:
             print(f"Failed to start keyboard listener: {e}")
             print("This might be due to macOS accessibility permissions.")
-            print("Please grant accessibility permissions to your terminal/Python in System Preferences > Security & Privacy > Privacy > Accessibility")
+            print(
+                "Please grant accessibility permissions to your terminal/Python in System Preferences > Security & Privacy > Privacy > Accessibility"
+            )
             return
 
         self.running = True
@@ -108,7 +109,7 @@ class TeleopWrapper(BaseEnvWrapper):
 
     def reset(self) -> tuple[torch.Tensor, dict[str, Any]]:
         """Reset the environment."""
-        if hasattr(self, '_teleop_env') and self._teleop_env is not None:
+        if hasattr(self, "_teleop_env") and self._teleop_env is not None:
             self._teleop_env.reset_idx(None)
             obs = self._teleop_env.get_observation()
             if obs is None:
@@ -116,13 +117,15 @@ class TeleopWrapper(BaseEnvWrapper):
             return torch.tensor([]), obs
         return torch.tensor([]), {}
 
-    def step(self, action: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, dict[str, Any]]:
+    def step(
+        self, action: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, dict[str, Any]]:
         """Step the environment with teleop input."""
         # Process keyboard input and create command
         command = self._process_input()
 
         # Apply command to environment
-        if command and hasattr(self, '_teleop_env') and self._teleop_env is not None:
+        if command and hasattr(self, "_teleop_env") and self._teleop_env is not None:
             self._teleop_env.apply_command(command)
             self.last_command = command
 
@@ -134,7 +137,7 @@ class TeleopWrapper(BaseEnvWrapper):
                     self.pressed_keys.clear()
 
         # Step the environment
-        if hasattr(self, '_teleop_env') and self._teleop_env is not None:
+        if hasattr(self, "_teleop_env") and self._teleop_env is not None:
             self._teleop_env.step()
 
         # CHANGED: after a reset, sync cached pose from the actual env pose
@@ -143,7 +146,7 @@ class TeleopWrapper(BaseEnvWrapper):
             self.pending_reset = False
 
         # Get observations
-        if hasattr(self, '_teleop_env') and self._teleop_env is not None:
+        if hasattr(self, "_teleop_env") and self._teleop_env is not None:
             obs = self._teleop_env.get_observation()
             if obs is None:
                 obs = {}
@@ -152,16 +155,16 @@ class TeleopWrapper(BaseEnvWrapper):
 
         # Return standard step format (empty tensors for compatibility)
         return (
-            torch.tensor([]),          # next_obs
-            torch.tensor([0.0]),       # reward
-            torch.tensor([False]),     # terminated
-            torch.tensor([False]),     # truncated
-            obs                        # extra_infos
+            torch.tensor([]),  # next_obs
+            torch.tensor([0.0]),  # reward
+            torch.tensor([False]),  # terminated
+            torch.tensor([False]),  # truncated
+            obs,  # extra_infos
         )
 
     def get_observations(self) -> torch.Tensor:
         """Get current observations."""
-        if hasattr(self, '_teleop_env') and self._teleop_env is not None:
+        if hasattr(self, "_teleop_env") and self._teleop_env is not None:
             obs = self._teleop_env.get_observation()
             if obs is None:
                 return torch.tensor([])
@@ -170,15 +173,16 @@ class TeleopWrapper(BaseEnvWrapper):
     def _initialize_current_pose(self) -> None:
         """Initialize current pose from environment."""
         try:
-            env = getattr(self, '_teleop_env', None) or self.env
+            env = getattr(self, "_teleop_env", None) or self.env
             if env is not None:
                 obs = env.get_observation()
                 if obs is not None:
-                    self.current_position = obs['end_effector_pos'].copy()
+                    self.current_position = obs["end_effector_pos"].copy()
                     from scipy.spatial.transform import Rotation as R
-                    quat = obs['end_effector_quat']
+
+                    quat = obs["end_effector_quat"]
                     rot = R.from_quat(quat)
-                    self.current_orientation = rot.as_euler('xyz')
+                    self.current_orientation = rot.as_euler("xyz")
         except Exception as e:
             print(f"Failed to initialize current pose: {e}")
             self.current_position = np.array([0.0, 0.0, 0.3])
@@ -188,33 +192,39 @@ class TeleopWrapper(BaseEnvWrapper):
     def _sync_pose_from_env(self) -> None:
         """Reset teleop's cached pose to the environment's actual EE pose."""
         try:
-            env = getattr(self, '_teleop_env', None) or self.env
+            env = getattr(self, "_teleop_env", None) or self.env
             if env is None:
                 return
             obs = env.get_observation()
             if obs is None:
                 return
             from scipy.spatial.transform import Rotation as R
-            self.current_position = obs['end_effector_pos'].copy()
-            self.current_orientation = R.from_quat(obs['end_effector_quat']).as_euler('xyz')
+
+            self.current_position = obs["end_effector_pos"].copy()
+            self.current_orientation = R.from_quat(obs["end_effector_quat"]).as_euler("xyz")
         except Exception as e:
             print(f"Failed to sync teleop pose: {e}")
 
-    def _process_input(self) -> TeleopCommand | None:
+    def _process_input(self) -> KeyboardCommand | None:
         """Process keyboard input and return command."""
         with self.lock:
             pressed_keys = self.pressed_keys.copy()
 
         # Always process gripper and special commands, even if no movement keys are pressed
         gripper_close = keyboard.Key.space in pressed_keys
-        reset_scene = keyboard.KeyCode.from_char('u') in pressed_keys
+        reset_scene = keyboard.KeyCode.from_char("u") in pressed_keys
         quit_teleop = keyboard.Key.esc in pressed_keys
 
         # Movement keys present?
         movement_keys = {
-            keyboard.Key.up, keyboard.Key.down, keyboard.Key.left, keyboard.Key.right,
-            keyboard.KeyCode.from_char('n'), keyboard.KeyCode.from_char('m'),
-            keyboard.KeyCode.from_char('j'), keyboard.KeyCode.from_char('k')
+            keyboard.Key.up,
+            keyboard.Key.down,
+            keyboard.Key.left,
+            keyboard.Key.right,
+            keyboard.KeyCode.from_char("n"),
+            keyboard.KeyCode.from_char("m"),
+            keyboard.KeyCode.from_char("j"),
+            keyboard.KeyCode.from_char("k"),
         }
         has_movement = bool(pressed_keys & movement_keys)
 
@@ -228,12 +238,12 @@ class TeleopWrapper(BaseEnvWrapper):
         # If still missing but special keys exist, send special-only command
         if self.current_position is None or self.current_orientation is None:
             if gripper_close or reset_scene or quit_teleop:
-                return TeleopCommand(
+                return KeyboardCommand(
                     position=np.array([0.0, 0.0, 0.0]),
                     orientation=np.array([0.0, 0.0, 0.0]),
                     gripper_close=gripper_close,
                     reset_scene=reset_scene,
-                    quit_teleop=quit_teleop
+                    quit_teleop=quit_teleop,
                 )
             return None
 
@@ -249,33 +259,33 @@ class TeleopWrapper(BaseEnvWrapper):
             new_position[1] += self.movement_speed
         if keyboard.Key.left in pressed_keys:
             new_position[1] -= self.movement_speed
-        if keyboard.KeyCode.from_char('n') in pressed_keys:
+        if keyboard.KeyCode.from_char("n") in pressed_keys:
             new_position[2] += self.movement_speed
-        if keyboard.KeyCode.from_char('m') in pressed_keys:
+        if keyboard.KeyCode.from_char("m") in pressed_keys:
             new_position[2] -= self.movement_speed
 
         # Orientation controls
-        if keyboard.KeyCode.from_char('j') in pressed_keys:
+        if keyboard.KeyCode.from_char("j") in pressed_keys:
             new_orientation[2] += self.rotation_speed
-        if keyboard.KeyCode.from_char('k') in pressed_keys:
+        if keyboard.KeyCode.from_char("k") in pressed_keys:
             new_orientation[2] -= self.rotation_speed
 
         # If reset is pressed this tick, send only the reset flag (no motion)
         if reset_scene:
-            command = TeleopCommand(
+            command = KeyboardCommand(
                 position=np.array([0.0, 0.0, 0.0]),
                 orientation=np.array([0.0, 0.0, 0.0]),
                 gripper_close=gripper_close,
                 reset_scene=reset_scene,
-                quit_teleop=quit_teleop
+                quit_teleop=quit_teleop,
             )
         else:
-            command = TeleopCommand(
+            command = KeyboardCommand(
                 position=new_position,
                 orientation=new_orientation,
                 gripper_close=gripper_close,
                 reset_scene=reset_scene,
-                quit_teleop=quit_teleop
+                quit_teleop=quit_teleop,
             )
 
         # Update cached pose only if there was movement (not on reset)

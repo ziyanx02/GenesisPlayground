@@ -57,7 +57,7 @@ class SO101Robot(BaseGymRobot):
                 self.target_position = pos.copy()
                 # Convert quaternion to euler angles
                 rot = R.from_quat(quat)
-                self.target_orientation = rot.as_euler('xyz')
+                self.target_orientation = rot.as_euler("xyz")
 
                 # Initialize previous target positions
                 self.previous_target_position = self.target_position.copy()
@@ -82,7 +82,7 @@ class SO101Robot(BaseGymRobot):
         # If reset is requested, don't process position/orientation commands
         if command.reset_scene:
             return  # Let the environment handle the reset
-        
+
         # Update target pose
         self.target_position = command.position.copy()
         self.target_orientation = command.orientation.copy()
@@ -146,11 +146,11 @@ class SO101Robot(BaseGymRobot):
                     link=self.ee_link,
                     pos=actual_ee_pos,  # Use actual position instead of target
                     quat=actual_ee_quat,  # Use actual orientation instead of target
-                    return_error=True
+                    return_error=True,
                 )
 
                 # Handle tensor error - take the maximum error value if it's a tensor
-                if hasattr(err, 'shape') and len(err.shape) > 0:
+                if hasattr(err, "shape") and len(err.shape) > 0:
                     max_err = float(err.max())
                 else:
                     max_err = float(err)
@@ -195,7 +195,7 @@ class SO101Robot(BaseGymRobot):
             if pos is not None:
                 self.target_position = pos.copy()
                 rot = R.from_quat(quat)
-                self.target_orientation = rot.as_euler('xyz')
+                self.target_orientation = rot.as_euler("xyz")
                 self.previous_target_position = self.target_position.copy()
                 self.previous_target_orientation = self.target_orientation.copy()
         except Exception as e:
@@ -228,11 +228,11 @@ class SO101Robot(BaseGymRobot):
             return None
 
         return {
-            'joint_positions': joint_pos,
-            'end_effector_pos': ee_pos,
-            'end_effector_quat': ee_quat,
-            'target_position': self.target_position.copy(),
-            'target_orientation': self.target_orientation.copy()
+            "joint_positions": joint_pos,
+            "end_effector_pos": ee_pos,
+            "end_effector_quat": ee_quat,
+            "target_position": self.target_position.copy(),
+            "target_orientation": self.target_orientation.copy(),
         }
 
     def is_moving(self) -> bool:
@@ -242,7 +242,7 @@ class SO101Robot(BaseGymRobot):
             target_q = self.entity.inverse_kinematics(
                 link=self.ee_link,
                 pos=self.target_position,
-                quat=R.from_euler('xyz', self.target_orientation).as_quat()
+                quat=R.from_euler("xyz", self.target_orientation).as_quat(),
             )
 
             # Check if current joints are close to target
