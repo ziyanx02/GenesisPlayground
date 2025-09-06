@@ -14,11 +14,18 @@ dependencies = [
   "fire>=0.7.0",
   "wandb>=0.21.3",
   "matplotlib>=3.10.0",
+  "tqdm>=4.67.1",
 ]
 
-[project.optional-dependencies]
-env = ["gs-env>=0.1,<0.2"]
-log = ["wandb>=0.17"]
+[dependency-groups]
+dev = [
+  "fire>=0.7.0",
+  "pre-commit>=4.3.0",
+  "pyright[nodejs]>=1.1.404",
+  "pytest-timeout>=2.4.0",
+  "pytest>=8.4.1",
+  "ruff>=0.12.10",
+]
 
 [build-system]
 requires = ["hatchling>=1.25"]

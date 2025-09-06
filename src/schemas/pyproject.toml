@@ -10,6 +10,16 @@ dependencies = ["pydantic>=2.11.4"]
 [project.optional-dependencies]
 types = ["jaxtyping>=0.2.28", "numpy>=1.26"]
 
+[dependency-groups]
+dev = [
+  "fire>=0.7.0",
+  "pre-commit>=4.3.0",
+  "pyright[nodejs]>=1.1.404",
+  "pytest-timeout>=2.4.0",
+  "pytest>=8.4.1",
+  "ruff>=0.12.10",
+]
+
 [build-system]
 requires = ["hatchling>=1.25"]
 build-backend = "hatchling.build"
