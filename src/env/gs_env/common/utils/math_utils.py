@@ -1,10 +1,10 @@
-from typing import Literal
+from typing import Literal, Optional
 
 import torch
 
 
 @torch.jit.script
-def quat_mul(q: torch.Tensor, r: torch.Tensor) -> torch.Tensor:
+def quat_mul(q, r) -> torch.Tensor:
     """Quaternion multiplication for batched tensors [w, x, y, z]."""
     w1, x1, y1, z1 = q.unbind(-1)
     w2, x2, y2, z2 = r.unbind(-1)
@@ -54,6 +54,39 @@ def quat_to_rotmat(q: torch.Tensor) -> torch.Tensor:
     )  # shape: [..., 3, 3]
 
     return rot
+
+
+@torch.jit.script
+def quat_to_euler(q: torch.Tensor) -> torch.Tensor:  # xyz
+    """Convert quaternions to Euler angles (roll, pitch, yaw).
+    Args:
+        quat: Tensor of shape (N, 4), where each row is a quaternion in (w, x, y, z) format.
+    Returns:
+        Tensor of shape (N, 3), where each row is (roll, pitch, yaw) in radians.
+    """
+    assert q.shape[-1] == 4, "Quaternion must be of shape [..., 4]"
+
+    qw, qx, qy, qz = q.unbind(-1)
+
+    # Roll (x-axis rotation)
+    sinr_cosp = 2 * (qw * qx + qy * qz)
+    cosr_cosp = 1 - 2 * (qx * qx + qy * qy)
+    roll = torch.atan2(sinr_cosp, cosr_cosp)
+
+    # Pitch (y-axis rotation)
+    sinp = 2 * (qw * qy - qz * qx)
+    pitch = torch.where(
+        torch.abs(sinp) >= 1,
+        torch.sign(sinp) * torch.tensor(torch.pi / 2),
+        torch.asin(sinp),
+    )
+
+    # Yaw (z-axis rotation)
+    siny_cosp = 2 * (qw * qz + qx * qy)
+    cosy_cosp = 1 - 2 * (qy * qy + qz * qz)
+    yaw = torch.atan2(siny_cosp, cosy_cosp)
+
+    return torch.stack([roll, pitch, yaw], dim=-1)
 
 
 @torch.jit.script
@@ -314,8 +347,8 @@ def is_identity_pose(pos: torch.Tensor, rot: torch.Tensor) -> bool:
 def combine_frame_transforms(
     t01: torch.Tensor,
     q01: torch.Tensor,
-    t12: torch.Tensor | None = None,
-    q12: torch.Tensor | None = None,
+    t12: Optional[torch.Tensor] = None,
+    q12: Optional[torch.Tensor] = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     r"""Combine transformations between two reference frames into a stationary frame.
 

@@ -3,7 +3,7 @@ from gs_schemas.base_types import genesis_pydantic_config
 from pydantic import BaseModel
 
 from gs_env.sim.objects.config.schema import ObjectArgs
-from gs_env.sim.robots.config.schema import ManipulatorRobotArgs
+from gs_env.sim.robots.config.schema import ManipulatorRobotArgs, LeggedRobotArgs
 from gs_env.sim.scenes.config.schema import SceneArgs
 from gs_env.sim.sensors.config.schema import SensorArgs
 
@@ -28,3 +28,9 @@ class EnvArgs(BaseModel):
     sensors_args: list[SensorArgs]
     reward_args: dict[str, float]
     img_resolution: tuple[int, int]
+
+
+class LeggedRobotEnvArgs(EnvArgs):
+    robot_args: LeggedRobotArgs
+    action_latency: int = 1
+    obs_history_len: int = 1

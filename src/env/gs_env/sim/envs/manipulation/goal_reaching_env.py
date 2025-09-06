@@ -35,7 +35,7 @@ class GoalReachingEnv(BaseEnv):
         self._args = args
 
         if not gs._initialized:  # noqa: SLF001
-            gs.init(performance_mode=True)
+            gs.init(performance_mode=True, backend=getattr(gs.constants.backend, device.type))
 
         # == setup the scene ==
         self._scene = FlatScene(
