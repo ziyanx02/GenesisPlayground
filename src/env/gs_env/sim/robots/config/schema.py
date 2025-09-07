@@ -84,7 +84,9 @@ class ManipulatorRobotArgs(BaseModel):
     default_gripper_dof: dict[str, float] | None = None
 
 
-class DomainRandomizationArgs:
+class DomainRandomizationArgs(BaseModel):
+    model_config = genesis_pydantic_config(frozen=True)
+
     kp_range: tuple[float, float]
     kd_range: tuple[float, float]
     motor_strength_range: tuple[float, float]
@@ -94,7 +96,9 @@ class DomainRandomizationArgs:
     com_displacement_range: tuple[float, float]
 
 
-class LeggedRobotArgs:
+class LeggedRobotArgs(BaseModel):
+    model_config = genesis_pydantic_config(frozen=True)
+
     material_args: RigidMaterialArgs
     morph_args: URDFMorphArgs
     dr_args: DomainRandomizationArgs
@@ -144,10 +148,8 @@ class EEPoseRelAction(BaseModel):
     ee_link_ang_delta: torch.Tensor  # (3,)
 
 
-class DRJointPosAction:
-    """
-    Noised joint position action for legged robots.
-    """
+class DRJointPosAction(BaseModel):
+    model_config = genesis_pydantic_config(frozen=True, arbitrary_types_allowed=True)
 
     joint_pos: torch.Tensor  # (n_dof,)
 

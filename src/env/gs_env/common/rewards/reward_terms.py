@@ -118,3 +118,17 @@ class PoseDist(RewardTerm):
         Compute the quaternion error between two quaternions.
         """
         ...
+
+class ActionRate(RewardTerm):
+    """
+    Penalize the action rate by its squared L2 norm.
+
+    Args:
+        action: Action tensor of shape (B, D) where B is the batch size and D is the action dimension.
+        prev_action: Previous action tensor of shape (B, D).
+    """
+
+    required_keys = ("action", "last_action")
+
+    def _compute(self, action: torch.Tensor, last_action: torch.Tensor) -> torch.Tensor:  # type: ignore
+        return -torch.sum((action - last_action) ** 2, dim=-1)

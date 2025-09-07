@@ -53,8 +53,7 @@ EnvArgsRegistry["walk_default"] = LeggedRobotEnvArgs(
     objects_args=[],
     sensors_args=[],
     reward_args={
-        "rew_actions": 0.0,
-        "rew_keypoints": 1.0,
+        "ActionRate": -0.001,
     },
     img_resolution=(480, 270),
     action_latency=1,

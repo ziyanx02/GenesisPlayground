@@ -3,21 +3,18 @@ from __future__ import annotations
 from collections.abc import Callable
 
 import genesis as gs
-from gs_env.sim import envs
+import numpy as np
 import torch
+from gymnasium import spaces
 from genesis.engine.entities.rigid_entity import RigidEntity
 from genesis.engine.solvers.rigid.rigid_solver_decomp import RigidSolver
 
 from gs_env.common.bases.base_robot import BaseGymRobot
-from gs_env.common.utils.gs_utils import to_gs_and_assert
-from gs_env.common.utils.math_utils import *
-from gs_env.common.utils.misc_utils import get_action_space
+from gs_env.common.utils.math_utils import quat_from_euler
 from gs_env.sim.robots.config.schema import (
     BaseAction,
     CtrlType,
     JointPosAction,
-    JointTorqueAction,
-    JointVelAction,
     DRJointPosAction,
     LeggedRobotArgs,
     HumanoidRobotArgs,
@@ -44,10 +41,8 @@ class LeggedRobotBase(BaseGymRobot):
         self._args = args
 
         # == Genesis configurations ==
-        material: gs.materials.Rigid = to_gs_and_assert(
-            args.material_args, gs.materials.Rigid
-        )
-        morph: gs.morphs.URDF = to_gs_and_assert(args.morph_args, gs.morphs.URDF)
+        material = gs.materials.Rigid(**args.material_args.model_dump())
+        morph = gs.morphs.URDF(**args.morph_args.model_dump())
         self._robot: RigidEntity = scene.add_entity(
             material=material,
             morph=morph,
@@ -56,9 +51,8 @@ class LeggedRobotBase(BaseGymRobot):
         )
 
         # == action space ==
-        self._action_space = get_action_space(
-            ctrl_type=args.ctrl_type, n_dof=len(args.default_dof.keys())
-        )
+        n_dof = len(args.default_dof.keys())
+        self._action_space = spaces.Box(shape=(n_dof,), low=-np.inf, high=np.inf)
         assert self._action_space is not None, "Action space cannot be None"
 
         # == some buffer initialization ==
@@ -90,8 +84,6 @@ class LeggedRobotBase(BaseGymRobot):
         self._dof_kd = torch.tensor(dof_kd, device=self._device)
         self._batched_dof_kp = self._dof_kp[None, :].repeat(self._num_envs, 1)
         self._batched_dof_kd = self._dof_kd[None, :].repeat(self._num_envs, 1)
-        self._robot.set_dofs_kp(self._dof_kp, dofs_idx_local=self._dofs_idx_local)
-        self._robot.set_dofs_kv(self._dof_kd, dofs_idx_local=self._dofs_idx_local)
         self._motor_strength = torch.ones(
             (self._num_envs, self._dof_dim), device=self._device
         )  # motor strength scaling factor
@@ -114,6 +106,23 @@ class LeggedRobotBase(BaseGymRobot):
         self._default_dof_pos = torch.tensor(
             default_joint_angles, dtype=torch.float32, device=self._device
         )
+        # buffers
+        self._dof_pos = torch.zeros(
+            (self._num_envs, self._dof_dim), dtype=torch.float32, device=self._device
+        )
+        self._dof_vel = torch.zeros(
+            (self._num_envs, self._dof_dim), dtype=torch.float32, device=self._device
+        )
+
+        # == set up control dispatch ==
+        self._dispatch: dict[CtrlType, Callable[[BaseAction], None]] = {
+            CtrlType.JOINT_POSITION.value: self._apply_joint_pos,
+            CtrlType.DR_JOINT_POSITION.value: self._apply_dr_joint_pos,
+        }
+
+    def _post_build_init(self):
+        self._init_domain_randomization()
+
         # limits
         self._dof_pos_limits = torch.stack(
             self._robot.get_dofs_limit(self._dofs_idx_local), dim=1
@@ -129,25 +138,6 @@ class LeggedRobotBase(BaseGymRobot):
                 m + 0.5 * r * self._args.soft_dof_pos_range
             )
         self._torque_limits = self._robot.get_dofs_force_range(self._dofs_idx_local)[1]
-
-        # buffers
-        self._dof_pos = torch.zeros(
-            (self._num_envs, self._dof_dim), dtype=torch.float32, device=self._device
-        )
-        self._dof_vel = torch.zeros(
-            (self._num_envs, self._dof_dim), dtype=torch.float32, device=self._device
-        )
-
-        # domain randomization
-        self._init_domain_randomization()
-
-        # == set up control dispatch ==
-        self._dispatch: dict[CtrlType, Callable[[BaseAction], None]] = {
-            CtrlType.JOINT_POSITION.value: self._apply_joint_pos,
-            CtrlType.JOINT_VELOCITY.value: self._apply_joint_vel,
-            CtrlType.JOINT_FORCE.value: self._apply_joint_force,
-            CtrlType.DR_JOINT_POSITION.value: self._apply_dr_joint_pos,
-        }
 
     def _init_domain_randomization(self):
         envs_idx: torch.IntTensor = torch.arange(0, self._num_envs, device=self._device)
@@ -228,10 +218,6 @@ class LeggedRobotBase(BaseGymRobot):
                     action = DRJointPosAction(joint_pos=action)
                 case CtrlType.JOINT_POSITION:
                     action = JointPosAction(joint_pos=action, gripper_width=0.0)
-                case CtrlType.JOINT_VELOCITY:
-                    action = JointVelAction(joint_vel=action, gripper_width=0.0)
-                case CtrlType.JOINT_FORCE:
-                    action = JointTorqueAction(joint_force=action, gripper_width=0.0)
                 case _:
                     raise ValueError(f"Unsupported control type: {self.ctrl_type}")
         self._dispatch[self._args.ctrl_type](action)
@@ -248,28 +234,6 @@ class LeggedRobotBase(BaseGymRobot):
         ), "Joint position action must match the number of joints."
         q_target = act.joint_pos.to(self._device)
         self._robot.control_dofs_position(position=q_target)
-
-    def _apply_joint_vel(self, act: JointVelAction) -> None:
-        """
-        Apply joint velocity control to the robot.
-        """
-        assert act.joint_vel.shape == (
-            self._num_envs,
-            self._dof_dim,
-        ), "Joint velocity action must match the number of joints."
-        q_vel = act.joint_vel.to(self._device)
-        self._robot.control_dofs_velocity(velocity=q_vel)
-
-    def _apply_joint_force(self, act: JointTorqueAction) -> None:
-        """
-        Apply joint torque control to the robot.
-        """
-        assert act.joint_force.shape == (
-            self._num_envs,
-            self._dof_dim,
-        ), "Joint torque action must match the number of joints."
-        q_force = act.joint_force.to(self._device)
-        self._robot.control_dofs_force(force=q_force)
 
     def _apply_dr_joint_pos(self, act: DRJointPosAction) -> None:
         """

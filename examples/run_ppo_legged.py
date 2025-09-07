@@ -10,11 +10,11 @@ from gs_agent.utils.logger import configure as logger_configure
 from gs_agent.wrappers.gs_env_wrapper import GenesisEnvWrapper
 from gs_env.common.bases.base_env import BaseEnv
 from gs_env.sim.envs.config.registry import EnvArgsRegistry
-from gs_env.sim.envs.manipulation.goal_reaching_env import GoalReachingEnv
+from gs_env.sim.envs.locomotion.walking_env import WalkingEnv
 
 
 def create_gs_env(
-    env_name: str = "goal_reach_default", show_viewer: bool = False, num_envs: int = 2048, device: str = "cpu"
+    env_name: str = "walk_default", show_viewer: bool = False, num_envs: int = 2048, device: str = "cuda"
 ) -> BaseEnv:
     """Create gym environment wrapper."""
     if torch.backends.mps.is_available():
@@ -25,7 +25,7 @@ def create_gs_env(
         device = torch.device("cpu")
     print(f"Using device: {device}")
 
-    return GoalReachingEnv(
+    return WalkingEnv(
         args=EnvArgsRegistry[env_name], num_envs=num_envs, show_viewer=show_viewer, device=device
     )
 
@@ -51,7 +51,7 @@ def create_ppo_runner_from_registry(env: BaseEnv) -> OnPolicyRunner:
     return runner
 
 
-def main(num_envs: int = 2048, show_viewer: bool = False, device: str = "cpu") -> None:
+def main(num_envs: int = 2048, show_viewer: bool = False, device: str = "cuda") -> None:
     """Main function demonstrating proper registry usage."""
     # create environment
     env = create_gs_env(show_viewer=show_viewer, num_envs=num_envs, device=device)
