@@ -159,6 +159,7 @@ class WalkingEnv(BaseEnv):
     def get_observations(self):
         self._update_buffers()
         # Prepare observation components
+        # import ipdb; ipdb.set_trace()
         obs_components = [
             last_action := self._last_action,  # last action
             dof_pos := self._robot.dof_pos,  # joint positions
@@ -231,7 +232,7 @@ class WalkingEnv(BaseEnv):
 
     @property
     def action_dim(self):
-        act_dim = get_space_dim(self._action_space) - 1  # -1 for the gripper actio
+        act_dim = get_space_dim(self._action_space)
         return act_dim
 
     @property
