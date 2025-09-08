@@ -90,6 +90,7 @@ class WalkingEnv(BaseEnv):
                 "dof_pos": gym.spaces.Box(low=-np.inf, high=np.inf, shape=(self._robot._dof_dim,), dtype=np.float32),
                 "dof_vel": gym.spaces.Box(low=-np.inf, high=np.inf, shape=(self._robot._dof_dim,), dtype=np.float32),
                 "projected_gravity": gym.spaces.Box(low=-1.0, high=1.0, shape=(3,), dtype=np.float32),
+                "ang_vel": gym.spaces.Box(low=-np.inf, high=np.inf, shape=(3,), dtype=np.float32),
                 # "img": spaces.Box(
                 #     low=0.0, high=255.0, shape=self._args.img_resolution, dtype=NP_SCALAR
                 # ),  # RGB image
@@ -111,6 +112,8 @@ class WalkingEnv(BaseEnv):
         self.base_pos = torch.zeros(self.num_envs, 3, dtype=torch.float32, device=self._device)
         self.base_quat = torch.zeros(self.num_envs, 4, dtype=torch.float32, device=self._device)
         self.base_euler = torch.zeros(self.num_envs, 3, dtype=torch.float32, device=self._device)
+        self.base_lin_vel = torch.zeros(self.num_envs, 3, dtype=torch.float32, device=self._device)
+        self.base_ang_vel = torch.zeros(self.num_envs, 3, dtype=torch.float32, device=self._device)
         global_gravity = torch.tensor([0.0, 0.0, -1.0], device=self.device, dtype=torch.float32)
         self.global_gravity = global_gravity[None, :].repeat(self.num_envs, 1)
         self.projected_gravity = torch.zeros((self.num_envs, 3), device=self.device, dtype=torch.float32)
@@ -150,10 +153,17 @@ class WalkingEnv(BaseEnv):
 
     def get_terminated(self) -> torch.Tensor:
         reset_buf = self.get_truncated()
+        reset_buf |= torch.logical_or(
+            torch.abs(self.base_euler[:, 0]) > 0.3,
+            torch.abs(self.base_euler[:, 1]) > 0.3,
+        )
+        reset_buf |= self.base_pos[:, 2] < 0.3
+        self.reset_buf[:] = reset_buf
         return reset_buf
 
     def get_truncated(self) -> torch.Tensor:
         time_out_buf = self.time_since_reset > self._max_sim_time
+        self.time_out_buf[:] = time_out_buf
         return time_out_buf
 
     def get_observations(self):
@@ -165,12 +175,13 @@ class WalkingEnv(BaseEnv):
             dof_pos := self._robot.dof_pos,  # joint positions
             dof_vel := self._robot.dof_vel,  # joint velocities
             projected_gravity := self.projected_gravity,  # projected gravity in base frame
+            ang_vel := self.base_ang_vel,  # angular velocity in base frame
         ]
         obs_tensor = torch.cat(obs_components, dim=-1)
 
         self._extra_info = {
             "observations": {"critic": obs_tensor},
-            "time_outs": self.reset_buf,
+            "time_outs": self.time_out_buf.clone(),
         }
         return obs_tensor
 
@@ -204,6 +215,8 @@ class WalkingEnv(BaseEnv):
         self.projected_gravity[:] = quat_apply(quat_inv(self.base_quat), self.global_gravity)
         inv_quat_yaw = quat_from_angle_axis(-self.base_euler[:, 2],
                                             torch.tensor([0, 0, 1], device=self.device, dtype=torch.float))
+        self.base_lin_vel[:] = quat_apply(inv_quat_yaw, self._robot.get_vel())
+        self.base_ang_vel[:] = quat_apply(quat_inv(base_quat_rel), self._robot.get_ang())
 
     def get_info(self, envs_idx: torch.IntTensor | None = None) -> dict:
         if envs_idx is None:
