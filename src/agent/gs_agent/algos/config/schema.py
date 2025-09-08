@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from gs_schemas.base_types import GenesisEnum, genesis_pydantic_config
 from pydantic import BaseModel, Field, NonNegativeFloat, NonNegativeInt, PositiveFloat
 
@@ -12,6 +14,7 @@ class OptimizerType(GenesisEnum):
 
 class AlgorithmType(GenesisEnum):
     PPO = "PPO"
+    BC = "BC"
 
 
 class PPOArgs(BaseModel):
@@ -55,4 +58,36 @@ class PPOArgs(BaseModel):
     weight_decay: NonNegativeFloat = 0.0
 
 
-AlgorithmArgs = PPOArgs
+class BCArgs(BaseModel):
+    """Configuration for BC algorithm."""
+
+    model_config = genesis_pydantic_config(frozen=True)
+
+    # Algorithm type
+    algorithm_type: AlgorithmType = AlgorithmType.BC
+
+    # Network architecture
+    policy_backbone: NetworkBackboneConfig = MLPConfig()
+    teacher_backbone: NetworkBackboneConfig = MLPConfig()
+
+    # Learning rates
+    lr: PositiveFloat = 3e-4
+    """Policy learning rate"""
+    max_grad_norm: PositiveFloat = 1.0
+
+    # Teacher path
+    teacher_path: Path
+
+    # Training
+    num_epochs: NonNegativeInt = 10
+    batch_size: NonNegativeInt = 256
+    rollout_length: NonNegativeInt = 1000
+    max_buffer_size: NonNegativeInt = 1_000_000
+    max_num_batches: NonNegativeInt = 4
+
+    # Optimizer
+    optimizer_type: OptimizerType = OptimizerType.ADAM
+    weight_decay: NonNegativeFloat = 0.0
+
+
+AlgorithmArgs = PPOArgs | BCArgs
