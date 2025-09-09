@@ -1,1 +1,0 @@
-python examples/run_ppo_legged.py --num_envs 2

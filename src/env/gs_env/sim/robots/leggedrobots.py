@@ -249,7 +249,7 @@ class LeggedRobotBase(BaseGymRobot):
         )
         q_force = q_force * self._motor_strength
         q_force = torch.clamp(q_force, -self._torque_limits, self._torque_limits)
-        self._robot.control_dofs_force(force=q_force)
+        self._robot.control_dofs_force(force=q_force, dofs_idx_local=self._dofs_idx_local)
 
     @property
     def base_pos(self) -> torch.Tensor:

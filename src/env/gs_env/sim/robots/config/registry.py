@@ -36,6 +36,20 @@ MaterialArgsRegistry["default"] = RigidMaterialArgs(
 )
 
 
+MaterialArgsRegistry["g1_default"] = RigidMaterialArgs(
+    rho=200.0,
+    friction=None,
+    needs_coup=True,
+    coup_friction=0.1,
+    coup_softness=0.002,
+    coup_restitution=0.0,
+    sdf_cell_size=0.005,
+    sdf_min_res=32,
+    sdf_max_res=128,
+    gravity_compensation=0,
+)
+
+
 # ------------------------------------------------------------
 # Morph
 # ------------------------------------------------------------
@@ -65,7 +79,7 @@ MorphArgsRegistry["g1_default"] = URDFMorphArgs(
     scale=1.0,
     convexify=False,
     recompute_inertia=False,
-    fixed=True,
+    fixed=False,
     prioritize_urdf_material=False,
     merge_fixed_links=False,
     links_to_keep=[],
@@ -131,7 +145,7 @@ RobotArgsRegistry["franka_default"] = ManipulatorRobotArgs(
 
 
 RobotArgsRegistry["g1_default"] = HumanoidRobotArgs(
-    material_args=MaterialArgsRegistry["default"],
+    material_args=MaterialArgsRegistry["g1_default"],
     morph_args=MorphArgsRegistry["g1_default"],
     dr_args=DRArgsRegistry["default"],
     visualize_contact=False,
