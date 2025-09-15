@@ -84,7 +84,7 @@ class BaseHeightPenalty(RewardTerm):
     """
 
     required_keys = ("base_pos",)
-    target_height: float = None
+    target_height: float = 1.0
 
     def _compute(self, base_pos: torch.Tensor) -> torch.Tensor:  # type: ignore
         return -torch.square(base_pos[:, 2] - self.target_height)

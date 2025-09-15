@@ -19,6 +19,8 @@ from gs_env.sim.robots.config.schema import (
     HumanoidRobotArgs,
     JointPosAction,
     LeggedRobotArgs,
+    ManipulatorRobotArgs,
+    QuadrupedRobotArgs,
 )
 
 
@@ -352,13 +354,21 @@ class LeggedRobotBase(BaseGymRobot):
 
 class HumanoidRobotBase(LeggedRobotBase):
     def __init__(
-        self, num_envs: int, scene: gs.Scene, args: LeggedRobotArgs, device: str = "cpu"
+        self,
+        num_envs: int,
+        scene: gs.Scene,
+        args: ManipulatorRobotArgs | QuadrupedRobotArgs | HumanoidRobotArgs,
+        device: str = "cpu",
     ) -> None:
         super().__init__(num_envs, scene, args, device)
 
 
 class G1Robot(HumanoidRobotBase):
     def __init__(
-        self, num_envs: int, scene: gs.Scene, args: HumanoidRobotArgs, device: str = "cpu"
+        self,
+        num_envs: int,
+        scene: gs.Scene,
+        args: ManipulatorRobotArgs | QuadrupedRobotArgs | HumanoidRobotArgs,
+        device: str = "cpu",
     ) -> None:
         super().__init__(num_envs, scene=scene, args=args, device=device)
