@@ -103,6 +103,7 @@ class WalkingEnv(BaseEnv):
                     low=-1.0, high=1.0, shape=(3,), dtype=np.float32
                 ),
                 "ang_vel": gym.spaces.Box(low=-np.inf, high=np.inf, shape=(3,), dtype=np.float32),
+                "commands": gym.spaces.Box(low=-np.inf, high=np.inf, shape=(3,), dtype=np.float32),
                 # "img": spaces.Box(
                 #     low=0.0, high=255.0, shape=self._args.img_resolution, dtype=NP_SCALAR
                 # ),  # RGB image
@@ -183,6 +184,7 @@ class WalkingEnv(BaseEnv):
             self._robot.dof_vel,  # joint velocities
             self.projected_gravity,  # projected gravity in base frame
             self.base_ang_vel,  # angular velocity in base frame
+            self.commands,  # command velocities
         ]
         obs_tensor = torch.cat(obs_components, dim=-1)
 
@@ -234,7 +236,7 @@ class WalkingEnv(BaseEnv):
             self.commands[:, :2] *= torch.norm(self.commands[:, :2], dim=-1, keepdim=True) > 0.3
             self.commands[:, 2] *= torch.abs(self.commands[:, 2]) > 0.3
 
-    def get_info(self, envs_idx: torch.IntTensor | None = None) -> dict:
+    def get_info(self, envs_idx: torch.IntTensor | None = None) -> dict[str, Any]:
         if envs_idx is None:
             envs_idx = torch.IntTensor(range(self.num_envs))
         return dict()
