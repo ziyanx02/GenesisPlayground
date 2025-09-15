@@ -358,7 +358,7 @@ class HumanoidRobotBase(LeggedRobotBase):
         num_envs: int,
         scene: gs.Scene,
         args: ManipulatorRobotArgs | QuadrupedRobotArgs | HumanoidRobotArgs,
-        device: str = "cpu",
+        device: torch.device = torch.device("cpu"),
     ) -> None:
         super().__init__(num_envs, scene, args, device)
 
@@ -369,6 +369,6 @@ class G1Robot(HumanoidRobotBase):
         num_envs: int,
         scene: gs.Scene,
         args: ManipulatorRobotArgs | QuadrupedRobotArgs | HumanoidRobotArgs,
-        device: str = "cpu",
+        device: torch.device = torch.device("cpu"),
     ) -> None:
         super().__init__(num_envs, scene=scene, args=args, device=device)

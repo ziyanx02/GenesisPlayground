@@ -38,3 +38,8 @@ class EnvArgs(BaseModel):
 class LeggedRobotEnvArgs(EnvArgs):
     action_latency: int = 1
     obs_history_len: int = 1
+
+class ImitationTeacherEnvArgs(LeggedRobotEnvArgs):
+    motion_path: str
+    future_steps: int = 20
+    resample_interval: int = 1000
