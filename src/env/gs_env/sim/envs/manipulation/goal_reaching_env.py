@@ -7,7 +7,6 @@ import numpy as np
 import torch
 
 from gs_env.common.bases.base_env import BaseEnv
-from gs_env.common.rewards import ActionL2Penalty, KeypointsAlign
 from gs_env.common.utils.math_utils import quat_mul
 from gs_env.common.utils.misc_utils import get_space_dim
 from gs_env.sim.envs.config.schema import EnvArgs

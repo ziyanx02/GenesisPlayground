@@ -4,6 +4,7 @@ from .utils import export
 __all__ = [
     "ActionL2Penalty",
     "PositionL2Penalty",
+    "KeypointsAlign",
 ]
 
 import torch

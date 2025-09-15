@@ -3,8 +3,9 @@
 
 import fire
 import torch
+from gs_agent.algos.config.registry import PPO_WALKING_MLP
 from gs_agent.algos.ppo import PPO
-from gs_agent.configs import PPO_GOAL_REACHING_MLP, RUNNER_GOAL_REACHING_MLP
+from gs_agent.runners.config.registry import RUNNER_WALKING_MLP
 from gs_agent.runners.onpolicy_runner import OnPolicyRunner
 from gs_agent.utils.logger import configure as logger_configure
 from gs_agent.wrappers.gs_env_wrapper import GenesisEnvWrapper
@@ -38,14 +39,14 @@ def create_ppo_runner_from_registry(env: BaseEnv) -> OnPolicyRunner:
     # Create PPO algorithm
     ppo = PPO(
         env=wrapped_env,
-        cfg=PPO_GOAL_REACHING_MLP,
+        cfg=PPO_WALKING_MLP,
         device=wrapped_env.device,
     )
 
     # Create PPO runner
     runner = OnPolicyRunner(
         algorithm=ppo,
-        runner_args=RUNNER_GOAL_REACHING_MLP,
+        runner_args=RUNNER_WALKING_MLP,
         device=wrapped_env.device,
     )
     return runner

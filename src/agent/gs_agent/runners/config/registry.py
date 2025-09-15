@@ -17,9 +17,18 @@ RUNNER_PENDULUM_MLP = RunnerArgs(
     save_path=Path("./logs/ppo_gym_pendulum"),
 )
 
+
 RUNNER_GOAL_REACHING_MLP = RunnerArgs(
     total_iterations=500,
     log_interval=10,
     save_interval=100,
     save_path=Path("./logs/ppo_gs_goal_reaching"),
+)
+
+
+RUNNER_WALKING_MLP = RunnerArgs(
+    total_iterations=2000,
+    log_interval=50,
+    save_interval=400,
+    save_path=Path("./logs/ppo_gs_walking"),
 )

@@ -41,8 +41,8 @@ EnvArgsRegistry["goal_reach_default"] = EnvArgs(
     ],
     reward_term="reward",
     reward_args={
-        "rew_actions": 0.0,
-        "rew_keypoints": 1.0,
+        "ActionL2Penalty": 0.0,
+        "KeypointsAlign": 1.0,
     },
     img_resolution=(480, 270),
 )
