@@ -1,19 +1,6 @@
-from .reward_terms import RewardTerm
-
-__all__ = [
-    "LinVelXYReward",
-    "LinVelZPenalty",
-    "AngVelXYPenalty",
-    "AngVelZReward",
-    "OrientationPenalty",
-    "BaseHeightPenalty",
-    "ActionRatePenalty",
-    "TorquePenalty",
-    "DofPosLimitPenalty",
-    "ActionLimitPenalty",
-]
-
 import torch
+
+from .reward_terms import RewardTerm
 
 
 ### ---- Reward Terms ---- ###

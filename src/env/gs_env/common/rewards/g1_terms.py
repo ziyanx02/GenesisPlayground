@@ -1,11 +1,6 @@
 from .leggedrobot_terms import (
     BaseHeightPenalty,
 )
-from .leggedrobot_terms import __all__ as all
-
-__all__ = all + [
-    "G1BaseHeightPenalty",
-]
 
 
 ### ---- Reward Terms ---- ###
