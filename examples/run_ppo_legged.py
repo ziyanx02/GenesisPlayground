@@ -15,7 +15,10 @@ from gs_env.sim.envs.locomotion.walking_env import WalkingEnv
 
 
 def create_gs_env(
-    env_name: str = "walk_default", show_viewer: bool = False, num_envs: int = 2048, device: str = "cuda"
+    env_name: str = "walk_default",
+    show_viewer: bool = False,
+    num_envs: int = 2048,
+    device: str = "cuda",
 ) -> BaseEnv:
     """Create gym environment wrapper."""
     if torch.backends.mps.is_available():
@@ -60,7 +63,8 @@ def main(num_envs: int = 2048, show_viewer: bool = False, device: str = "cuda") 
     runner = create_ppo_runner_from_registry(env)
     # Set up logging with proper configuration
     logger = logger_configure(
-        folder=str(runner.save_dir), format_strings=["stdout", "csv", "wandb"],
+        folder=str(runner.save_dir),
+        format_strings=["stdout", "csv", "wandb"],
         mode="disabled",
         # mode="online" if not show_viewer else "disabled",
     )

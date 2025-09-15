@@ -120,7 +120,7 @@ class LeggedRobotArgs(BaseModel):
 class QuadrupedRobotArgs(LeggedRobotArgs): ...
 
 
-class HumanoidRobotArgs(LeggedRobotArgs): 
+class HumanoidRobotArgs(LeggedRobotArgs):
     left_foot_link_name: str
     right_foot_link_name: str
 

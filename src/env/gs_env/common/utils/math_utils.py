@@ -1,10 +1,10 @@
-from typing import Literal, Optional
+from typing import Literal
 
 import torch
 
 
 @torch.jit.script
-def quat_mul(q, r) -> torch.Tensor:
+def quat_mul(q: torch.Tensor, r: torch.Tensor) -> torch.Tensor:
     """Quaternion multiplication for batched tensors [w, x, y, z]."""
     w1, x1, y1, z1 = q.unbind(-1)
     w2, x2, y2, z2 = r.unbind(-1)
@@ -347,8 +347,8 @@ def is_identity_pose(pos: torch.Tensor, rot: torch.Tensor) -> bool:
 def combine_frame_transforms(
     t01: torch.Tensor,
     q01: torch.Tensor,
-    t12: Optional[torch.Tensor] = None,
-    q12: Optional[torch.Tensor] = None,
+    t12: torch.Tensor | None = None,
+    q12: torch.Tensor | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     r"""Combine transformations between two reference frames into a stationary frame.
 

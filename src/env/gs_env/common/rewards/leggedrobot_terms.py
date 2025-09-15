@@ -15,8 +15,6 @@ __all__ = [
 
 import torch
 
-from gs_env.common.utils.math_utils import quat_apply
-
 
 ### ---- Reward Terms ---- ###
 class LinVelXYReward(RewardTerm):
@@ -149,6 +147,7 @@ class DofPosLimitPenalty(RewardTerm):
         out_of_limits = -(dof_pos - dof_pos_limits[:, 0]).clip(max=0.0)  # lower limit
         out_of_limits += (dof_pos - dof_pos_limits[:, 1]).clip(min=0.0)  # upper limit
         return torch.sum(out_of_limits, dim=1)
+
 
 class ActionLimitPenalty(RewardTerm):
     """

@@ -68,18 +68,18 @@ EnvArgsRegistry["walk_default"] = LeggedRobotEnvArgs(
     reward_term="g1",
     reward_args={
         ### Velocity Tracking ###
-        'LinVelXYReward': 1.0,
-        'AngVelZReward': 1.0,
-        'LinVelZPenalty': -0.2,
-        'AngVelXYPenalty': -0.1,
+        "LinVelXYReward": 1.0,
+        "AngVelZReward": 1.0,
+        "LinVelZPenalty": -0.2,
+        "AngVelXYPenalty": -0.1,
         ### Pose Tracking ###
-        'OrientationPenalty': -5.,
+        "OrientationPenalty": -5.0,
         ### Regularization ###
-        'TorquePenalty': -0.00001,
-        'ActionRatePenalty': -0.01,
-        'DofPosLimitPenalty': -10.0,
-        'G1BaseHeightPenalty': -30.0,
-        'ActionLimitPenalty': -0.1,
+        "TorquePenalty": -0.00001,
+        "ActionRatePenalty": -0.01,
+        "DofPosLimitPenalty": -10.0,
+        "G1BaseHeightPenalty": -30.0,
+        "ActionLimitPenalty": -0.1,
     },
     img_resolution=(480, 270),
     action_latency=1,

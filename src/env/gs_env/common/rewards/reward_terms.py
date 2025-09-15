@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from .utils import export
 
 __all__ = [
     "ActionL2Penalty",

@@ -4,9 +4,9 @@ from pydantic import BaseModel
 
 from gs_env.sim.objects.config.schema import ObjectArgs
 from gs_env.sim.robots.config.schema import (
-    ManipulatorRobotArgs,
-    LeggedRobotArgs,
     HumanoidRobotArgs,
+    LeggedRobotArgs,
+    ManipulatorRobotArgs,
     QuadrupedRobotArgs,
 )
 from gs_env.sim.scenes.config.schema import SceneArgs
