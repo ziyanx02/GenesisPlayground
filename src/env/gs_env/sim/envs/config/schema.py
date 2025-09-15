@@ -31,6 +31,7 @@ class EnvArgs(BaseModel):
     robot_args: ManipulatorRobotArgs
     objects_args: list[ObjectArgs]
     sensors_args: list[SensorArgs]
+    reward_term: str = "reward"
     reward_args: dict[str, float]
     img_resolution: tuple[int, int]
 

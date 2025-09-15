@@ -299,8 +299,8 @@ SceneArgsRegistry["flat_scene_legged"] = FlatSceneArgs(
     # pbd_options=PBDArgsRegistry["default"],
     vis_options=VisArgsRegistry["default"],
     viewer_options=gs.options.ViewerOptions(
-        camera_pos=(-0.6, 0.0, 0.7),
-        camera_lookat=(0.2, 0.0, 0.1),
+        camera_pos=(-2.0, 0.0, 0.6),
+        camera_lookat=(0.0, 0.0, 0.6),
         camera_fov=50,
         max_FPS=60,
     ),

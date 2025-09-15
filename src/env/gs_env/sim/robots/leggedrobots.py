@@ -90,6 +90,9 @@ class LeggedRobotBase(BaseGymRobot):
         self._motor_offset = torch.zeros(
             (self._num_envs, self._dof_dim), device=self._device
         )  # motor offset
+        self._torque = torch.zeros(
+            (self._num_envs, self._dof_dim), device=self._device
+        )
 
         # default states
         self._default_pos = torch.tensor(
@@ -195,10 +198,12 @@ class LeggedRobotBase(BaseGymRobot):
 
     def reset_idx(self, envs_idx: torch.IntTensor):
         self._robot.set_pos(
-            self._default_pos[None].repeat(len(envs_idx), 1), envs_idx=envs_idx
+            self._default_pos[None].repeat(len(envs_idx), 1), envs_idx=envs_idx,
+            zero_velocity=True,
         )
         self._robot.set_quat(
-            self._default_quat[None].repeat(len(envs_idx), 1), envs_idx=envs_idx
+            self._default_quat[None].repeat(len(envs_idx), 1), envs_idx=envs_idx,
+            zero_velocity=True,
         )
         self._robot.set_dofs_position(
             self._default_dof_pos[None].repeat(len(envs_idx), 1),
@@ -208,6 +213,38 @@ class LeggedRobotBase(BaseGymRobot):
         self._dof_pos[envs_idx] = self._default_dof_pos[None].repeat(len(envs_idx), 1)
         self._dof_vel[envs_idx] = 0.0
 
+    def set_state(self,
+        pos: torch.Tensor,
+        quat: torch.Tensor,
+        dof_pos: torch.Tensor,
+        envs_idx: torch.IntTensor,
+        lin_vel: torch.Tensor | None = None,
+        ang_vel: torch.Tensor | None = None,
+        dof_vel: torch.Tensor | None = None,
+    ):
+        self._robot.set_pos(pos, envs_idx=envs_idx)
+        self._robot.set_quat(quat, envs_idx=envs_idx)
+        dof_pos = torch.clamp(dof_pos, self._dof_pos_limits[:, 0], self._dof_pos_limits[:, 1])
+        self._robot.set_dofs_position(dof_pos, envs_idx=envs_idx, dofs_idx_local=self._dofs_idx_local)
+        self._dof_pos[envs_idx] = dof_pos.clone()
+        if lin_vel is not None:
+            self._robot.set_dofs_velocity(lin_vel, envs_idx=envs_idx, dofs_idx_local=[0,1,2])
+        else:
+            self._robot.set_dofs_velocity(torch.zeros((len(envs_idx), 3), device=self._device),
+                                          envs_idx=envs_idx, dofs_idx_local=[0,1,2])
+        if ang_vel is not None:
+            self._robot.set_dofs_velocity(ang_vel, envs_idx=envs_idx, dofs_idx_local=[3,4,5])
+        else:
+            self._robot.set_dofs_velocity(torch.zeros((len(envs_idx), 3), device=self._device),
+                                          envs_idx=envs_idx, dofs_idx_local=[3,4,5])
+        if dof_vel is not None:
+            self._robot.set_dofs_velocity(dof_vel, envs_idx=envs_idx, dofs_idx_local=self._dofs_idx_local)
+            self._dof_vel[envs_idx] = dof_vel.clone()
+        else:
+            self._robot.set_dofs_velocity(torch.zeros((len(envs_idx), self._dof_dim), device=self._device),
+                                          envs_idx=envs_idx, dofs_idx_local=self._dofs_idx_local)
+            self._dof_vel[envs_idx] = 0.0
+        
     def apply_action(self, action: BaseAction | torch.Tensor) -> None:
         """
         Apply the action to the robot.
@@ -249,6 +286,7 @@ class LeggedRobotBase(BaseGymRobot):
         )
         q_force = q_force * self._motor_strength
         q_force = torch.clamp(q_force, -self._torque_limits, self._torque_limits)
+        self._torque[:] = q_force
         self._robot.control_dofs_force(force=q_force, dofs_idx_local=self._dofs_idx_local)
 
     @property
@@ -266,6 +304,14 @@ class LeggedRobotBase(BaseGymRobot):
     @property
     def dof_vel(self) -> torch.Tensor:
         return self._dof_vel
+    
+    @property
+    def torque(self) -> torch.Tensor:
+        return self._torque
+    
+    @property
+    def dof_pos_limits(self) -> torch.Tensor:
+        return self._dof_pos_limits
 
     def __getattr__(self, item):
         if hasattr(self._robot, item):

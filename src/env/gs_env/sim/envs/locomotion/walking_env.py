@@ -1,4 +1,5 @@
 from typing import Any
+import importlib
 
 import genesis as gs
 import gymnasium as gym
@@ -7,13 +8,13 @@ import torch
 
 #
 from gs_env.common.bases.base_env import BaseEnv
-import gs_env.common.rewards as rewards
 from gs_env.common.utils.math_utils import (
     quat_apply,
     quat_inv,
     quat_mul,
     quat_from_angle_axis,
-    quat_to_euler
+    quat_to_euler,
+    quat_from_euler,
 )
 from gs_env.common.utils.misc_utils import get_space_dim
 from gs_env.sim.envs.config.schema import LeggedRobotEnvArgs
@@ -66,13 +67,16 @@ class WalkingEnv(BaseEnv):
         # == setup reward scalars and functions ==
         dt = self._scene.scene.dt
         self._reward_functions = {}
+        module_name = f"gs_env.common.rewards.{self._args.reward_term}_terms"
+        module = importlib.import_module(module_name)
         for key in args.reward_args.keys():
-            if key not in rewards.__all__:
+            if key not in module.__all__:
                 raise ValueError(f"Reward {key} not found in rewards module.")
-            self._reward_functions[key] = getattr(rewards, key)(scale=args.reward_args[key] * dt)
+            self._reward_functions[key] = getattr(module, key)(scale=args.reward_args[key] * dt)
 
         # some auxiliary variables
         self._max_sim_time = 20.0  # seconds
+        self._command_resample_time = 10.0  # seconds
         #
         self._init()
         self.reset()
@@ -107,6 +111,7 @@ class WalkingEnv(BaseEnv):
         self._action = torch.zeros((self.num_envs, self.action_dim), device=self._device)
         self._last_action = torch.zeros((self.num_envs, self.action_dim), device=self._device)
         self._last_last_action = torch.zeros((self.num_envs, self.action_dim), device=self._device)
+        self._torque = torch.zeros((self.num_envs, self.action_dim), device=self._device)
         self.base_default_pos: torch.Tensor = self._robot._default_pos[None, :].repeat(self.num_envs, 1)
         self.base_default_quat: torch.Tensor = self._robot._default_quat[None, :].repeat(self.num_envs, 1)
         self.base_pos = torch.zeros(self.num_envs, 3, dtype=torch.float32, device=self._device)
@@ -117,39 +122,25 @@ class WalkingEnv(BaseEnv):
         global_gravity = torch.tensor([0.0, 0.0, -1.0], device=self.device, dtype=torch.float32)
         self.global_gravity = global_gravity[None, :].repeat(self.num_envs, 1)
         self.projected_gravity = torch.zeros((self.num_envs, 3), device=self.device, dtype=torch.float32)
+        self.commands = torch.zeros((self.num_envs, 3), device=self.device, dtype=torch.float32)
 
         #
         self.reset_buf = torch.zeros(self.num_envs, dtype=torch.bool, device=self._device)
         self.time_out_buf = torch.zeros(self.num_envs, dtype=torch.bool, device=self._device)
         self.time_since_reset = torch.zeros(self.num_envs, device=self._device)
+        self.time_since_resample = 0.0
 
     def reset_idx(self, envs_idx: torch.IntTensor):
-        self._robot.reset(envs_idx=envs_idx)
-        # Generate random goal positions
-        num_reset = len(envs_idx)
-        # Random position within reachable workspace
-        random_x = torch.rand(num_reset, device=self._device) * 0.3 + 0.15  # 0.15 to 0.45
-        random_y = (torch.rand(num_reset, device=self._device) - 0.5) * 0.4  # -0.2 to 0.2
-        random_z = torch.rand(num_reset, device=self._device) * 0.2 + 0.1  # 0.1 to 0.3
-
-        q_down = torch.tensor([0.0, 0.0, 1.0, 0.0], dtype=torch.float32, device=self._device).repeat(
-            num_reset, 1
-        )
-        random_yaw = torch.rand(num_reset, device=self._device) * 2 * np.pi - np.pi  # -pi to pi
-        random_yaw *= 0.25  # reduce the range to [-pi/4, pi/4]
-        # random_yaw *= 0.0  # reduce the range to [-pi/4, pi/4]
-        q_yaw = torch.stack(
-            [
-                torch.cos(random_yaw / 2),
-                torch.zeros(num_reset, device=self._device),
-                torch.zeros(num_reset, device=self._device),
-                torch.sin(random_yaw / 2),
-            ],
-            dim=-1,
-        )
-
-        #
-        self.time_since_reset[envs_idx] = 0.0
+        default_pos = self._robot._default_pos[None, :].repeat(len(envs_idx), 1)
+        default_quat = self._robot._default_quat[None, :].repeat(len(envs_idx), 1)
+        default_dof_pos = self._robot._default_dof_pos[None, :].repeat(len(envs_idx), 1)
+        random_euler = torch.zeros((len(envs_idx), 3), device=self._device)
+        random_euler[:, :2] = (torch.rand(len(envs_idx), 2, device=self._device) - 0.5) * 0.3
+        random_euler[:, 2] = torch.rand(len(envs_idx), device=self._device) * 2 * np.pi - np.pi
+        quat = quat_from_euler(random_euler)
+        quat = quat_mul(quat, default_quat)
+        dof_pos = default_dof_pos + (torch.rand(len(envs_idx), self._robot._dof_dim, device=self._device) - 0.5) * 0.3
+        self._robot.set_state(pos=default_pos, quat=quat, dof_pos=dof_pos, envs_idx=envs_idx)
 
     def get_terminated(self) -> torch.Tensor:
         reset_buf = self.get_truncated()
@@ -194,11 +185,15 @@ class WalkingEnv(BaseEnv):
         exec_action = self._action_buf[:, :, 0]
         exec_action *= self._args.robot_args.action_scale
 
+        self._torque *= 0
+
         # Apply actions and simulate physics
         for _ in range(self._args.robot_args.decimation):
             self.time_since_reset += self._scene.scene.dt
+            self.time_since_resample += self._scene.scene.dt
             self._robot.apply_action(action=exec_action)
             self._scene.scene.step()
+            self._torque = torch.max(self._torque, torch.abs(self._robot.torque))
 
         # save for reward computation
         self._last_last_action.copy_(self._last_action)
@@ -218,6 +213,12 @@ class WalkingEnv(BaseEnv):
         self.base_lin_vel[:] = quat_apply(inv_quat_yaw, self._robot.get_vel())
         self.base_ang_vel[:] = quat_apply(quat_inv(base_quat_rel), self._robot.get_ang())
 
+        if self.time_since_resample > self._command_resample_time:
+            self.time_since_resample = 0.0
+            self.commands[:, :] = torch.rand(self.num_envs, 3, device=self._device)
+            self.commands[:, :2] *= torch.norm(self.commands[:, :2], dim=-1, keepdim=True) > 0.3
+            self.commands[:, 2] *= torch.abs(self.commands[:, 2]) > 0.3
+
     def get_info(self, envs_idx: torch.IntTensor | None = None) -> dict:
         if envs_idx is None:
             envs_idx = torch.IntTensor(range(self.num_envs))
@@ -225,6 +226,8 @@ class WalkingEnv(BaseEnv):
 
     def get_reward(self):
         reward_total = torch.zeros(self.num_envs, device=self._device)
+        reward_total_pos = torch.zeros(self.num_envs, device=self._device)
+        reward_total_neg = torch.zeros(self.num_envs, device=self._device)
         reward_dict = {}
         for key, func in self._reward_functions.items():
             reward = func(
@@ -232,10 +235,24 @@ class WalkingEnv(BaseEnv):
                     "action": self._action,
                     "last_action": self._last_action,
                     "last_last_action": self._last_last_action,
+                    "base_pos": self.base_pos,
+                    "lin_vel": self.base_lin_vel,
+                    "ang_vel": self.base_ang_vel,
+                    "dof_pos": self._robot.dof_pos,
+                    "dof_vel": self._robot.dof_vel,
+                    "projected_gravity": self.projected_gravity,
+                    "torque": self._torque,
+                    "dof_pos_limits": self._robot.dof_pos_limits,
+                    "commands": self.commands,
                 }
             )
-            reward_total += reward
+            if reward.sum() >= 0:
+                reward_total_pos += reward
+            else:
+                reward_total_neg += reward
             reward_dict[f"reward_{key}"] = reward
+        reward_total = reward_total_pos * torch.exp(reward_total_neg)
+        reward_dict["reward_total"] = reward_total
 
         return reward_total, reward_dict
 

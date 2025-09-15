@@ -39,6 +39,7 @@ EnvArgsRegistry["goal_reach_default"] = EnvArgs(
         SensorArgsRegistry["joint_angles"],
         SensorArgsRegistry["gripper_width"],
     ],
+    reward_term="reward",
     reward_args={
         "rew_actions": 0.0,
         "rew_keypoints": 1.0,
@@ -52,8 +53,21 @@ EnvArgsRegistry["walk_default"] = LeggedRobotEnvArgs(
     robot_args=RobotArgsRegistry["g1_default"],
     objects_args=[],
     sensors_args=[],
+    reward_term="g1",
     reward_args={
-        "ActionRate": -0.001,
+        ### Velocity Tracking ###
+        'LinVelXYReward': 1.0,
+        'AngVelZReward': 1.0,
+        'LinVelZPenalty': -0.2,
+        'AngVelXYPenalty': -0.1,
+        ### Pose Tracking ###
+        'OrientationPenalty': -5.,
+        ### Regularization ###
+        'TorquePenalty': -0.00001,
+        'ActionRatePenalty': -0.01,
+        'DofPosLimitPenalty': -10.0,
+        'G1BaseHeightPenalty': -30.0,
+        'ActionLimitPenalty': -0.1,
     },
     img_resolution=(480, 270),
     action_latency=1,
