@@ -149,3 +149,17 @@ class ActionLimitPenalty(RewardTerm):
 
     def _compute(self, action: torch.Tensor) -> torch.Tensor:  # type: ignore
         return torch.sum(torch.square(torch.abs(action).clip(min=8) - 8), dim=1)
+
+class ImitationDofPosReward(RewardTerm):
+    """
+    Reward the imitation of target DoF positions.
+
+    Args:
+        dof_pos: DoF position tensor of shape (B, D) where B is the batch size and D is the number of DoFs.
+        target_dof_pos: Target DoF position tensor of shape (B, D).
+    """
+
+    required_keys = ("dof_pos", "target_dof_pos")
+
+    def _compute(self, dof_pos: torch.Tensor, target_dof_pos: torch.Tensor) -> torch.Tensor:  # type: ignore
+        return torch.exp(-torch.sum(torch.square(dof_pos - target_dof_pos), dim=-1) / 0.25)

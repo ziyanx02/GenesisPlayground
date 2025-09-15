@@ -1,4 +1,4 @@
-from gs_env.sim.envs.config.schema import EnvArgs, GenesisInitArgs, LeggedRobotEnvArgs
+from gs_env.sim.envs.config.schema import EnvArgs, GenesisInitArgs, LeggedRobotEnvArgs, ImitationTeacherEnvArgs
 from gs_env.sim.objects.config.registry import ObjectArgsRegistry
 from gs_env.sim.robots.config.registry import RobotArgsRegistry
 from gs_env.sim.scenes.config.registry import SceneArgsRegistry
@@ -84,4 +84,36 @@ EnvArgsRegistry["walk_default"] = LeggedRobotEnvArgs(
     img_resolution=(480, 270),
     action_latency=1,
     obs_history_len=1,
+)
+
+EnvArgsRegistry["imitation_default"] = ImitationTeacherEnvArgs(
+    gs_init_args=GenesisInitArgsRegistry["default"],
+    scene_args=SceneArgsRegistry["flat_scene_legged"],
+    robot_args=RobotArgsRegistry["g1_default"],
+    objects_args=[],
+    sensors_args=[],
+    reward_term="g1",
+    reward_args={
+        ### Velocity Tracking ###
+        "LinVelXYReward": 1.0,
+        "AngVelZReward": 1.0,
+        "LinVelZPenalty": -0.2,
+        "AngVelXYPenalty": -0.1,
+        ### Pose Tracking ###
+        "OrientationPenalty": -5.0,
+        ### Regularization ###
+        "TorquePenalty": -0.00001,
+        "ActionRatePenalty": -0.01,
+        "DofPosLimitPenalty": -10.0,
+        "G1BaseHeightPenalty": -30.0,
+        "ActionLimitPenalty": -0.1,
+        ### Imitation ###
+        "ImitationDofPosReward": 1.0,
+    },
+    img_resolution=(480, 270),
+    action_latency=1,
+    obs_history_len=1,
+    motion_path="",
+    future_steps=20,
+    resample_interval=1000,
 )

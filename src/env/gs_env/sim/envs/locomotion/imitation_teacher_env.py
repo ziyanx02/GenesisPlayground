@@ -24,6 +24,7 @@ _DEFAULT_DEVICE = torch.device("cpu")
 
 class ImitationTeacherEnv(BaseEnv):
     """
+    TODO: Move into a single leggedgym env and control by config
     Teacher environment for motion imitation.
     """
 
@@ -68,7 +69,6 @@ class ImitationTeacherEnv(BaseEnv):
         self._traj_len = torch.zeros(self.num_envs, dtype=torch.long, device=self._device)
 
         # == setup reward scalars and functions ==
-        # :: How to load trajectory into reward function? TODO ::
         dt = self._scene.scene.dt
         self._reward_functions = {}
         module_name = f"gs_env.common.rewards.{self._args.reward_term}_terms"
@@ -90,7 +90,7 @@ class ImitationTeacherEnv(BaseEnv):
         
         self.resample_trajectories_and_reset()
 
-    def _init(self):
+    def _init(self) -> None:
 
         # domain randomization
         self._robot.post_build_init()
@@ -135,6 +135,7 @@ class ImitationTeacherEnv(BaseEnv):
         self.time_since_reset = torch.zeros(self.num_envs, device=self._device)
     
     def load_trajectories(self) -> None:
+        # TODO: split out as a utility function
         data = np.load(self._args.motion_path, allow_pickle=True)
         # "name": {"dof_pos": ndarray(T, 36), "length": int, "fps": int}
         self.raw_motion = []
@@ -150,7 +151,9 @@ class ImitationTeacherEnv(BaseEnv):
             self.raw_motion.append(traj)
 
     def resample_trajectories_and_reset(self) -> None:
-        # TODO: do domain randomization for trajectories?
+        # TODO: augmentation for trajectories
+        # 1: package lost (freeze motion)
+        # 2: random orientation
         data_len = len(self.raw_motion)
         sample_data_idx = torch.randint(0, data_len, (self.num_envs,), device=self._device)
         for i in range(self.num_envs):
@@ -170,14 +173,20 @@ class ImitationTeacherEnv(BaseEnv):
             self._traj_start[i] = torch.randint(0, int(traj_len.item()), (1,), device=self._device)
 
     def reset_idx(self, envs_idx: torch.IntTensor) -> None:
+        # TODO: domain randomization
+        # 1: initial pose noise
         self._reset_buffers(envs_idx=envs_idx)
         self.resample_start_time(envs_idx=envs_idx)
         
         default_pos = self._traj[envs_idx, self._traj_start, :3]
         default_quat = self._traj[envs_idx, self._traj_start, 3:7]
         default_dof_pos = self._traj[envs_idx, self._traj_start, 7:]
-        self._robot.set_state(pos=default_pos, quat=default_quat, dof_pos=default_dof_pos, envs_idx=envs_idx)
-        
+        dof_pos = (
+            default_dof_pos
+            + (torch.rand(len(envs_idx), self._robot.dof_dim, device=self._device) - 0.5) * 0.3
+        )
+        self._robot.set_state(pos=default_pos, quat=default_quat, dof_pos=dof_pos, envs_idx=envs_idx)
+
         self._episode_length[envs_idx] = 0
 
     def get_terminated(self) -> torch.Tensor:
