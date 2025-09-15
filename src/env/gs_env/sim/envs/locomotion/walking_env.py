@@ -70,9 +70,10 @@ class WalkingEnv(BaseEnv):
         module_name = f"gs_env.common.rewards.{self._args.reward_term}_terms"
         module = importlib.import_module(module_name)
         for key in args.reward_args.keys():
-            if key not in module.__all__:
+            reward_func = getattr(module, key, None)
+            if reward_func is None:
                 raise ValueError(f"Reward {key} not found in rewards module.")
-            self._reward_functions[key] = getattr(module, key)(scale=args.reward_args[key] * dt)
+            self._reward_functions[key] = reward_func(scale=args.reward_args[key] * dt)
 
         # some auxiliary variables
         self._max_sim_time = 20.0  # seconds

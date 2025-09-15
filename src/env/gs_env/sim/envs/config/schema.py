@@ -5,7 +5,6 @@ from pydantic import BaseModel
 from gs_env.sim.objects.config.schema import ObjectArgs
 from gs_env.sim.robots.config.schema import (
     HumanoidRobotArgs,
-    LeggedRobotArgs,
     ManipulatorRobotArgs,
     QuadrupedRobotArgs,
 )
@@ -28,7 +27,7 @@ class EnvArgs(BaseModel):
 
     gs_init_args: GenesisInitArgs
     scene_args: SceneArgs
-    robot_args: ManipulatorRobotArgs
+    robot_args: ManipulatorRobotArgs | QuadrupedRobotArgs | HumanoidRobotArgs
     objects_args: list[ObjectArgs]
     sensors_args: list[SensorArgs]
     reward_term: str = "reward"
@@ -37,6 +36,5 @@ class EnvArgs(BaseModel):
 
 
 class LeggedRobotEnvArgs(EnvArgs):
-    robot_args: LeggedRobotArgs | HumanoidRobotArgs | QuadrupedRobotArgs
     action_latency: int = 1
     obs_history_len: int = 1
