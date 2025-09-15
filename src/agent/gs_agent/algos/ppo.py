@@ -7,16 +7,18 @@ from typing import Any, Final
 import torch
 import torch.nn as nn
 
+from gs_agent.algos.config.schema import PPOArgs
 from gs_agent.bases.algo import BaseAlgo
 from gs_agent.bases.env_wrapper import BaseEnvWrapper
 from gs_agent.bases.policy import Policy
 from gs_agent.buffers.gae_buffer import GAEBuffer
-from gs_agent.configs.schema import PPOArgs
 from gs_agent.modules.critics import StateValueFunction
 from gs_agent.modules.models import NetworkFactory
 from gs_agent.modules.policies import GaussianPolicy
 
 _DEFAULT_DEVICE: Final[torch.device] = torch.device("cpu")
+"""Default device for the algorithm."""
+
 _DEQUE_MAXLEN: Final[int] = 100
 """Max length of the deque for storing episode statistics."""
 
@@ -192,8 +194,8 @@ class PPO(BaseAlgo):
             "approx_kl": approx_kl.item(),
         }
 
-    def train_one_episode(self) -> dict[str, Any]:
-        """Train one episode."""
+    def train_one_iteration(self) -> dict[str, Any]:
+        """Train one iteration."""
         # collect rollouts
         t0 = time.time()
         rollout_infos = self._collect_rollouts(num_steps=self._num_steps)
@@ -213,7 +215,7 @@ class PPO(BaseAlgo):
 
         self._rollouts.reset()
 
-        episode_infos = {
+        iteration_infos = {
             "rollout": {
                 "mean_reward": rollout_infos["mean_reward"],
                 "mean_length": rollout_infos["mean_ep_len"],
@@ -239,7 +241,7 @@ class PPO(BaseAlgo):
                 "rollout_step": self._num_steps * self._num_envs,
             },
         }
-        return episode_infos
+        return iteration_infos
 
     def save(self, path: Path) -> None:
         """Save the algorithm to a file."""

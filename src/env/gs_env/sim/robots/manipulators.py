@@ -2,6 +2,7 @@ from typing import Any
 
 import genesis as gs
 import torch
+from genesis.engine.entities.rigid_entity import RigidEntity, RigidLink
 from gymnasium import spaces
 
 from gs_env.common.bases.base_robot import BaseGymRobot
@@ -37,16 +38,20 @@ class ManipulatorBase(BaseGymRobot):
             quat=args.morph_args.quat,
         )
         #
-        self._robot = scene.add_entity(
+        robot_entity = scene.add_entity(
             material=material,
             morph=morph,
             visualize_contact=args.visualize_contact,
             vis_mode=args.vis_mode,
         )
+        assert isinstance(robot_entity, RigidEntity), (
+            "Robot entity must be an instance of gs.Entity"
+        )
+        self._robot_entity = robot_entity
 
         # == action space ==
         n_dof = len(args.default_arm_dof.keys())
-        action_space_dict = {"gripper_width": spaces.Box(0.0, 0.08)}
+        action_space_dict: dict[str, spaces.Space[Any]] = {"gripper_width": spaces.Box(0.0, 0.08)}
         match args.ctrl_type:
             case CtrlType.JOINT_POSITION:
                 action_space_dict.update(
@@ -68,8 +73,6 @@ class ManipulatorBase(BaseGymRobot):
                         ),  # roll, pitch, yaw
                     }
                 )
-            case _:  # type: ignore
-                raise ValueError(f"Unknown control type: {args.ctrl_type}")
 
         self._action_space = spaces.Dict(action_space_dict)
 
@@ -93,9 +96,13 @@ class ManipulatorBase(BaseGymRobot):
         )
 
         #
-        self._ee_link = self._robot.get_link(self._args.ee_link_name)
-        self._left_finger_link = self._robot.get_link(self._args.gripper_link_names[0])
-        self._right_finger_link = self._robot.get_link(self._args.gripper_link_names[1])
+        self._ee_link: RigidLink = self._robot_entity.get_link(self._args.ee_link_name)
+        self._left_finger_link: RigidLink = self._robot_entity.get_link(
+            self._args.gripper_link_names[0]
+        )
+        self._right_finger_link: RigidLink = self._robot_entity.get_link(
+            self._args.gripper_link_names[1]
+        )
         #
         self._default_joint_angles = list(self._args.default_arm_dof.values())
         if self._args.default_gripper_dof is not None:
@@ -117,7 +124,7 @@ class ManipulatorBase(BaseGymRobot):
         default_joint_angles = torch.tensor(
             self._default_joint_angles, dtype=torch.float32, device=self._device
         ).repeat(len(envs_idx), 1)
-        self._robot.set_qpos(default_joint_angles, envs_idx=envs_idx)
+        self._robot_entity.set_qpos(default_joint_angles, envs_idx=envs_idx)
 
     def apply_action(
         self, action: JointPosAction | EEPoseAbsAction | EEPoseRelAction | torch.Tensor
@@ -131,18 +138,16 @@ class ManipulatorBase(BaseGymRobot):
                     action = JointPosAction(joint_pos=action, gripper_width=0.0)
                 case CtrlType.EE_POSE_ABS:
                     action = EEPoseAbsAction(
-                        ee_link_pos=action[:, :3],
-                        ee_link_quat=action[:, 3:7],
+                        ee_link_pos=action[..., :3],
+                        ee_link_quat=action[..., 3:7],
                         gripper_width=0.0,
                     )
                 case CtrlType.EE_POSE_REL:
                     action = EEPoseRelAction(
-                        ee_link_pos_delta=action[:, :3],
-                        ee_link_ang_delta=action[:, 3:6],
+                        ee_link_pos_delta=action[..., :3],
+                        ee_link_ang_delta=action[..., 3:6],
                         gripper_width=0.0,
                     )
-                case _:
-                    raise ValueError(f"Unsupported control type: {self.ctrl_type}")
         self._dispatch[self._args.ctrl_type](action)
 
     def _apply_joint_pos(self, act: JointPosAction) -> None:
@@ -154,7 +159,7 @@ class ManipulatorBase(BaseGymRobot):
             self._arm_dof_dim,
         ), "Joint position action must match the number of joints."
         q_target = act.joint_pos.to(self._device)
-        self._robot.control_dofs_position(position=q_target)
+        self._robot_entity.control_dofs_position(position=q_target)
 
     def _apply_ee_pose_abs(self, act: EEPoseAbsAction) -> None:
         """
@@ -172,7 +177,7 @@ class ManipulatorBase(BaseGymRobot):
         target_pos = act.ee_link_pos.to(self._device)
         target_quat = act.ee_link_quat.to(self._device)
 
-        q_pos = self._robot.inverse_kinematics(
+        q_pos = self._robot_entity.inverse_kinematics(
             link=self._ee_link,
             pos=target_pos,
             quat=target_quat,
@@ -180,7 +185,10 @@ class ManipulatorBase(BaseGymRobot):
             max_samples=10,  # number of IK samples
             max_solver_iters=20,  # maximum solver iterations
         )
-        self._robot.control_dofs_position(position=q_pos)
+        q_pos[:, self._fingers_dof] = torch.tensor(
+            [act.gripper_width, act.gripper_width], device=self._device
+        )
+        self._robot_entity.control_dofs_position(position=q_pos)
 
     def _apply_ee_pose_rel(self, act: EEPoseRelAction) -> None:
         """
@@ -199,7 +207,7 @@ class ManipulatorBase(BaseGymRobot):
         q_pos[:, self._fingers_dof] = torch.tensor(
             [act.gripper_width, -act.gripper_width], device=self._device
         )
-        self._robot.control_dofs_position(position=q_pos)
+        self._robot_entity.control_dofs_position(position=q_pos)
 
     def _dls_ik(self, action: EEPoseRelAction) -> torch.Tensor:
         """
@@ -207,7 +215,7 @@ class ManipulatorBase(BaseGymRobot):
         """
         delta_pose = torch.cat([action.ee_link_pos_delta, action.ee_link_ang_delta], dim=-1)
         lambda_val = 0.01
-        jacobian = self._robot.get_jacobian(link=self._ee_link)
+        jacobian = self._robot_entity.get_jacobian(link=self._ee_link)
         jacobian_T = jacobian.transpose(1, 2)
         lambda_matrix = (lambda_val**2) * torch.eye(n=jacobian.shape[1], device=self._device)
         delta_joint_pos = (
@@ -215,11 +223,15 @@ class ManipulatorBase(BaseGymRobot):
             @ torch.inverse(jacobian @ jacobian_T + lambda_matrix)
             @ delta_pose.unsqueeze(-1)
         ).squeeze(-1)
-        return self._robot.get_qpos() + delta_joint_pos
+        return self._robot_entity.get_qpos() + delta_joint_pos
+
+    @property
+    def joint_positions(self) -> torch.Tensor:
+        return self._robot_entity.get_qpos()
 
     @property
     def base_pos(self) -> torch.Tensor:
-        return self._robot.get_pos()
+        return self._robot_entity.get_pos()
 
     @property
     def ee_pose(self) -> torch.Tensor:

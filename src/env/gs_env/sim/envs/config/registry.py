@@ -47,6 +47,18 @@ EnvArgsRegistry["goal_reach_default"] = EnvArgs(
     img_resolution=(480, 270),
 )
 
+
+EnvArgsRegistry["pick_cube_default"] = EnvArgs(
+    gs_init_args=GenesisInitArgsRegistry["default"],
+    scene_args=SceneArgsRegistry["flat_scene_default"],
+    robot_args=RobotArgsRegistry["franka_teleop"],
+    objects_args=[ObjectArgsRegistry["box_default"]],
+    sensors_args=[],
+    reward_args={},
+    img_resolution=(480, 270),
+)
+
+
 EnvArgsRegistry["walk_default"] = LeggedRobotEnvArgs(
     gs_init_args=GenesisInitArgsRegistry["default"],
     scene_args=SceneArgsRegistry["flat_scene_legged"],
