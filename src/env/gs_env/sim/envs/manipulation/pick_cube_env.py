@@ -101,20 +101,17 @@ class PickCubeEnv(BaseEnv):
         self.scene.clear_debug_objects()
 
         # Set initial robot pose
-        initial_q = np.array([0.0, -0.3, 0.5, 0.0, 0.0, 0.0])
+        initial_q = torch.tensor([0.0, -0.3, 0.5, 0.0, 0.0, 0.0, 0.0], dtype=torch.float32)
         self.entities["robot"].reset_to_pose(initial_q)
 
         # Randomize cube position (this will set new target location and draw debug sphere)
         self._randomize_cube()
 
     # TODO: should not use Any but KeyboardCommand
-    def apply_action(self, action: torch.Tensor | Any) -> None:
+    def apply_action(self, action: Any) -> None:
         """Apply action to the environment (BaseEnv requirement)."""
         # For teleop, action might be a command object instead of tensor
-        if isinstance(action, torch.Tensor):
-            # Empty tensor from teleop wrapper - no action to apply
-            pass
-        else:
+        if action is not None:
             # This is a command object from teleop
             self.last_command = action
 
@@ -190,7 +187,9 @@ class PickCubeEnv(BaseEnv):
         self.scene.clear_debug_objects()
 
         # Reset robot to natural pose
-        initial_q = np.array([0.0, -0.3, 0.5, 0.0, 0.0, 0.0])
+        initial_q = torch.tensor(
+            [0.0, -0.3, 0.5, 0.0, 0.0, 0.0, 0.0], dtype=torch.float32
+        )  # 7 joints to match registry format
         self.entities["robot"].reset_to_pose(initial_q)
 
         # Randomize cube position (this will set new target location and draw debug sphere)

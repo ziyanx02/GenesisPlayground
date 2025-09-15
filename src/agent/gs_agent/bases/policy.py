@@ -1,7 +1,6 @@
-from abc import ABC, abstractmethod
+from abc import ABC
 from typing import Final
 
-import torch
 from torch import nn
 
 from gs_agent.bases.network_backbone import NetworkBackbone
@@ -14,8 +13,3 @@ class Policy(nn.Module, ABC):
         super().__init__()
         self.backbone: Final[NetworkBackbone] = backbone
         self.action_dim: Final[int] = action_dim
-
-    @abstractmethod
-    def forward(
-        self, obs: torch.Tensor, *, deterministic: bool = False
-    ) -> tuple[torch.Tensor, torch.Tensor]: ...
