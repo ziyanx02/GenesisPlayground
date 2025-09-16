@@ -82,8 +82,6 @@ class ManipulatorRobotArgs(BaseModel):
     gripper_link_names: list[str]
     default_arm_dof: dict[str, float]
     default_gripper_dof: dict[str, float] | None = None
-    action_scale: float
-    decimation: int
 
 
 class DomainRandomizationArgs(BaseModel):
@@ -96,8 +94,6 @@ class DomainRandomizationArgs(BaseModel):
     friction_range: tuple[float, float]
     mass_range: tuple[float, float]
     com_displacement_range: tuple[float, float]
-    action_scale: float
-    decimation: int
 
 
 class LeggedRobotArgs(BaseModel):

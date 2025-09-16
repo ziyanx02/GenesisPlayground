@@ -69,9 +69,10 @@ class TeleopTeacherEnv(BaseEnv):
         module_name = f"gs_env.common.rewards.{self._args.reward_term}_terms"
         module = importlib.import_module(module_name)
         for key in args.reward_args.keys():
-            if key not in module.__all__:
+            reward_func = getattr(module, key, None)
+            if reward_func is None:
                 raise ValueError(f"Reward {key} not found in rewards module.")
-            self._reward_functions[key] = getattr(module, key)(scale=args.reward_args[key] * dt)
+            self._reward_functions[key] = reward_func(scale=args.reward_args[key] * dt)
 
         # == auxiliary variables ==
         self._max_sim_time = 20.0  # seconds
@@ -101,9 +102,9 @@ class TeleopTeacherEnv(BaseEnv):
                 "dof_vel": gym.spaces.Box(low=-np.inf, high=np.inf, shape=(self._robot.dof_dim,), dtype=np.float32),
                 "projected_gravity": gym.spaces.Box(low=-1.0, high=1.0, shape=(3,), dtype=np.float32),
                 "ang_vel": gym.spaces.Box(low=-np.inf, high=np.inf, shape=(3,), dtype=np.float32),
-                "ref_pos": gym.spaces.Box(low=-np.inf, high=np.inf, shape=(self._future_steps, 3), dtype=np.float32),
-                "ref_quat": gym.spaces.Box(low=-np.inf, high=np.inf, shape=(self._future_steps, 4), dtype=np.float32),
-                "ref_dof_pos": gym.spaces.Box(low=-np.inf, high=np.inf, shape=(self._future_steps, self._robot.dof_dim), dtype=np.float32),
+                "ref_pos": gym.spaces.Box(low=-np.inf, high=np.inf, shape=(self._future_steps * 3,), dtype=np.float32),
+                "ref_quat": gym.spaces.Box(low=-np.inf, high=np.inf, shape=(self._future_steps * 4, ), dtype=np.float32),
+                "ref_dof_pos": gym.spaces.Box(low=-np.inf, high=np.inf, shape=(self._future_steps * self._robot.dof_dim, ), dtype=np.float32),
             }
         )
         self._info_space = gym.spaces.Dict({})
@@ -127,7 +128,7 @@ class TeleopTeacherEnv(BaseEnv):
         self._last_action = torch.zeros((self.num_envs, self.action_dim), device=self._device)
         self._last_last_action = torch.zeros((self.num_envs, self.action_dim), device=self._device)
         self._torque = torch.zeros((self.num_envs, self.action_dim), device=self._device)
-        self._episode_length = torch.zeros(self.num_envs, device=self._device)
+        self._episode_length = torch.zeros(self.num_envs, dtype=torch.long, device=self._device)
         self.base_pos = torch.zeros(self.num_envs, 3, dtype=torch.float32, device=self._device)
         self.base_quat = torch.zeros(self.num_envs, 4, dtype=torch.float32, device=self._device)
         self.base_euler = torch.zeros(self.num_envs, 3, dtype=torch.float32, device=self._device)
@@ -143,13 +144,14 @@ class TeleopTeacherEnv(BaseEnv):
         self.time_since_reset = torch.zeros(self.num_envs, device=self._device)
     
     def load_trajectories(self) -> None:
-        data = np.load(self._args.motion_path, allow_pickle=True)
+        # data = np.load(self._args.motion_path, allow_pickle=True)
+        data = {"tmp": {"dof_pos": np.zeros((100, 36)), "length": 100, "fps": 30}}
         # "name": {"dof_pos": ndarray(T, 36), "length": int, "fps": int}
         self.raw_motion = []
         self.raw_motion_lengths = []
         for arr in data.values():
-            traj = torch.tensor(arr, device=self._device, dtype=torch.float32)
-            self.raw_motion_lengths.append(traj.shape[0])
+            self.raw_motion_lengths.append(arr["length"])
+            traj = torch.tensor(arr["dof_pos"], device=self._device, dtype=torch.float32)
             # pad trajectory with last frame future_steps times
             pad_len = self._future_steps
             if pad_len > 0:
@@ -165,14 +167,14 @@ class TeleopTeacherEnv(BaseEnv):
         sample_data_idx = torch.randint(0, data_len, (self.num_envs,), device=self._device)
         for i in range(self.num_envs):
             self._ref_len[i] = self.raw_motion_lengths[sample_data_idx[i]]
-        max_len = int(torch.max(self._ref_len).item())
+        max_len = int(torch.max(self._ref_len).item()) + self._future_steps
         self._ref_dof_pos = torch.zeros((self.num_envs, max_len, self._robot.dof_dim), device=self._device)
         self._ref_pos = torch.zeros((self.num_envs, max_len, 3), device=self._device)
         self._ref_quat = torch.zeros((self.num_envs, max_len, 4), device=self._device)
         for i in range(self.num_envs):
-            self._ref_dof_pos[i, :self._ref_len[i]] = self.raw_motion[sample_data_idx[i]][:, 7:]
-            self._ref_pos[i, :self._ref_len[i]] = self.raw_motion[sample_data_idx[i]][:, :3]
-            self._ref_quat[i, :self._ref_len[i]] = self.raw_motion[sample_data_idx[i]][:, 3:7]
+            self._ref_dof_pos[i, :self._ref_len[i]+self._future_steps] = self.raw_motion[sample_data_idx[i]][:, 7:]
+            self._ref_pos[i, :self._ref_len[i]+self._future_steps] = self.raw_motion[sample_data_idx[i]][:, :3]
+            self._ref_quat[i, :self._ref_len[i]+self._future_steps] = self.raw_motion[sample_data_idx[i]][:, 3:7]
         
         envs_idx = torch.IntTensor(range(self.num_envs))
         self.reset_idx(envs_idx=envs_idx)
@@ -200,7 +202,7 @@ class TeleopTeacherEnv(BaseEnv):
 
     def get_terminated(self) -> torch.Tensor:
         reset_buf = self.get_truncated()
-        reset_buf |= self._ref_start[:] + self._episode_length[:] + self._future_steps >= self._ref_len[:]
+        reset_buf |= self._ref_start[:] + self._episode_length[:] >= self._ref_len[:]
         reset_buf |= torch.logical_or(
             torch.abs(self.base_euler[:, 0]) > 0.3,
             torch.abs(self.base_euler[:, 1]) > 0.3,
@@ -217,6 +219,12 @@ class TeleopTeacherEnv(BaseEnv):
     def get_observations(self) -> torch.Tensor:
         self._update_buffers()
         # Prepare observation components
+
+        # Reference batch indices
+        envs_idx = torch.arange(self.num_envs, device=self._device)
+        time_steps = torch.arange(self._future_steps, device=self._device)
+        ref_indices = self._ref_start.unsqueeze(1) + time_steps.unsqueeze(0)  # [num_envs, future_steps]
+
         obs_components = [
             last_action := self._last_action,  # last action
             pos := self.base_pos,  # base position
@@ -225,9 +233,9 @@ class TeleopTeacherEnv(BaseEnv):
             dof_vel := self._robot.dof_vel,  # joint velocities
             projected_gravity := self.projected_gravity,  # projected gravity in base frame
             ang_vel := self.base_ang_vel,  # angular velocity in base frame
-            ref_pos := self._ref_pos[:, self._ref_start+self._episode_length:self._ref_start+self._episode_length+self._future_steps],
-            ref_quat := self._ref_quat[:, self._ref_start+self._episode_length:self._ref_start+self._episode_length+self._future_steps],
-            ref_dof_pos := self._ref_dof_pos[:, self._ref_start+self._episode_length:self._ref_start+self._episode_length+self._future_steps],
+            ref_pos := self._ref_pos[envs_idx.unsqueeze(1), ref_indices].view(self.num_envs, -1),
+            ref_quat := self._ref_quat[envs_idx.unsqueeze(1), ref_indices].view(self.num_envs, -1),
+            ref_dof_pos := self._ref_dof_pos[envs_idx.unsqueeze(1), ref_indices].view(self.num_envs, -1),
         ]
         obs_tensor = torch.cat(obs_components, dim=-1)
 
@@ -297,6 +305,10 @@ class TeleopTeacherEnv(BaseEnv):
         reward_total_pos = torch.zeros(self.num_envs, device=self._device)
         reward_total_neg = torch.zeros(self.num_envs, device=self._device)
         reward_dict = {}
+
+        envs_idx = torch.arange(self.num_envs, device=self._device)
+        ref_idx = self._ref_start + self._episode_length
+
         for key, func in self._reward_functions.items():
             reward = func(
                 {
@@ -311,9 +323,9 @@ class TeleopTeacherEnv(BaseEnv):
                     "projected_gravity": self.projected_gravity,
                     "torque": self._torque,
                     "dof_pos_limits": self._robot.dof_pos_limits,
-                    "target_pos": self._ref_pos[:, self._ref_start + self._episode_length, :],
-                    "target_quat": self._ref_quat[:, self._ref_start + self._episode_length, :],
-                    "target_dof_pos": self._ref_dof_pos[:, self._ref_start + self._episode_length, :],
+                    "target_pos": self._ref_pos[envs_idx, ref_idx],
+                    "target_quat": self._ref_quat[envs_idx, ref_idx],
+                    "target_dof_pos": self._ref_dof_pos[envs_idx, ref_idx]
                 }
             )
             if reward.sum() >= 0:

@@ -8,7 +8,8 @@ from .leggedrobot_terms import (
     LinVelXYReward,  # noqa
     LinVelZPenalty,  # noqa
     OrientationPenalty,  # noqa
-    TorquePenalty,  # noqa  # noqa
+    TorquePenalty,  # noqa
+    TeleopDofPos,  # noqa
 )
 
 

@@ -86,7 +86,7 @@ EnvArgsRegistry["walk_default"] = LeggedRobotEnvArgs(
     obs_history_len=1,
 )
 
-EnvArgsRegistry["imitation_default"] = TeleopTeacherEnvArgs(
+EnvArgsRegistry["teleop_teacher_default"] = TeleopTeacherEnvArgs(
     gs_init_args=GenesisInitArgsRegistry["default"],
     scene_args=SceneArgsRegistry["flat_scene_legged"],
     robot_args=RobotArgsRegistry["g1_default"],
@@ -94,11 +94,6 @@ EnvArgsRegistry["imitation_default"] = TeleopTeacherEnvArgs(
     sensors_args=[],
     reward_term="g1",
     reward_args={
-        ### Velocity Tracking ###
-        "LinVelXYReward": 1.0,
-        "AngVelZReward": 1.0,
-        "LinVelZPenalty": -0.2,
-        "AngVelXYPenalty": -0.1,
         ### Pose Tracking ###
         "OrientationPenalty": -5.0,
         ### Regularization ###
