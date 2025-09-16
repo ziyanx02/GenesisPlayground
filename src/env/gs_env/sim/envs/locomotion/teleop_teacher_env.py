@@ -16,13 +16,13 @@ from gs_env.common.utils.math_utils import (
     quat_from_euler,
 )
 from gs_env.common.utils.misc_utils import get_space_dim
-from gs_env.sim.envs.config.schema import ImitationTeacherEnvArgs
+from gs_env.sim.envs.config.schema import TeleopTeacherEnvArgs
 from gs_env.sim.robots.leggedrobots import G1Robot
 from gs_env.sim.scenes import FlatScene
 
 _DEFAULT_DEVICE = torch.device("cpu")
 
-class ImitationTeacherEnv(BaseEnv):
+class TeleopTeacherEnv(BaseEnv):
     """
     TODO: Move into a single leggedgym env and control by config
     Teacher environment for motion imitation.
@@ -30,7 +30,7 @@ class ImitationTeacherEnv(BaseEnv):
 
     def __init__(
         self,
-        args: ImitationTeacherEnvArgs,
+        args: TeleopTeacherEnvArgs,
         num_envs: int,
         show_viewer: bool = False,
         device: torch.device = _DEFAULT_DEVICE,
@@ -62,11 +62,6 @@ class ImitationTeacherEnv(BaseEnv):
 
         # == build the scene ==
         self._scene.build()
-
-        # == trajectory buffers ==
-        self._traj = torch.zeros((self.num_envs, 1, self._robot.dof_dim), device=self._device)
-        self._traj_start = torch.zeros(self.num_envs, dtype=torch.long, device=self._device)
-        self._traj_len = torch.zeros(self.num_envs, dtype=torch.long, device=self._device)
 
         # == setup reward scalars and functions ==
         dt = self._scene.scene.dt
@@ -100,15 +95,28 @@ class ImitationTeacherEnv(BaseEnv):
         self._observation_space = gym.spaces.Dict(
             {
                 "last_action": gym.spaces.Box(low=-np.inf, high=np.inf, shape=(self._robot.dof_dim,), dtype=np.float32),
+                "pos": gym.spaces.Box(low=-np.inf, high=np.inf, shape=(3,), dtype=np.float32),
+                "quat": gym.spaces.Box(low=-np.inf, high=np.inf, shape=(4,), dtype=np.float32),
                 "dof_pos": gym.spaces.Box(low=-np.inf, high=np.inf, shape=(self._robot.dof_dim,), dtype=np.float32),
                 "dof_vel": gym.spaces.Box(low=-np.inf, high=np.inf, shape=(self._robot.dof_dim,), dtype=np.float32),
                 "projected_gravity": gym.spaces.Box(low=-1.0, high=1.0, shape=(3,), dtype=np.float32),
                 "ang_vel": gym.spaces.Box(low=-np.inf, high=np.inf, shape=(3,), dtype=np.float32),
-                "trajectory": gym.spaces.Box(low=-np.inf, high=np.inf, shape=(self._future_steps, self._robot.dof_dim), dtype=np.float32),
+                "ref_pos": gym.spaces.Box(low=-np.inf, high=np.inf, shape=(self._future_steps, 3), dtype=np.float32),
+                "ref_quat": gym.spaces.Box(low=-np.inf, high=np.inf, shape=(self._future_steps, 4), dtype=np.float32),
+                "ref_dof_pos": gym.spaces.Box(low=-np.inf, high=np.inf, shape=(self._future_steps, self._robot.dof_dim), dtype=np.float32),
             }
         )
         self._info_space = gym.spaces.Dict({})
         self._extra_info = {}
+        self._setup_buffers()
+    
+    def _setup_buffers(self) -> None:
+        # == reference buffers ==
+        self._ref_dof_pos = torch.zeros((self.num_envs, 1, self._robot.dof_dim), device=self._device)
+        self._ref_pos = torch.zeros((self.num_envs, 1, 3), device=self._device)
+        self._ref_quat = torch.zeros((self.num_envs, 1, 4), device=self._device)
+        self._ref_start = torch.zeros(self.num_envs, dtype=torch.long, device=self._device)
+        self._ref_len = torch.zeros(self.num_envs, dtype=torch.long, device=self._device)
 
         # initialize buffers
         self._action_buf = torch.zeros(
@@ -135,7 +143,6 @@ class ImitationTeacherEnv(BaseEnv):
         self.time_since_reset = torch.zeros(self.num_envs, device=self._device)
     
     def load_trajectories(self) -> None:
-        # TODO: split out as a utility function
         data = np.load(self._args.motion_path, allow_pickle=True)
         # "name": {"dof_pos": ndarray(T, 36), "length": int, "fps": int}
         self.raw_motion = []
@@ -157,20 +164,22 @@ class ImitationTeacherEnv(BaseEnv):
         data_len = len(self.raw_motion)
         sample_data_idx = torch.randint(0, data_len, (self.num_envs,), device=self._device)
         for i in range(self.num_envs):
-            traj_len = self.raw_motion_lengths[sample_data_idx[i]]
-            self._traj_len[i] = traj_len
-        max_len = int(torch.max(self._traj_len).item()) + self._future_steps
-        self._traj = torch.zeros((self.num_envs, max_len, self._robot.dof_dim), device=self._device)
+            self._ref_len[i] = self.raw_motion_lengths[sample_data_idx[i]]
+        max_len = int(torch.max(self._ref_len).item())
+        self._ref_dof_pos = torch.zeros((self.num_envs, max_len, self._robot.dof_dim), device=self._device)
+        self._ref_pos = torch.zeros((self.num_envs, max_len, 3), device=self._device)
+        self._ref_quat = torch.zeros((self.num_envs, max_len, 4), device=self._device)
         for i in range(self.num_envs):
-            self._traj[i, :self._traj_len[i]] = self.raw_motion[sample_data_idx[i]]
+            self._ref_dof_pos[i, :self._ref_len[i]] = self.raw_motion[sample_data_idx[i]][:, 7:]
+            self._ref_pos[i, :self._ref_len[i]] = self.raw_motion[sample_data_idx[i]][:, :3]
+            self._ref_quat[i, :self._ref_len[i]] = self.raw_motion[sample_data_idx[i]][:, 3:7]
         
         envs_idx = torch.IntTensor(range(self.num_envs))
         self.reset_idx(envs_idx=envs_idx)
     
     def resample_start_time(self, envs_idx: torch.IntTensor) -> None:
         for i in envs_idx:
-            traj_len = self._traj_len[i]
-            self._traj_start[i] = torch.randint(0, int(traj_len.item()), (1,), device=self._device)
+            self._ref_start[i] = torch.randint(0, int(self._ref_len[i].item()), (1,), device=self._device)
 
     def reset_idx(self, envs_idx: torch.IntTensor) -> None:
         # TODO: domain randomization
@@ -178,9 +187,9 @@ class ImitationTeacherEnv(BaseEnv):
         self._reset_buffers(envs_idx=envs_idx)
         self.resample_start_time(envs_idx=envs_idx)
         
-        default_pos = self._traj[envs_idx, self._traj_start, :3]
-        default_quat = self._traj[envs_idx, self._traj_start, 3:7]
-        default_dof_pos = self._traj[envs_idx, self._traj_start, 7:]
+        default_pos = self._ref_pos[envs_idx, self._ref_start]
+        default_quat = self._ref_quat[envs_idx, self._ref_start]
+        default_dof_pos = self._ref_dof_pos[envs_idx, self._ref_start]
         dof_pos = (
             default_dof_pos
             + (torch.rand(len(envs_idx), self._robot.dof_dim, device=self._device) - 0.5) * 0.3
@@ -191,7 +200,7 @@ class ImitationTeacherEnv(BaseEnv):
 
     def get_terminated(self) -> torch.Tensor:
         reset_buf = self.get_truncated()
-        reset_buf |= self._traj_start[:] + self._episode_length[:] + self._future_steps >= self._traj_len[:]
+        reset_buf |= self._ref_start[:] + self._episode_length[:] + self._future_steps >= self._ref_len[:]
         reset_buf |= torch.logical_or(
             torch.abs(self.base_euler[:, 0]) > 0.3,
             torch.abs(self.base_euler[:, 1]) > 0.3,
@@ -210,11 +219,15 @@ class ImitationTeacherEnv(BaseEnv):
         # Prepare observation components
         obs_components = [
             last_action := self._last_action,  # last action
+            pos := self.base_pos,  # base position
+            quat := self.base_quat,  # base orientation
             dof_pos := self._robot.dof_pos,  # joint positions
             dof_vel := self._robot.dof_vel,  # joint velocities
             projected_gravity := self.projected_gravity,  # projected gravity in base frame
             ang_vel := self.base_ang_vel,  # angular velocity in base frame
-            trajectory := self._traj[:, self._traj_start+self._episode_length:self._traj_start+self._episode_length+self._future_steps, :],
+            ref_pos := self._ref_pos[:, self._ref_start+self._episode_length:self._ref_start+self._episode_length+self._future_steps],
+            ref_quat := self._ref_quat[:, self._ref_start+self._episode_length:self._ref_start+self._episode_length+self._future_steps],
+            ref_dof_pos := self._ref_dof_pos[:, self._ref_start+self._episode_length:self._ref_start+self._episode_length+self._future_steps],
         ]
         obs_tensor = torch.cat(obs_components, dim=-1)
 
@@ -298,7 +311,9 @@ class ImitationTeacherEnv(BaseEnv):
                     "projected_gravity": self.projected_gravity,
                     "torque": self._torque,
                     "dof_pos_limits": self._robot.dof_pos_limits,
-                    "target_dof_pos": self._traj[:, self._traj_start + self._episode_length, :],
+                    "target_pos": self._ref_pos[:, self._ref_start + self._episode_length, :],
+                    "target_quat": self._ref_quat[:, self._ref_start + self._episode_length, :],
+                    "target_dof_pos": self._ref_dof_pos[:, self._ref_start + self._episode_length, :],
                 }
             )
             if reward.sum() >= 0:
@@ -328,21 +343,3 @@ class ImitationTeacherEnv(BaseEnv):
     def critic_obs_dim(self) -> int:
         num_critic_obs = get_space_dim(self._observation_space)
         return num_critic_obs
-
-    # @property
-    # def depth_shape(self):
-    #     if self._camera is None and self._args.img_resolution is None:
-    #         return None
-    #     return (1, *self._args.img_resolution)
-
-    # @property
-    # def rgb_shape(self):
-    #     if self._camera is None and self._args.img_resolution is None:
-    #         return None
-    #     return (4, *self._args.img_resolution)
-
-    # @property
-    # def img_resolution(self):
-    #     if self._camera is None and self._args.img_resolution is None:
-    #         return None
-    #     return self._args.img_resolution

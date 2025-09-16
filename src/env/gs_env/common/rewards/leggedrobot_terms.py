@@ -150,16 +150,120 @@ class ActionLimitPenalty(RewardTerm):
     def _compute(self, action: torch.Tensor) -> torch.Tensor:  # type: ignore
         return torch.sum(torch.square(torch.abs(action).clip(min=8) - 8), dim=1)
 
-class ImitationDofPosReward(RewardTerm):
+class TeleopDofPos(RewardTerm):
     """
-    Reward the imitation of target DoF positions.
+    Reward the similarity between the current and target DoF positions for all joints.
 
     Args:
         dof_pos: DoF position tensor of shape (B, D) where B is the batch size and D is the number of DoFs.
         target_dof_pos: Target DoF position tensor of shape (B, D).
     """
-
+    
     required_keys = ("dof_pos", "target_dof_pos")
 
     def _compute(self, dof_pos: torch.Tensor, target_dof_pos: torch.Tensor) -> torch.Tensor:  # type: ignore
-        return torch.exp(-torch.sum(torch.square(dof_pos - target_dof_pos), dim=-1) / 0.25)
+        return -torch.sum(torch.square(dof_pos[:, :] - target_dof_pos[:, :]), dim=1)
+
+class TeleopDofPosSelected(RewardTerm):
+    """
+    Reward the similarity between the current and target DoF positions for selected joints.
+
+    Args:
+        dof_pos: DoF position tensor of shape (B, D) where B is the batch size and D is the number of DoFs.
+        target_dof_pos: Target DoF position tensor of shape (B, D).
+        dof_pos_idxs: Indices of the joints to consider for the reward.
+    """
+    
+    required_keys = ("dof_pos", "target_dof_pos", "dof_pos_idxs")
+
+    def _compute(self, dof_pos: torch.Tensor, target_dof_pos: torch.Tensor, dof_pos_idxs: torch.Tensor) -> torch.Tensor:  # type: ignore
+        return -torch.sum(torch.square(dof_pos[:, dof_pos_idxs] - target_dof_pos[:, dof_pos_idxs]), dim=1)
+
+class TeleopDofPosLower(RewardTerm):
+    """
+    Reward the similarity between the current and target DoF positions for lower joints.
+
+    Args:
+        dof_pos: DoF position tensor of shape (B, D) where B is the batch size and D is the number of DoFs.
+        target_dof_pos: Target DoF position tensor of shape (B, D).
+        lower_idxs: Indices of the joints to consider for the reward.
+    """
+    
+    required_keys = ("dof_pos", "target_dof_pos", "lower_idxs")
+
+    def _compute(self, dof_pos: torch.Tensor, target_dof_pos: torch.Tensor, lower_idxs: torch.Tensor) -> torch.Tensor:  # type: ignore
+        return -torch.sum(torch.square(dof_pos[:, lower_idxs] - target_dof_pos[:, lower_idxs]), dim=1)
+
+class TeleopDofPosUpper(RewardTerm):
+    """
+    Reward the similarity between the current and target DoF positions for upper joints.
+
+    Args:
+        dof_pos: DoF position tensor of shape (B, D) where B is the batch size and D is the number of DoFs.
+        target_dof_pos: Target DoF position tensor of shape (B, D).
+        upper_idxs: Indices of the joints to consider for the reward.
+    """
+    
+    required_keys = ("dof_pos", "target_dof_pos", "upper_idxs")
+
+    def _compute(self, dof_pos: torch.Tensor, target_dof_pos: torch.Tensor, upper_idxs: torch.Tensor) -> torch.Tensor:  # type: ignore
+        return -torch.sum(torch.square(dof_pos[:, upper_idxs] - target_dof_pos[:, upper_idxs]), dim=1)
+    
+class TeleopDofVelAll(RewardTerm):
+    """
+    Reward the similarity between the current and target DoF velocities for all joints.
+
+    Args:
+        dof_vel: DoF velocities tensor of shape (B, D) where B is the batch size and D is the number of DoFs.
+        target_dof_vel: Target DoF velocities tensor of shape (B, D).
+    """
+    
+    required_keys = ("dof_vel", "target_dof_vel")
+
+    def _compute(self, dof_vel: torch.Tensor, target_dof_vel: torch.Tensor) -> torch.Tensor:  # type: ignore
+        return -torch.sum(torch.square(dof_vel[:, :] - target_dof_vel[:, :]), dim=1)
+
+class TeleopDofVelSelected(RewardTerm):
+    """
+    Reward the similarity between the current and target DoF velocities for selected joints.
+
+    Args:
+        dof_vel: DoF velocities tensor of shape (B, D) where B is the batch size and D is the number of DoFs.
+        target_dof_vel: Target DoF velocities tensor of shape (B, D).
+        dof_vel_idxs: Indices of the joints to consider for the reward.
+    """
+    
+    required_keys = ("dof_vel", "target_dof_vel", "dof_vel_idxs")
+
+    def _compute(self, dof_vel: torch.Tensor, target_dof_vel: torch.Tensor, dof_vel_idxs: torch.Tensor) -> torch.Tensor:  # type: ignore
+        return -torch.sum(torch.square(dof_vel[:, dof_vel_idxs] - target_dof_vel[:, dof_vel_idxs]), dim=1)
+
+class TeleopDofVelLower(RewardTerm):
+    """
+    Reward the similarity between the current and target DoF velocities for lower joints.
+
+    Args:
+        dof_vel: DoF velocities tensor of shape (B, D) where B is the batch size and D is the number of DoFs.
+        target_dof_vel: Target DoF velocities tensor of shape (B, D).
+        lower_idxs: Indices of the joints to consider for the reward.
+    """
+    
+    required_keys = ("dof_vel", "target_dof_vel", "lower_idxs")
+
+    def _compute(self, dof_vel: torch.Tensor, target_dof_vel: torch.Tensor, lower_idxs: torch.Tensor) -> torch.Tensor:  # type: ignore
+        return -torch.sum(torch.square(dof_vel[:, lower_idxs] - target_dof_vel[:, lower_idxs]), dim=1)
+
+class TeleopDofVelUpper(RewardTerm):
+    """
+    Reward the similarity between the current and target DoF velocities for upper joints.
+
+    Args:
+        dof_vel: DoF velocities tensor of shape (B, D) where B is the batch size and D is the number of DoFs.
+        target_dof_vel: Target DoF velocities tensor of shape (B, D).
+        upper_idxs: Indices of the joints to consider for the reward.
+    """
+    
+    required_keys = ("dof_vel", "target_dof_vel", "upper_idxs")
+
+    def _compute(self, dof_vel: torch.Tensor, target_dof_vel: torch.Tensor, upper_idxs: torch.Tensor) -> torch.Tensor:  # type: ignore
+        return -torch.sum(torch.square(dof_vel[:, upper_idxs] - target_dof_vel[:, upper_idxs]), dim=1)

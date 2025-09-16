@@ -1,4 +1,4 @@
-from gs_env.sim.envs.config.schema import EnvArgs, GenesisInitArgs, LeggedRobotEnvArgs, ImitationTeacherEnvArgs
+from gs_env.sim.envs.config.schema import EnvArgs, GenesisInitArgs, LeggedRobotEnvArgs, TeleopTeacherEnvArgs
 from gs_env.sim.objects.config.registry import ObjectArgsRegistry
 from gs_env.sim.robots.config.registry import RobotArgsRegistry
 from gs_env.sim.scenes.config.registry import SceneArgsRegistry
@@ -86,7 +86,7 @@ EnvArgsRegistry["walk_default"] = LeggedRobotEnvArgs(
     obs_history_len=1,
 )
 
-EnvArgsRegistry["imitation_default"] = ImitationTeacherEnvArgs(
+EnvArgsRegistry["imitation_default"] = TeleopTeacherEnvArgs(
     gs_init_args=GenesisInitArgsRegistry["default"],
     scene_args=SceneArgsRegistry["flat_scene_legged"],
     robot_args=RobotArgsRegistry["g1_default"],
@@ -108,7 +108,7 @@ EnvArgsRegistry["imitation_default"] = ImitationTeacherEnvArgs(
         "G1BaseHeightPenalty": -30.0,
         "ActionLimitPenalty": -0.1,
         ### Imitation ###
-        "ImitationDofPosReward": 1.0,
+        "TeleopDofPos": -0.25,
     },
     img_resolution=(480, 270),
     action_latency=1,
