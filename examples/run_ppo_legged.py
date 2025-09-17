@@ -65,8 +65,9 @@ def main(num_envs: int = 2048, show_viewer: bool = False, device: str = "cuda") 
     logger = logger_configure(
         folder=str(runner.save_dir),
         format_strings=["stdout", "csv", "wandb"],
-        mode="disabled",
-        # mode="online" if not show_viewer else "disabled",
+        entity="ziyanx02",
+        project="genesis",
+        mode="online" if not show_viewer else "disabled",
     )
     # Train using Runner
     train_summary_info = runner.train(metric_logger=logger)
