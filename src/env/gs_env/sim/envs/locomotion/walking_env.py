@@ -1,10 +1,12 @@
 import importlib
+from datetime import datetime
 from typing import Any
 
 import genesis as gs
 import gymnasium as gym
 import numpy as np
 import torch
+from PIL import Image
 
 #
 from gs_env.common.bases.base_env import BaseEnv
@@ -51,6 +53,7 @@ class WalkingEnv(BaseEnv):
             args=args.scene_args,
             show_viewer=self._show_viewer,
             img_resolution=args.img_resolution,
+            env_spacing=(1.0, 1.0),
         )
 
         # == setup the robot ==
@@ -59,6 +62,13 @@ class WalkingEnv(BaseEnv):
             scene=self._scene.scene,
             args=args.robot_args,
             device=self._device,
+        )
+
+        # == set up camera ==
+        self._floating_camera = self._scene.scene.add_camera(
+            res=(480, 480),
+            fov=40,
+            GUI=False,
         )
 
         # == build the scene ==
@@ -144,6 +154,12 @@ class WalkingEnv(BaseEnv):
         self.time_since_reset = torch.zeros(self.num_envs, device=self._device)
         self.time_since_resample = 0.0
 
+        # rendering
+        self._rendered_images = []
+        self._rendering = False
+        self.camera_lookat = torch.tensor([0.0, 0.0, 0.0], device=self._device)
+        self.camera_pos = torch.tensor([-1.0, -1.0, 0.5], device=self._device)
+
     def reset_idx(self, envs_idx: torch.IntTensor) -> None:
         default_pos = self._robot.default_pos[None, :].repeat(len(envs_idx), 1)
         default_quat = self._robot.default_quat[None, :].repeat(len(envs_idx), 1)
@@ -215,6 +231,9 @@ class WalkingEnv(BaseEnv):
         self._last_last_action.copy_(self._last_action)
         self._last_action.copy_(self._action)
 
+        # Render if rendering is enabled
+        self._render_headless()
+
     def get_extra_infos(self) -> dict[str, Any]:
         return self._extra_info
 
@@ -272,6 +291,64 @@ class WalkingEnv(BaseEnv):
         reward_dict["reward_total"] = reward_total
 
         return reward_total, reward_dict
+
+    def _render_headless(self) -> None:
+        if self._rendering and len(self._rendered_images) < 1000:
+            robot_pos = self._robot.base_pos[0]
+            self._floating_camera.set_pose(
+                pos=robot_pos + self.camera_pos,
+                lookat=robot_pos + self.camera_lookat,
+            )
+            rgb, _, _, _ = self._floating_camera.render()
+            self._rendered_images.append(rgb)
+
+    def start_rendering(self) -> None:
+        self._rendering = True
+        self._rendered_images = []
+
+    def stop_rendering(self, save_gif: bool = True, gif_path: str = ".") -> None:
+        self._rendering = False
+        if save_gif and self._rendered_images:
+            self.save_gif(gif_path)
+
+    def save_gif(self, gif_path: str, duration: int = 20) -> None:
+        """
+        Save the rendered images as a GIF.
+
+        Args:
+            gif_path: Path to save the GIF. If None, generates a timestamped filename.
+            duration: Duration of each frame in milliseconds (default: 100ms)
+        """
+        if not self._rendered_images:
+            print("No rendered images to save.")
+            return
+
+        if gif_path is None:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            gif_path = f"evaluation_{timestamp}.gif"
+
+        # Convert numpy arrays to PIL Images
+        pil_images = []
+        for img_array in self._rendered_images:
+            # Convert from numpy array to PIL Image
+            # Assuming the image is in RGB format (H, W, 3)
+            if img_array.dtype != np.uint8:
+                img_array = (img_array * 255).astype(np.uint8)
+            pil_img = Image.fromarray(img_array)
+            pil_images.append(pil_img)
+
+        # Save as GIF
+        if pil_images:
+            pil_images[0].save(
+                gif_path,
+                save_all=True,
+                append_images=pil_images[1:],
+                duration=duration,
+                loop=0,  # Infinite loop
+            )
+            print(f"GIF saved to: {gif_path}")
+        else:
+            print("No images to save as GIF.")
 
     @property
     def num_envs(self) -> int:

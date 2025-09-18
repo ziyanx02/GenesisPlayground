@@ -111,6 +111,27 @@ def evaluate_policy(
     env = create_gs_env(show_viewer=show_viewer, num_envs=1, device="cuda")
     wrapped_env = GenesisEnvWrapper(env, device=env.device)
 
+    # Setup GIF recording if not showing viewer
+    gif_path = None
+    if not show_viewer:
+        # Create gif directory structure
+        gif_dir = Path("./gif") / exp_name if exp_name else Path("./gif") / "latest"
+        gif_dir.mkdir(parents=True, exist_ok=True)
+
+        # Determine checkpoint number for filename
+        if num_ckpt is not None:
+            ckpt_num = num_ckpt
+        else:
+            # Extract checkpoint number from checkpoint path
+            ckpt_filename = ckpt_path.stem  # e.g., "checkpoint_0000"
+            ckpt_num = ckpt_filename.split("_")[-1] if "_" in ckpt_filename else "latest"
+
+        gif_path = gif_dir / f"{ckpt_num}.gif"
+        print(f"Will save GIF to: {gif_path}")
+
+        # Start rendering
+        env.start_rendering()  # type: ignore
+
     # Create PPO algorithm and load checkpoint
     ppo = PPO(
         env=wrapped_env,
@@ -130,7 +151,7 @@ def evaluate_policy(
     if show_viewer:
         print("Running endlessly (press Ctrl+C to stop)")
     else:
-        print("Running for 500 steps")
+        print("Running until all environments are done")
 
     step_count = 0
     total_reward = 0.0
@@ -152,23 +173,65 @@ def evaluate_policy(
             if step_count % 50 == 0:
                 print(f"Step {step_count}, Total reward: {total_reward:.2f}")
 
-            # Check termination conditions
-            if not show_viewer and step_count >= 500:
-                print(f"Evaluation completed after {step_count} steps")
-                break
-
-            # Handle episode resets
-            if terminated.item() or truncated.item():
-                print(f"Episode ended at step {step_count}, Total reward: {total_reward:.2f}")
-                obs = wrapped_env.get_observations()
-                total_reward = 0.0
+            # Check if all environments are done (for non-viewer mode)
+            if not show_viewer:
+                if terminated.item() or truncated.item():
+                    print(f"Episode ended at step {step_count}, Total reward: {total_reward:.2f}")
+                    break
+            else:
+                # For viewer mode, check termination conditions
+                if terminated.item() or truncated.item():
+                    print(f"Episode ended at step {step_count}, Total reward: {total_reward:.2f}")
+                    obs = wrapped_env.get_observations()
+                    total_reward = 0.0
 
     except KeyboardInterrupt:
         print(f"\nEvaluation interrupted at step {step_count}")
 
+    # Stop rendering and save GIF if recording
+    if not show_viewer and gif_path is not None:
+        print("Stopping rendering and saving GIF...")
+        env.stop_rendering(save_gif=True, gif_path=str(gif_path))  # type: ignore
+        print(f"GIF saved to: {gif_path}")
+
     print("Final evaluation results:")
     print(f"  Total steps: {step_count}")
     print(f"  Final reward: {total_reward:.2f}")
+
+
+def train_policy(
+    exp_name: str | None = None,
+    show_viewer: bool = False,
+    num_envs: int = 2048,
+    device: str = "cuda",
+) -> None:
+    """Train the policy using PPO."""
+
+    # Create environment
+    env = create_gs_env(show_viewer=show_viewer, num_envs=num_envs, device=device)
+
+    # Get configuration and runner from registry
+    runner = create_ppo_runner_from_registry(env, exp_name=exp_name)
+
+    # Set up logging with proper configuration
+    logger = logger_configure(
+        folder=str(runner.save_dir),
+        format_strings=["stdout", "csv", "wandb"],
+        entity=None,
+        project=None,
+        exp_name=exp_name,
+        mode="online" if not show_viewer else "disabled",
+    )
+
+    # Train using Runner
+    print("Starting training...")
+    train_summary_info = runner.train(metric_logger=logger)
+
+    print("Training completed successfully!")
+    print(f"Training completed in {train_summary_info['total_time']:.2f} seconds.")
+    print(f"Total episodes: {train_summary_info['total_episodes']}.")
+    print(f"Total steps: {train_summary_info['total_steps']}.")
+    print(f"Total reward: {train_summary_info['final_reward']:.2f}.")
 
 
 def main(
@@ -182,31 +245,13 @@ def main(
     """Main function demonstrating proper registry usage."""
     if eval:
         # Evaluation mode - don't create runner to avoid creating empty log dir
+        num_envs = 1
         print("Evaluation mode: Loading trained policy")
         evaluate_policy(exp_name=exp_name, show_viewer=show_viewer, num_ckpt=num_ckpt)
     else:
         # Training mode
-        # create environment
-        env = create_gs_env(show_viewer=show_viewer, num_envs=num_envs, device=device)
-        # Get configuration and runner from registry
-        runner = create_ppo_runner_from_registry(env, exp_name=exp_name)
-        # Set up logging with proper configuration
-        logger = logger_configure(
-            folder=str(runner.save_dir),
-            format_strings=["stdout", "csv", "wandb"],
-            entity=None,
-            project=None,
-            exp_name=exp_name,
-            mode="online" if not show_viewer else "disabled",
-        )
-        # Train using Runner
-        train_summary_info = runner.train(metric_logger=logger)
-
-        print("Training completed successfully!")
-        print(f"Training completed in {train_summary_info['total_time']:.2f} seconds.")
-        print(f"Total episodes: {train_summary_info['total_episodes']}.")
-        print(f"Total steps: {train_summary_info['total_steps']}.")
-        print(f"Total reward: {train_summary_info['final_reward']:.2f}.")
+        print("Training mode: Starting policy training")
+        train_policy(exp_name=exp_name, show_viewer=show_viewer, num_envs=num_envs, device=device)
 
 
 if __name__ == "__main__":
