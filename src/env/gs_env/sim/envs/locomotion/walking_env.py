@@ -1,5 +1,4 @@
 import importlib
-from datetime import datetime
 from typing import Any
 
 import genesis as gs
@@ -322,10 +321,6 @@ class WalkingEnv(BaseEnv):
         if not self._rendered_images:
             print("No rendered images to save.")
             return
-
-        if gif_path is None:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            gif_path = f"evaluation_{timestamp}.gif"
 
         # Convert numpy arrays to PIL Images
         pil_images = []

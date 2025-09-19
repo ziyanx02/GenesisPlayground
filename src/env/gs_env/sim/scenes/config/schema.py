@@ -1,4 +1,4 @@
-from typing import TypeAlias
+from typing import Any, TypeAlias
 
 import genesis as gs
 from gs_schemas.base_types import genesis_pydantic_config
@@ -31,4 +31,11 @@ class FlatSceneArgs(BaseSceneArgs):
     normal: tuple[float, float, float] = (0.0, 0.0, 1.0)
 
 
-SceneArgs: TypeAlias = FlatSceneArgs
+class CustomSceneArgs(BaseSceneArgs):
+    model_config = genesis_pydantic_config(frozen=True)
+    normal: tuple[float, float, float] = (0.0, 0.0, 1.0)
+    remove_ground: bool = False
+    objects: list[dict[Any, Any]] = []
+
+
+SceneArgs: TypeAlias = FlatSceneArgs | CustomSceneArgs
