@@ -96,18 +96,18 @@ EnvArgsRegistry["custom_desk"] = LeggedRobotEnvArgs(
     reward_term="g1",
     reward_args={
         ### Velocity Tracking ###
-        "LinVelXYReward": 1.0,
-        "AngVelZReward": 1.0,
-        "LinVelZPenalty": 0.2,
-        "AngVelXYPenalty": 0.1,
+        "LinVelXYReward": 100.0,
+        "AngVelZReward": 100.0,
+        "LinVelZPenalty": 2.0,
+        "AngVelXYPenalty": 1.0,
         ### Pose Tracking ###
-        "OrientationPenalty": 5.0,
+        "OrientationPenalty": 50.0,
         ### Regularization ###
-        "TorquePenalty": 0.00001,
-        "ActionRatePenalty": 0.01,
-        "DofPosLimitPenalty": 10.0,
-        "G1BaseHeightPenalty": 30.0,
-        "ActionLimitPenalty": 0.1,
+        "TorquePenalty": 0.0001,
+        "ActionRatePenalty": 0.1,
+        "DofPosLimitPenalty": 100.0,
+        "G1BaseHeightPenalty": 300.0,
+        "ActionLimitPenalty": 1.0,
         ### Motion Constraints ###
         "AnkleTorquePenalty": 0.0001,
         "HipYawPenalty": 1.0,
