@@ -172,6 +172,7 @@ class WalkingEnv(BaseEnv):
             default_dof_pos
             + (torch.rand(len(envs_idx), self._robot.dof_dim, device=self._device) - 0.5) * 0.3
         )
+        self.time_since_reset[envs_idx] = 0.0
         self._robot.set_state(pos=default_pos, quat=quat, dof_pos=dof_pos, envs_idx=envs_idx)
 
     def get_terminated(self) -> torch.Tensor:
