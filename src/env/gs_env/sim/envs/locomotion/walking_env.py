@@ -220,6 +220,10 @@ class WalkingEnv(BaseEnv):
         self._action = action
         self._action_buf[:] = torch.cat([self._action_buf[:, :, 1:], action.unsqueeze(-1)], dim=-1)
         exec_action = self._action_buf[:, :, 0]
+        exec_action[:, :] = 0.0
+        exec_action[:, 14] = 1.0
+        exec_action[:, :12] = 0.0
+        exec_action[:, 15:] = 0.0
         exec_action *= self._args.robot_args.action_scale
 
         self._torque *= 0

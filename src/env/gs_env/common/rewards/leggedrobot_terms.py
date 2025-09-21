@@ -149,3 +149,45 @@ class ActionLimitPenalty(RewardTerm):
 
     def _compute(self, action: torch.Tensor) -> torch.Tensor:  # type: ignore
         return -torch.sum(torch.square(torch.abs(action).clip(min=8) - 8), dim=1)
+
+
+class WaistDofPenalty(RewardTerm):
+    """
+    Penalize the waist DoF position.
+
+    Args:
+        dof_pos: DoF position tensor of shape (B, D) where B is the batch size and D is the number of DoFs.
+    """
+
+    required_keys = ("dof_pos",)
+
+    def _compute(self, dof_pos: torch.Tensor) -> torch.Tensor:  # type: ignore
+        return -torch.sum(torch.square(dof_pos[:, 12:15]), dim=-1)
+
+
+class UpperBodyDofPenalty(RewardTerm):
+    """
+    Penalize the upper body DoF position.
+
+    Args:
+        dof_pos: DoF position tensor of shape (B, D) where B is the batch size and D is the number of DoFs.
+    """
+
+    required_keys = ("dof_pos",)
+
+    def _compute(self, dof_pos: torch.Tensor) -> torch.Tensor:  # type: ignore
+        return -torch.sum(torch.square(dof_pos[:, 12:]), dim=-1)
+
+
+class HipYawPenalty(RewardTerm):
+    """
+    Penalize the hip yaw DoF position.
+
+    Args:
+        dof_pos: DoF position tensor of shape (B, D) where B is the batch size and D is the number of DoFs.
+    """
+
+    required_keys = ("dof_pos",)
+
+    def _compute(self, dof_pos: torch.Tensor) -> torch.Tensor:  # type: ignore
+        return -torch.sum(torch.square(dof_pos[:, []]), dim=-1)
