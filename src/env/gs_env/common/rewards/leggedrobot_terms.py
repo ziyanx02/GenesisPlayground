@@ -15,7 +15,7 @@ class LinVelXYReward(RewardTerm):
     required_keys = ("lin_vel", "commands")
 
     def _compute(self, lin_vel: torch.Tensor, commands: torch.Tensor) -> torch.Tensor:  # type: ignore
-        return torch.exp(-torch.sum(torch.square(lin_vel[:, :2] - commands[:, :2]), dim=-1) / 0.25)
+        return torch.exp(-torch.sum(torch.square(lin_vel[:, :2] - commands[:, :2]), dim=-1))
 
 
 class AngVelZReward(RewardTerm):
@@ -30,7 +30,7 @@ class AngVelZReward(RewardTerm):
     required_keys = ("ang_vel", "commands")
 
     def _compute(self, ang_vel: torch.Tensor, commands: torch.Tensor) -> torch.Tensor:  # type: ignore
-        return torch.exp(-torch.square(ang_vel[:, 2] - commands[:, 2]) / 0.25)
+        return torch.exp(-torch.square(ang_vel[:, 2] - commands[:, 2]))
 
 
 class LinVelZPenalty(RewardTerm):
