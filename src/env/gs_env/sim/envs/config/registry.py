@@ -62,10 +62,10 @@ EnvArgsRegistry["pick_cube_default"] = EnvArgs(
 EnvArgsRegistry["walk_default"] = LeggedRobotEnvArgs(
     gs_init_args=GenesisInitArgsRegistry["default"],
     scene_args=SceneArgsRegistry["flat_scene_legged"],
-    robot_args=RobotArgsRegistry["g1_default"],
+    robot_args=RobotArgsRegistry["g1_no_waist"],
     objects_args=[],
     sensors_args=[],
-    reward_term="g1",
+    reward_term="g1_no_waist",
     reward_args={
         ### Velocity Tracking ###
         "LinVelXYReward": 100.0,
@@ -81,10 +81,9 @@ EnvArgsRegistry["walk_default"] = LeggedRobotEnvArgs(
         "G1BaseHeightPenalty": 300.0,
         "ActionLimitPenalty": 1.0,
         ### Motion Constraints ###
-        "AnkleTorquePenalty": 0.0001,
-        "HipYawPenalty": 1.0,
-        "WaistDofPenalty": 1.0,
-        "UpperBodyDofPenalty": 1.0,
+        "AnkleTorquePenalty": 0.001,
+        "HipYawPenalty": 10.0,
+        "UpperBodyDofPenalty": 10.0,
     },
     img_resolution=(480, 270),
     action_latency=1,

@@ -20,20 +20,6 @@ class G1BaseHeightPenalty(BaseHeightPenalty):
     target_height = 0.75
 
 
-class WaistDofPenalty(RewardTerm):
-    """
-    Penalize the waist DoF position.
-
-    Args:
-        dof_pos: DoF position tensor of shape (B, D) where B is the batch size and D is the number of DoFs.
-    """
-
-    required_keys = ("dof_pos",)
-
-    def _compute(self, dof_pos: torch.Tensor) -> torch.Tensor:  # type: ignore
-        return -torch.sum(torch.square(dof_pos[:, 12:15]), dim=-1)
-
-
 class UpperBodyDofPenalty(RewardTerm):
     """
     Penalize the upper body DoF position.
@@ -45,7 +31,7 @@ class UpperBodyDofPenalty(RewardTerm):
     required_keys = ("dof_pos",)
 
     def _compute(self, dof_pos: torch.Tensor) -> torch.Tensor:  # type: ignore
-        return -torch.sum(torch.square(dof_pos[:, 15:]), dim=-1)
+        return -torch.sum(torch.square(dof_pos[:, 12:]), dim=-1)
 
 
 class HipYawPenalty(RewardTerm):

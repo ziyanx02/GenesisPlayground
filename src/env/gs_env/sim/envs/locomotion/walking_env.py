@@ -178,8 +178,8 @@ class WalkingEnv(BaseEnv):
     def get_terminated(self) -> torch.Tensor:
         reset_buf = self.get_truncated()
         tilt_mask = torch.logical_or(
-            torch.abs(self.base_euler[:, 0]) > 0.3,
-            torch.abs(self.base_euler[:, 1]) > 0.3,
+            torch.abs(self.base_euler[:, 0]) > 0.5,
+            torch.abs(self.base_euler[:, 1]) > 0.5,
         )
         height_mask = self.base_pos[:, 2] < 0.3
         reset_buf |= tilt_mask
