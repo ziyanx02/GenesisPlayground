@@ -135,6 +135,9 @@ class PickCubeEnv(BaseEnv):
         # Step the scene (like goal_reaching_env)
         self.scene.step()
 
+    def update_history(self) -> None:
+        pass
+
     def get_observations(self) -> torch.Tensor:
         """Get current observation as tensor (BaseEnv requirement)."""
         ee_pose = self.entities["robot"].ee_pose

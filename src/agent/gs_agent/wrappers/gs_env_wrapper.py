@@ -50,6 +50,8 @@ class GenesisEnvWrapper(BaseEnvWrapper):
         done_idx = terminated.nonzero(as_tuple=True)[0]
         if len(done_idx) > 0:
             self.env.reset_idx(done_idx)
+        # update history
+        self.env.update_history()
         # get extra infos
         extra_infos = self.env.get_extra_infos()
         extra_infos["reward_terms"] = reward_terms

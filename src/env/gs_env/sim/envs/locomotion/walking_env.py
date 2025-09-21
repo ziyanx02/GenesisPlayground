@@ -232,12 +232,13 @@ class WalkingEnv(BaseEnv):
             self._scene.scene.step()
             self._torque = torch.max(self._torque, torch.abs(self._robot.torque))
 
-        # save for reward computation
-        self._last_last_action.copy_(self._last_action)
-        self._last_action.copy_(self._action)
-
         # Render if rendering is enabled
         self._render_headless()
+
+    def update_history(self) -> None:
+        # save for reward computation
+        self._last_last_action = self._last_action.clone()
+        self._last_action = self._action.clone()
 
     def get_extra_infos(self) -> dict[str, Any]:
         return self._extra_info

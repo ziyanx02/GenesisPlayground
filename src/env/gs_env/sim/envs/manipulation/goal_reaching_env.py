@@ -169,6 +169,9 @@ class GoalReachingEnv(BaseEnv):
         self._robot.apply_action(action=action)
         self._scene.scene.step()
 
+    def update_history(self) -> None:
+        pass
+
     def get_extra_infos(self) -> dict[str, Any]:
         return dict()
 
