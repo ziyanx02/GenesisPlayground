@@ -156,24 +156,25 @@ RobotArgsRegistry["g1_default"] = HumanoidRobotArgs(
     right_foot_link_name="right_ankle_roll_link",
     show_target=True,
     dof_names=[
-        # Lower body
+        # Left Lower body 0:6
         "left_hip_roll_joint",
         "left_hip_pitch_joint",
         "left_hip_yaw_joint",
         "left_knee_joint",
         "left_ankle_roll_joint",
         "left_ankle_pitch_joint",
+        # Right Lower body 6:12
         "right_hip_roll_joint",
         "right_hip_pitch_joint",
         "right_hip_yaw_joint",
         "right_knee_joint",
         "right_ankle_roll_joint",
         "right_ankle_pitch_joint",
-        # Waist
+        # Waist 12:15
         "waist_roll_joint",
         "waist_pitch_joint",
         "waist_yaw_joint",
-        # Upper body
+        # Left Upper body 15:22
         "left_shoulder_roll_joint",
         "left_shoulder_pitch_joint",
         "left_shoulder_yaw_joint",
@@ -181,6 +182,7 @@ RobotArgsRegistry["g1_default"] = HumanoidRobotArgs(
         "left_wrist_roll_joint",
         "left_wrist_pitch_joint",
         "left_wrist_yaw_joint",
+        # Right Upper body 22:29
         "right_shoulder_roll_joint",
         "right_shoulder_pitch_joint",
         "right_shoulder_yaw_joint",

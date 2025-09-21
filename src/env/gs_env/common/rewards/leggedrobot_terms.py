@@ -176,7 +176,7 @@ class UpperBodyDofPenalty(RewardTerm):
     required_keys = ("dof_pos",)
 
     def _compute(self, dof_pos: torch.Tensor) -> torch.Tensor:  # type: ignore
-        return -torch.sum(torch.square(dof_pos[:, 12:]), dim=-1)
+        return -torch.sum(torch.square(dof_pos[:, 15:]), dim=-1)
 
 
 class HipYawPenalty(RewardTerm):
@@ -190,4 +190,18 @@ class HipYawPenalty(RewardTerm):
     required_keys = ("dof_pos",)
 
     def _compute(self, dof_pos: torch.Tensor) -> torch.Tensor:  # type: ignore
-        return -torch.sum(torch.square(dof_pos[:, []]), dim=-1)
+        return -torch.sum(torch.square(dof_pos[:, [2, 8]]), dim=-1)
+
+
+class AnkleTorquePenalty(RewardTerm):
+    """
+    Penalize the ankle torque.
+
+    Args:
+        torque: Torque tensor of shape (B, D) where B is the batch size and D is the number of DoFs.
+    """
+
+    required_keys = ("torque",)
+
+    def _compute(self, torque: torch.Tensor) -> torch.Tensor:  # type: ignore
+        return -torch.sum(torch.square(torque[:, [4, 5, 10, 11]]), dim=-1)

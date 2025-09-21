@@ -108,6 +108,11 @@ EnvArgsRegistry["custom_desk"] = LeggedRobotEnvArgs(
         "DofPosLimitPenalty": 10.0,
         "G1BaseHeightPenalty": 30.0,
         "ActionLimitPenalty": 0.1,
+        ### Motion Constraints ###
+        "AnkleTorquePenalty": 0.0001,
+        "HipYawPenalty": 1.0,
+        "WaistDofPenalty": 1.0,
+        "UpperBodyDofPenalty": 1.0,
     },
     img_resolution=(480, 270),
     action_latency=1,
