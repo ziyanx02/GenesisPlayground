@@ -4,6 +4,7 @@
 import glob
 import os
 from pathlib import Path
+from datetime import datetime
 
 import fire
 import torch
@@ -57,10 +58,13 @@ def create_ppo_runner_from_registry(env: BaseEnv, exp_name: str | None = None) -
     # Create PPO runner
     runner_args = RUNNER_WALKING_MLP
     if exp_name is not None:
-        runner_args.save_path = Path(f"./logs/{exp_name}")
+        # Avoid mutating a frozen Pydantic model; create a copied config with updated save_path
+        runner_args = RUNNER_WALKING_MLP.model_copy(
+            update={"save_path": Path(f"./logs/{exp_name}")}
+        )
     runner = OnPolicyRunner(
         algorithm=ppo,
-        runner_args=RUNNER_WALKING_MLP,
+        runner_args=runner_args,
         device=wrapped_env.device,
     )
     return runner
@@ -73,7 +77,7 @@ def evaluate_policy(
     # Find the experiment directory without creating a new runner
     if exp_name is not None:
         # Use specific experiment name
-        log_pattern = f"logs/ppo_gs_{exp_name}/*"
+        log_pattern = f"logs/{exp_name}/*"
         log_dirs = glob.glob(log_pattern)
         if not log_dirs:
             raise FileNotFoundError(
@@ -81,7 +85,7 @@ def evaluate_policy(
             )
     else:
         # Find latest experiment - try walking first, then goal_reaching
-        log_patterns = ["logs/ppo_gs_walking/*", "logs/ppo_gs_goal_reaching/*"]
+        log_patterns = ["logs/ppo_gs_walking/*"]
         log_dirs = []
         for pattern in log_patterns:
             log_dirs.extend(glob.glob(pattern))
@@ -214,8 +218,14 @@ def train_policy(
     runner = create_ppo_runner_from_registry(env, exp_name=exp_name)
 
     # Set up logging with proper configuration
+    if exp_name is not None:
+        save_path = Path(f"./logs/{exp_name}")
+    else:
+        save_path = RUNNER_WALKING_MLP.save_path
     logger = logger_configure(
-        folder=str(runner.save_dir),
+        folder=str(
+            save_path / datetime.now().strftime("%Y%m%d_%H%M%S")
+        ),
         format_strings=["stdout", "csv", "wandb"],
         entity=None,
         project=None,
