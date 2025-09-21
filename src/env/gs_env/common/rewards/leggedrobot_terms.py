@@ -133,7 +133,7 @@ class DofPosLimitPenalty(RewardTerm):
     def _compute(self, dof_pos: torch.Tensor, dof_pos_limits: torch.Tensor) -> torch.Tensor:  # type: ignore
         out_of_limits = -(dof_pos - dof_pos_limits[:, 0]).clip(max=0.0)  # lower limit
         out_of_limits += (dof_pos - dof_pos_limits[:, 1]).clip(min=0.0)  # upper limit
-        return torch.sum(out_of_limits, dim=1)
+        return -torch.sum(out_of_limits, dim=1)
 
 
 class ActionLimitPenalty(RewardTerm):
@@ -148,4 +148,4 @@ class ActionLimitPenalty(RewardTerm):
     required_keys = ("action",)
 
     def _compute(self, action: torch.Tensor) -> torch.Tensor:  # type: ignore
-        return torch.sum(torch.square(torch.abs(action).clip(min=8) - 8), dim=1)
+        return -torch.sum(torch.square(torch.abs(action).clip(min=8) - 8), dim=1)
