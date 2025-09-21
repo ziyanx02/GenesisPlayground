@@ -91,6 +91,8 @@ class PPO(BaseAlgo):
     def _collect_rollouts(self, num_steps: int) -> dict[str, Any]:
         """Collect rollouts from the environment."""
         obs = self.env.get_observations()
+        termination_buffer = []
+        reward_terms_buffer = []
         with torch.inference_mode():
             # collect rollouts and compute returns & advantages
             for _step in range(num_steps):
@@ -113,6 +115,10 @@ class PPO(BaseAlgo):
                 # Extract tensors from reward and done objects
                 self._curr_reward_sum += reward.squeeze(-1)
                 self._curr_ep_len += 1
+
+                # Update termination buffer
+                termination_buffer.append(_extra_infos["termination"])
+                reward_terms_buffer.append(_extra_infos["reward_terms"])
 
                 # Check for episode completions and reset tracking
                 done_mask = terminated.unsqueeze(-1) | truncated.unsqueeze(-1)
@@ -137,9 +143,24 @@ class PPO(BaseAlgo):
         if len(self._rewbuffer) > 0:
             mean_reward = statistics.mean(self._rewbuffer)
             mean_ep_len = statistics.mean(self._lenbuffer)
+        # import ipdb; ipdb.set_trace()
+        mean_termination = {}
+        mean_reward_terms = {}
+        if len(termination_buffer) > 0:
+            for key in termination_buffer[0].keys():
+                terminations = torch.stack([termination[key] for termination in termination_buffer])
+                mean_termination[key] = terminations.to(torch.float).mean().item()
+        if len(reward_terms_buffer) > 0:
+            for key in reward_terms_buffer[0].keys():
+                reward_terms = torch.stack(
+                    [reward_term[key] for reward_term in reward_terms_buffer]
+                )
+                mean_reward_terms[key] = reward_terms.mean().item()
         return {
             "mean_reward": mean_reward,
             "mean_ep_len": mean_ep_len,
+            "termination": mean_termination,
+            "reward_terms": mean_reward_terms,
         }
 
     def _train_one_batch(self, mini_batch: dict[GAEBufferKey, torch.Tensor]) -> dict[str, Any]:
@@ -238,6 +259,8 @@ class PPO(BaseAlgo):
                 "train_time": train_time,
                 "rollout_step": self._num_steps * self._num_envs,
             },
+            "termination": rollout_infos["termination"],
+            "reward_terms": rollout_infos["reward_terms"],
         }
         return iteration_infos
 

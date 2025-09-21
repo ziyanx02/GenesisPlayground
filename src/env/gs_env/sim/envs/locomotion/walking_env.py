@@ -176,12 +176,19 @@ class WalkingEnv(BaseEnv):
 
     def get_terminated(self) -> torch.Tensor:
         reset_buf = self.get_truncated()
-        reset_buf |= torch.logical_or(
+        tilt_mask = torch.logical_or(
             torch.abs(self.base_euler[:, 0]) > 0.3,
             torch.abs(self.base_euler[:, 1]) > 0.3,
         )
-        reset_buf |= self.base_pos[:, 2] < 0.3
+        height_mask = self.base_pos[:, 2] < 0.3
+        reset_buf |= tilt_mask
+        reset_buf |= height_mask
         self.reset_buf[:] = reset_buf
+        termination_dict = {}
+        termination_dict["tilt"] = tilt_mask.clone()
+        termination_dict["base_height"] = height_mask.clone()
+        termination_dict["any"] = reset_buf.clone()
+        self._extra_info["termination"] = termination_dict
         return reset_buf
 
     def get_truncated(self) -> torch.Tensor:
@@ -203,10 +210,8 @@ class WalkingEnv(BaseEnv):
         ]
         obs_tensor = torch.cat(obs_components, dim=-1)
 
-        self._extra_info = {
-            "observations": {"critic": obs_tensor},
-            "time_outs": self.time_out_buf.clone(),
-        }
+        self._extra_info["observations"] = {"critic": obs_tensor}
+        self._extra_info["time_outs"] = self.time_out_buf.clone()
         return obs_tensor
 
     def apply_action(self, action: torch.Tensor) -> None:
@@ -285,7 +290,7 @@ class WalkingEnv(BaseEnv):
                 reward_total_pos += reward
             else:
                 reward_total_neg += reward
-            reward_dict[f"reward_{key}"] = reward
+            reward_dict[f"reward_{key}"] = reward.clone()
         reward_total = reward_total_pos * torch.exp(reward_total_neg)
         reward_dict["reward_total"] = reward_total
 
