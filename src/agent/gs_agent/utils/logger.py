@@ -477,10 +477,11 @@ class WandbOutputFormat(KVWriter):
         config: dict[str, Any] | None = None,
         log_dir: str | None = None,
         mode: Literal["online", "offline", "disabled"] = "online",
+        exp_name: str | None = None,
     ):
         if log_dir is not None:
             os.environ["WANDB_DIR"] = log_dir
-        wandb.init(project=project, entity=entity, config=config, mode=mode)
+        wandb.init(project=project, entity=entity, config=config, mode=mode, name=exp_name)
         self.run = wandb.run
 
     def write(
@@ -530,6 +531,7 @@ def make_output_format(_format: str, log_dir: str, log_suffix: str = "", **kwarg
             config=kwargs.get("config", None),
             log_dir=log_dir,
             mode=kwargs.get("mode", "online"),
+            exp_name=kwargs.get("exp_name", None)
         )
     else:
         raise ValueError(f"Unknown format specified: {_format}")

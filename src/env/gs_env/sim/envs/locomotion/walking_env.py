@@ -74,7 +74,7 @@ class WalkingEnv(BaseEnv):
         self._scene.build()
 
         # == setup reward scalars and functions ==
-        dt = self._scene.scene.dt
+        self.dt = self._scene.scene.dt
         self._reward_functions = {}
         module_name = f"gs_env.common.rewards.{self._args.reward_term}_terms"
         module = importlib.import_module(module_name)
@@ -82,7 +82,7 @@ class WalkingEnv(BaseEnv):
             reward_func = getattr(module, key, None)
             if reward_func is None:
                 raise ValueError(f"Reward {key} not found in rewards module.")
-            self._reward_functions[key] = reward_func(scale=args.reward_args[key] * dt)
+            self._reward_functions[key] = reward_func(scale=args.reward_args[key] * self.dt)
 
         # some auxiliary variables
         self._max_sim_time = 20.0  # seconds
@@ -129,6 +129,7 @@ class WalkingEnv(BaseEnv):
         self._last_action = torch.zeros((self.num_envs, self.action_dim), device=self._device)
         self._last_last_action = torch.zeros((self.num_envs, self.action_dim), device=self._device)
         self._torque = torch.zeros((self.num_envs, self.action_dim), device=self._device)
+
         self.base_default_pos: torch.Tensor = self._robot.default_pos[None, :].repeat(
             self.num_envs, 1
         )
@@ -140,12 +141,27 @@ class WalkingEnv(BaseEnv):
         self.base_euler = torch.zeros(self.num_envs, 3, dtype=torch.float32, device=self._device)
         self.base_lin_vel = torch.zeros(self.num_envs, 3, dtype=torch.float32, device=self._device)
         self.base_ang_vel = torch.zeros(self.num_envs, 3, dtype=torch.float32, device=self._device)
+
         global_gravity = torch.tensor([0.0, 0.0, -1.0], device=self.device, dtype=torch.float32)
         self.global_gravity = global_gravity[None, :].repeat(self.num_envs, 1)
         self.projected_gravity = torch.zeros(
             (self.num_envs, 3), device=self.device, dtype=torch.float32
         )
+
         self.commands = torch.zeros((self.num_envs, 3), device=self.device, dtype=torch.float32)
+
+        self.link_contact_forces = torch.zeros(
+            (self.num_envs, self._robot.n_links, 3), device=self.device, dtype=torch.float32
+        )
+        self.feet_contact = torch.zeros(
+            (self.num_envs, 2), device=self.device, dtype=torch.float32
+        )
+        self.feet_first_contact = torch.zeros(
+            (self.num_envs, 2), device=self.device, dtype=torch.float32
+        )
+        self.feet_air_time = torch.zeros(
+            (self.num_envs, 2), device=self.device, dtype=torch.float32
+        )
 
         #
         self.reset_buf = torch.zeros(self.num_envs, dtype=torch.bool, device=self._device)
@@ -173,6 +189,7 @@ class WalkingEnv(BaseEnv):
             + (torch.rand(len(envs_idx), self._robot.dof_dim, device=self._device) - 0.5) * 0.3
         )
         self.time_since_reset[envs_idx] = 0.0
+        self.feet_air_time[envs_idx] = 0.0
         self._robot.set_state(pos=default_pos, quat=quat, dof_pos=dof_pos, envs_idx=envs_idx)
 
     def get_terminated(self) -> torch.Tensor:
@@ -239,6 +256,7 @@ class WalkingEnv(BaseEnv):
         # save for reward computation
         self._last_last_action = self._last_action.clone()
         self._last_action = self._action.clone()
+        self.feet_air_time *= 1 - self.feet_contact
 
     def get_extra_infos(self) -> dict[str, Any]:
         return self._extra_info
@@ -260,6 +278,11 @@ class WalkingEnv(BaseEnv):
             self.commands[:, :] = torch.rand(self.num_envs, 3, device=self._device)
             self.commands[:, :2] *= torch.norm(self.commands[:, :2], dim=-1, keepdim=True) > 0.3
             self.commands[:, 2] *= torch.abs(self.commands[:, 2]) > 0.3
+
+        self.link_contact_forces[:] = self._robot.link_contact_forces
+        self.feet_contact[:] = self.link_contact_forces[:, [self._robot.left_foot_link_idx, self._robot.right_foot_link_idx], 2] > 1.0
+        self.feet_first_contact[:] = (self.feet_air_time > 0.0) * self.feet_contact
+        self.feet_air_time += self.dt
 
     def get_info(self, envs_idx: torch.IntTensor | None = None) -> dict[str, Any]:
         if envs_idx is None:
@@ -286,6 +309,8 @@ class WalkingEnv(BaseEnv):
                     "torque": self._torque,
                     "dof_pos_limits": self._robot.dof_pos_limits,
                     "commands": self.commands,
+                    "feet_first_contact": self.feet_first_contact,
+                    "feet_air_time": self.feet_air_time,
                 }
             )
             if reward.sum() >= 0:

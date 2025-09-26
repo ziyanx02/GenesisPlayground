@@ -84,6 +84,7 @@ EnvArgsRegistry["walk_default"] = LeggedRobotEnvArgs(
         "AnkleTorquePenalty": 0.001,
         "HipYawPenalty": 10.0,
         "UpperBodyDofPenalty": 10.0,
+        "FeetAirTimeReward": 1.0,
     },
     img_resolution=(480, 270),
     action_latency=1,
@@ -100,12 +101,12 @@ EnvArgsRegistry["custom_desk"] = LeggedRobotEnvArgs(
     reward_term="g1",
     reward_args={
         ### Velocity Tracking ###
-        "LinVelXYReward": 100.0,
-        "AngVelZReward": 100.0,
+        "LinVelXYReward": 10.0,
+        "AngVelZReward": 10.0,
         "LinVelZPenalty": 2.0,
         "AngVelXYPenalty": 1.0,
         ### Pose Tracking ###
-        "OrientationPenalty": 50.0,
+        "OrientationPenalty": 100.0,
         ### Regularization ###
         "TorquePenalty": 0.0001,
         "ActionRatePenalty": 0.1,
@@ -115,8 +116,8 @@ EnvArgsRegistry["custom_desk"] = LeggedRobotEnvArgs(
         ### Motion Constraints ###
         "AnkleTorquePenalty": 0.0001,
         "HipYawPenalty": 1.0,
-        "WaistDofPenalty": 1.0,
-        "UpperBodyDofPenalty": 1.0,
+        "UpperBodyDofPenalty": 3.0,
+        "FeetAirTimeReward": 10.0,
     },
     img_resolution=(480, 270),
     action_latency=1,

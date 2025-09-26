@@ -23,7 +23,7 @@ from gs_env.sim.envs.locomotion.walking_env import WalkingEnv
 def create_gs_env(
     env_name: str = "walk_default",
     show_viewer: bool = False,
-    num_envs: int = 2048,
+    num_envs: int = 4096,
     device: str = "cuda",
 ) -> BaseEnv:
     """Create gym environment wrapper."""
@@ -198,15 +198,16 @@ def evaluate_policy(
         env.stop_rendering(save_gif=True, gif_path=str(gif_path))  # type: ignore
         print(f"GIF saved to: {gif_path}")
 
+    print(f"Evaluation of checkpoint {ckpt_path} completed successfully!")
     print("Final evaluation results:")
-    print(f"  Total steps: {step_count}")
-    print(f"  Final reward: {total_reward:.2f}")
+    print(f"Total steps: {step_count}")
+    print(f"Final reward: {total_reward:.2f}")
 
 
 def train_policy(
     exp_name: str | None = None,
     show_viewer: bool = False,
-    num_envs: int = 2048,
+    num_envs: int = 4096,
     device: str = "cuda",
 ) -> None:
     """Train the policy using PPO."""
@@ -230,12 +231,16 @@ def train_policy(
         entity=None,
         project=None,
         exp_name=exp_name,
+        # mode="disabled",
         mode="online" if not show_viewer else "disabled",
     )
 
     # Train using Runner
     print("Starting training...")
-    train_summary_info = runner.train(metric_logger=logger)
+    try:
+        train_summary_info = runner.train(metric_logger=logger)
+    except KeyboardInterrupt
+        pass
 
     print("Training completed successfully!")
     print(f"Training completed in {train_summary_info['total_time']:.2f} seconds.")
@@ -245,7 +250,7 @@ def train_policy(
 
 
 def main(
-    num_envs: int = 2048,
+    num_envs: int = 4096,
     show_viewer: bool = False,
     device: str = "cuda",
     eval: bool = False,

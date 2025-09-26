@@ -10,14 +10,15 @@ from .leggedrobot_terms import (
     LinVelXYReward,  # noqa
     LinVelZPenalty,  # noqa
     OrientationPenalty,  # noqa
-    TorquePenalty,  # noqa  # noqa
+    TorquePenalty,  # noqa
+    FeetAirTimeReward,  # noqa
 )
 from .reward_terms import RewardTerm
 
 
 ### ---- Reward Terms ---- ###
 class G1BaseHeightPenalty(BaseHeightPenalty):
-    target_height = 0.75
+    target_height = 0.7
 
 
 class UpperBodyDofPenalty(RewardTerm):

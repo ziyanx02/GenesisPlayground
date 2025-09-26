@@ -70,6 +70,10 @@ class LeggedRobotBase(BaseGymRobot):
         #
         self._body_link = self._robot.get_link(self._args.body_link_name)
         self._body_link_idx = self._body_link.idx
+        self.left_foot_link = self._robot.get_link(self._args.left_foot_link_name)
+        self.left_foot_link_idx = self.left_foot_link.idx
+        self.right_foot_link = self._robot.get_link(self._args.right_foot_link_name)
+        self.right_foot_link_idx = self.right_foot_link.idx
         #
         self._dofs_idx_local = [
             self._robot.get_joint(name).dofs_idx_local[0] for name in self._args.dof_names
@@ -337,6 +341,10 @@ class LeggedRobotBase(BaseGymRobot):
     @property
     def torque(self) -> torch.Tensor:
         return self._torque
+
+    @property
+    def link_contact_forces(self) -> torch.Tensor:
+        return self._robot.get_links_net_contact_force()
 
     @property
     def dof_pos_limits(self) -> torch.Tensor:
