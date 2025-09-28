@@ -168,3 +168,15 @@ class FeetAirTimeReward(RewardTerm):
         rew_air_time = torch.sum(feet_air_time * feet_first_contact, dim=1).clip(max=0.5)
         rew_air_time *= torch.norm(commands, dim=1) > 0.1
         return rew_air_time
+    
+class FeetHeightReward(RewardTerm):
+    """
+    Reward the maximum foot height.
+    """
+
+    required_keys = ("feet_height", "from_air_to_contact")
+    feet_max_height: float = 0.25
+
+    def _compute(self, feet_air_max_height: torch.Tensor, from_air_to_contact: torch.Tensor) -> torch.Tensor:  # type: ignore
+        rew_feet_max_height = torch.sum((torch.clamp_min(self.feet_max_height - feet_air_max_height, 0)) * from_air_to_contact, dim=1) # reward only on first contact with the ground
+        return rew_feet_max_height

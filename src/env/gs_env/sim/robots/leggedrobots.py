@@ -345,6 +345,10 @@ class LeggedRobotBase(BaseGymRobot):
     @property
     def link_contact_forces(self) -> torch.Tensor:
         return self._robot.get_links_net_contact_force()
+    
+    @property
+    def rigid_body_pose(self) -> torch.Tensor:
+        return self._robot.get_links_pos()
 
     @property
     def dof_pos_limits(self) -> torch.Tensor:

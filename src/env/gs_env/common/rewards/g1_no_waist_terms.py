@@ -12,6 +12,7 @@ from .leggedrobot_terms import (
     OrientationPenalty,  # noqa
     TorquePenalty,  # noqa
     FeetAirTimeReward,  # noqa
+    FeetHeightReward,
 )
 from .reward_terms import RewardTerm
 
