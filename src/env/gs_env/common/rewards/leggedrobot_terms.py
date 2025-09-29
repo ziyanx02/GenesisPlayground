@@ -150,6 +150,7 @@ class ActionLimitPenalty(RewardTerm):
     def _compute(self, action: torch.Tensor) -> torch.Tensor:  # type: ignore
         return -torch.sum(torch.square(torch.abs(action).clip(min=8) - 8), dim=1)
 
+
 class FeetAirTimeReward(RewardTerm):
     """
     Reward the feet air time.
@@ -168,3 +169,22 @@ class FeetAirTimeReward(RewardTerm):
         rew_air_time = torch.sum(feet_air_time * feet_first_contact, dim=1).clip(max=0.5)
         rew_air_time *= torch.norm(commands, dim=1) > 0.1
         return rew_air_time
+
+
+class FeetHeightPenalty(RewardTerm):
+    """
+    Reward the feet air time.
+
+    Args:
+        feet_height: Feet height tensor of shape (B, 2) where B is the batch size.
+        commands: Commands tensor of shape (B, 3) where B is the batch size.
+    """
+
+    required_keys = ("feet_height", "commands")
+    target_height: float = 0.0
+
+    def _compute(self, feet_height: torch.Tensor, commands: torch.Tensor) -> torch.Tensor:  # type: ignore
+        feet_height = feet_height.max(dim=1)[0] - self.target_height
+        feet_height = feet_height.clip(max=0.0)
+        feet_height *= torch.norm(commands, dim=1) > 0.1
+        return feet_height

@@ -7,11 +7,12 @@ from .leggedrobot_terms import (
     AngVelZReward,  # noqa
     BaseHeightPenalty,
     DofPosLimitPenalty,  # noqa
+    FeetAirTimeReward,  # noqa
+    FeetHeightPenalty,
     LinVelXYReward,  # noqa
     LinVelZPenalty,  # noqa
     OrientationPenalty,  # noqa
     TorquePenalty,  # noqa
-    FeetAirTimeReward,  # noqa
 )
 from .reward_terms import RewardTerm
 
@@ -61,3 +62,7 @@ class AnkleTorquePenalty(RewardTerm):
 
     def _compute(self, torque: torch.Tensor) -> torch.Tensor:  # type: ignore
         return -torch.sum(torch.square(torque[:, [4, 5, 10, 11]]), dim=-1)
+
+
+class G1FeetHeightPenalty(FeetHeightPenalty):
+    target_height = 0.2
