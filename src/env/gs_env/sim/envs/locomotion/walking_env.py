@@ -165,6 +165,9 @@ class WalkingEnv(BaseEnv):
         self.feet_height = torch.zeros(
             (self.num_envs, 2), device=self.device, dtype=torch.float32
         )
+        self.feet_air_max_height = torch.zeros(
+            (self.num_envs, 2), device=self.device, dtype=torch.float32
+        )
         self.last_feet_contact = torch.zeros(
             (self.num_envs, 2), device=self.device, dtype=torch.float32
         )
@@ -202,6 +205,7 @@ class WalkingEnv(BaseEnv):
         )
         self.time_since_reset[envs_idx] = 0.0
         self.feet_air_time[envs_idx] = 0.0
+        self.feet_air_max_height[envs_idx] = 0.0
         self._robot.set_state(pos=default_pos, quat=quat, dof_pos=dof_pos, envs_idx=envs_idx)
 
     def get_terminated(self) -> torch.Tensor:
@@ -269,7 +273,7 @@ class WalkingEnv(BaseEnv):
         self._last_last_action = self._last_action.clone()
         self._last_action = self._action.clone()
         self.feet_air_time *= 1 - self.feet_contact
-        self.feet_height *= 1 - self.feet_contact
+        self.feet_air_max_height *= 1 - self.feet_contact
 
     def get_extra_infos(self) -> dict[str, Any]:
         return self._extra_info
@@ -295,10 +299,11 @@ class WalkingEnv(BaseEnv):
         self.link_contact_forces[:] = self._robot.link_contact_forces
         self.feet_contact[:] = self.link_contact_forces[:, [self._robot.left_foot_link_idx, self._robot.right_foot_link_idx], 2] > 1.0
         self.feet_first_contact[:] = (self.feet_air_time > 0.0) * self.feet_contact
-        self.from_air_to_contact = torch.logical_and(1-self.feet_contact,torch.logical_not(self.last_feet_contact))
+        self.from_air_to_contact = torch.logical_and(self.feet_contact,torch.logical_not(self.last_feet_contact))
         self.last_feet_contact = self.feet_contact.clone()
         self.rigid_body_pose[:] = self._robot.rigid_body_pose
-        self.feet_height[:] = torch.max(self.feet_height, self.rigid_body_pose[:, [self._robot.left_foot_link_idx, self._robot.right_foot_link_idx], 2])
+        self.feet_height[:] = self.rigid_body_pose[:, [self._robot.left_foot_link_idx, self._robot.right_foot_link_idx], 2]
+        self.feet_air_max_height[:] = torch.max(self.feet_air_max_height, self.feet_height)
         self.feet_air_time += self.dt
 
     def get_info(self, envs_idx: torch.IntTensor | None = None) -> dict[str, Any]:
@@ -328,7 +333,8 @@ class WalkingEnv(BaseEnv):
                     "commands": self.commands,
                     "feet_first_contact": self.feet_first_contact,
                     "feet_air_time": self.feet_air_time,
-                    "feet_height": self.feet_height,
+                    # "feet_height": self.feet_height,
+                    "feet_air_max_height": self.feet_air_max_height,
                     "from_air_to_contact": self.from_air_to_contact
                 }
             )

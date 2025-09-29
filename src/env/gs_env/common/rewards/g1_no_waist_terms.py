@@ -5,14 +5,15 @@ from .leggedrobot_terms import (
     ActionRatePenalty,  # noqa
     AngVelXYPenalty,  # noqa
     AngVelZReward,  # noqa
-    BaseHeightPenalty,
+    BaseHeightPenalty, # noqa
     DofPosLimitPenalty,  # noqa
     LinVelXYReward,  # noqa
     LinVelZPenalty,  # noqa
     OrientationPenalty,  # noqa
     TorquePenalty,  # noqa
     FeetAirTimeReward,  # noqa
-    FeetHeightReward,
+    # FeetHeightPenalty, # noqa
+    FeetMaxHeightReward, # noqa
 )
 from .reward_terms import RewardTerm
 

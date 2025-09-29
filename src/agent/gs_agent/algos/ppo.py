@@ -180,7 +180,7 @@ class PPO(BaseAlgo):
         )
         policy_loss = torch.max(surr1, surr2).mean()
 
-        approx_kl = (new_log_prob - old_log_prob).mean()
+        approx_kl = (old_log_prob - new_log_prob).mean()
 
         # Calculate value loss
         values = self._critic(obs)
