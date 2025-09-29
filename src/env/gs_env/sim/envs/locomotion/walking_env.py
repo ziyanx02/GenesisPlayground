@@ -328,6 +328,7 @@ class WalkingEnv(BaseEnv):
                 reward_total_pos += reward
             else:
                 reward_total_neg += reward
+            print(key, reward)
             reward_dict[f"{key}"] = reward.clone()
         reward_total = reward_total_pos * torch.exp(reward_total_neg)
         reward_dict["Total"] = reward_total

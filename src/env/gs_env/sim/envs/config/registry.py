@@ -73,7 +73,7 @@ EnvArgsRegistry["walk_default"] = LeggedRobotEnvArgs(
         "LinVelZPenalty": 2.0,
         "AngVelXYPenalty": 1.0,
         ### Pose Tracking ###
-        "OrientationPenalty": 500.0,
+        "OrientationPenalty": 200.0,
         ### Regularization ###
         "TorquePenalty": 0.0001,
         "ActionRatePenalty": 0.03,

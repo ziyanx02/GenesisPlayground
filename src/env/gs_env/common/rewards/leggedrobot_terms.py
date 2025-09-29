@@ -187,4 +187,5 @@ class FeetHeightPenalty(RewardTerm):
         feet_height = feet_height.max(dim=1)[0] - self.target_height
         feet_height = feet_height.clip(max=0.0)
         feet_height *= torch.norm(commands, dim=1) > 0.1
+        print(feet_height)
         return feet_height

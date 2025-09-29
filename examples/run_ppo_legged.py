@@ -209,6 +209,7 @@ def train_policy(
     show_viewer: bool = False,
     num_envs: int = 4096,
     device: str = "cuda",
+    use_wandb: bool = True,
 ) -> None:
     """Train the policy using PPO."""
 
@@ -231,8 +232,7 @@ def train_policy(
         entity=None,
         project=None,
         exp_name=exp_name,
-        # mode="disabled",
-        mode="online" if not show_viewer else "disabled",
+        mode="online" if use_wandb and (not show_viewer) else "disabled",
     )
 
     # Train using Runner
@@ -256,6 +256,7 @@ def main(
     eval: bool = False,
     exp_name: str | None = None,
     num_ckpt: int | None = None,
+    use_wandb: bool = True,
 ) -> None:
     """Main function demonstrating proper registry usage."""
     if eval:
@@ -266,7 +267,7 @@ def main(
     else:
         # Training mode
         print("Training mode: Starting policy training")
-        train_policy(exp_name=exp_name, show_viewer=show_viewer, num_envs=num_envs, device=device)
+        train_policy(exp_name=exp_name, show_viewer=show_viewer, num_envs=num_envs, device=device, use_wandb=use_wandb)
 
 
 if __name__ == "__main__":
