@@ -85,6 +85,7 @@ EnvArgsRegistry["walk_default"] = LeggedRobotEnvArgs(
         "HipYawPenalty": 10.0,
         "UpperBodyDofPenalty": 10.0,
         "FeetAirTimeReward": 1.0,
+        "G1FeetHeightPenalty": 1.0,
     },
     img_resolution=(480, 270),
     action_latency=1,

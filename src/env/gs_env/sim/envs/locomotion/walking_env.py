@@ -153,9 +153,11 @@ class WalkingEnv(BaseEnv):
         self.link_contact_forces = torch.zeros(
             (self.num_envs, self._robot.n_links, 3), device=self.device, dtype=torch.float32
         )
-        self.feet_contact = torch.zeros(
-            (self.num_envs, 2), device=self.device, dtype=torch.float32
+        self.link_positions = torch.zeros(
+            (self.num_envs, self._robot.n_links, 3), device=self.device, dtype=torch.float32
         )
+        self.feet_height = torch.zeros((self.num_envs, 2), device=self.device, dtype=torch.float32)
+        self.feet_contact = torch.zeros((self.num_envs, 2), device=self.device, dtype=torch.float32)
         self.feet_first_contact = torch.zeros(
             (self.num_envs, 2), device=self.device, dtype=torch.float32
         )
@@ -191,6 +193,7 @@ class WalkingEnv(BaseEnv):
         self.time_since_reset[envs_idx] = 0.0
         self.feet_air_time[envs_idx] = 0.0
         self._robot.set_state(pos=default_pos, quat=quat, dof_pos=dof_pos, envs_idx=envs_idx)
+        self._resample_commands(envs_idx=envs_idx)
 
     def get_terminated(self) -> torch.Tensor:
         reset_buf = self.get_truncated()
@@ -275,14 +278,21 @@ class WalkingEnv(BaseEnv):
 
         if self.time_since_resample > self._command_resample_time:
             self.time_since_resample = 0.0
-            self.commands[:, :] = torch.rand(self.num_envs, 3, device=self._device)
-            self.commands[:, :2] *= torch.norm(self.commands[:, :2], dim=-1, keepdim=True) > 0.3
-            self.commands[:, 2] *= torch.abs(self.commands[:, 2]) > 0.3
+            self._resample_commands(envs_idx=torch.IntTensor(range(self.num_envs)))
 
         self.link_contact_forces[:] = self._robot.link_contact_forces
-        self.feet_contact[:] = self.link_contact_forces[:, [self._robot.left_foot_link_idx, self._robot.right_foot_link_idx], 2] > 1.0
+        self.feet_contact[:] = (
+            self.link_contact_forces[
+                :, [self._robot.left_foot_link_idx, self._robot.right_foot_link_idx], 2
+            ]
+            > 1.0
+        )
         self.feet_first_contact[:] = (self.feet_air_time > 0.0) * self.feet_contact
         self.feet_air_time += self.dt
+        self.link_positions[:] = self._robot.link_positions
+        self.feet_height[:] = self.link_positions[
+            :, [self._robot.left_foot_link_idx, self._robot.right_foot_link_idx], 2
+        ]
 
     def get_info(self, envs_idx: torch.IntTensor | None = None) -> dict[str, Any]:
         if envs_idx is None:
@@ -311,6 +321,7 @@ class WalkingEnv(BaseEnv):
                     "commands": self.commands,
                     "feet_first_contact": self.feet_first_contact,
                     "feet_air_time": self.feet_air_time,
+                    "feet_height": self.feet_height,
                 }
             )
             if reward.sum() >= 0:
@@ -378,6 +389,11 @@ class WalkingEnv(BaseEnv):
             print(f"GIF saved to: {gif_path}")
         else:
             print("No images to save as GIF.")
+
+    def _resample_commands(self, envs_idx: torch.IntTensor) -> None:
+        self.commands[envs_idx, :] = torch.rand(len(envs_idx), 3, device=self._device)
+        self.commands[:, :2] *= torch.norm(self.commands[:, :2], dim=-1, keepdim=True) > 0.3
+        self.commands[:, 2] *= torch.abs(self.commands[:, 2]) > 0.3
 
     @property
     def num_envs(self) -> int:
