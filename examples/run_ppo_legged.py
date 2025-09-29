@@ -239,7 +239,7 @@ def train_policy(
     print("Starting training...")
     try:
         train_summary_info = runner.train(metric_logger=logger)
-    except KeyboardInterrupt
+    except KeyboardInterrupt:
         pass
 
     print("Training completed successfully!")

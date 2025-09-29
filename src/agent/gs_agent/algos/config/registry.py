@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from gs_agent.algos.config.schema import BCArgs, OptimizerType, PPOArgs
+from gs_agent.algos.config.schema import BCArgs, LearningRateType, OptimizerType, PPOArgs
 from gs_agent.modules.config.registry import DEFAULT_MLP
 
 # default PPO config
@@ -8,6 +8,7 @@ PPO_DEFAULT = PPOArgs(
     policy_backbone=DEFAULT_MLP,
     critic_backbone=DEFAULT_MLP,
     lr=3e-4,
+    lr_type=LearningRateType.FIXED,
     gamma=0.99,
     gae_lambda=0.95,
     clip_ratio=0.2,
@@ -28,6 +29,7 @@ PPO_PENDULUM_MLP = PPOArgs(
     policy_backbone=DEFAULT_MLP,
     critic_backbone=DEFAULT_MLP,
     lr=3e-4,
+    lr_type=LearningRateType.FIXED,
     value_lr=None,
     gamma=0.99,
     gae_lambda=0.95,
@@ -49,6 +51,7 @@ PPO_GOAL_REACHING_MLP = PPOArgs(
     policy_backbone=DEFAULT_MLP,
     critic_backbone=DEFAULT_MLP,
     lr=3e-4,
+    lr_type=LearningRateType.FIXED,
     value_lr=None,
     gamma=0.99,
     gae_lambda=0.95,
@@ -85,6 +88,10 @@ PPO_WALKING_MLP = PPOArgs(
     policy_backbone=DEFAULT_MLP,
     critic_backbone=DEFAULT_MLP,
     lr=1e-3,
+    lr_type=LearningRateType.FIXED,
+    lr_adaptive_factor=1.5,
+    lr_min=1e-5,
+    lr_max=1e-2,
     value_lr=None,
     gamma=0.99,
     gae_lambda=0.95,

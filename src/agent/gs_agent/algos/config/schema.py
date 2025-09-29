@@ -12,6 +12,11 @@ class OptimizerType(GenesisEnum):
     SGD = "SGD"
 
 
+class LearningRateType(GenesisEnum):
+    FIXED = "FIXED"
+    ADAPTIVE = "ADAPTIVE"
+
+
 class AlgorithmType(GenesisEnum):
     PPO = "PPO"
     BC = "BC"
@@ -36,6 +41,12 @@ class PPOArgs(BaseModel):
     # Value function learning rate
     value_lr: PositiveFloat | None = None
     """None means use the same learning rate as the policy"""
+
+    # Adaptive learning rate
+    lr_type: LearningRateType = LearningRateType.FIXED
+    lr_adaptive_factor: PositiveFloat = 1.5
+    lr_min: PositiveFloat = 1e-5
+    lr_max: PositiveFloat = 1e-2
 
     # Discount and GAE
     gamma: PositiveFloat = Field(default=0.99, ge=0, le=1)

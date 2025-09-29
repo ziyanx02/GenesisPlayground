@@ -11,6 +11,8 @@ class GAEBufferKey(str, Enum):
     DONES = "DONES"
     VALUES = "VALUES"
     ACTION_LOGPROBS = "ACTION_LOGPROBS"
+    MU = "MU"
+    SIGMA = "SIGMA"
     ADVANTAGES = "ADVANTAGES"
     RETURNS = "RETURNS"
 

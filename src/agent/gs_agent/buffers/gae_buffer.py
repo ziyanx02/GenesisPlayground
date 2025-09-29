@@ -131,6 +131,8 @@ class GAEBuffer(BaseBuffer):
                 GAEBufferKey.DONES: torch.zeros(max_steps, num_envs, 1).byte(),
                 GAEBufferKey.VALUES: torch.zeros(max_steps, num_envs, 1),
                 GAEBufferKey.ACTION_LOGPROBS: torch.zeros(max_steps, num_envs, 1),
+                GAEBufferKey.MU: torch.zeros(max_steps, num_envs, action_dim),
+                GAEBufferKey.SIGMA: torch.zeros(max_steps, num_envs, action_dim),
             },
             batch_size=[self._max_steps, self._num_envs],
             device=self._device,
@@ -151,6 +153,8 @@ class GAEBuffer(BaseBuffer):
         self._buffer[GAEBufferKey.DONES][idx] = transition[GAEBufferKey.DONES]
         self._buffer[GAEBufferKey.VALUES][idx] = transition[GAEBufferKey.VALUES]
         self._buffer[GAEBufferKey.ACTION_LOGPROBS][idx] = transition[GAEBufferKey.ACTION_LOGPROBS]
+        self._buffer[GAEBufferKey.MU][idx] = transition[GAEBufferKey.MU]
+        self._buffer[GAEBufferKey.SIGMA][idx] = transition[GAEBufferKey.SIGMA]
 
         # Increment index
         self._idx += 1
@@ -223,6 +227,12 @@ class GAEBuffer(BaseBuffer):
                     GAEBufferKey.ACTION_LOGPROBS: self._buffer[GAEBufferKey.ACTION_LOGPROBS][
                         t_idx, b_idx
                     ].reshape(mini_batch_size, -1),
+                    GAEBufferKey.MU: self._buffer[GAEBufferKey.MU][t_idx, b_idx].reshape(
+                        mini_batch_size, -1
+                    ),
+                    GAEBufferKey.SIGMA: self._buffer[GAEBufferKey.SIGMA][t_idx, b_idx].reshape(
+                        mini_batch_size, -1
+                    ),
                     GAEBufferKey.ADVANTAGES: advantages[t_idx, b_idx].reshape(mini_batch_size, -1),
                     GAEBufferKey.RETURNS: returns[t_idx, b_idx].reshape(mini_batch_size, -1),
                 }

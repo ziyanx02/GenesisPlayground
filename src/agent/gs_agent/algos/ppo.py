@@ -7,7 +7,7 @@ from typing import Any, Final
 import torch
 import torch.nn as nn
 
-from gs_agent.algos.config.schema import PPOArgs
+from gs_agent.algos.config.schema import LearningRateType, PPOArgs
 from gs_agent.bases.algo import BaseAlgo
 from gs_agent.bases.env_wrapper import BaseEnvWrapper
 from gs_agent.bases.policy import Policy
@@ -47,6 +47,10 @@ class PPO(BaseAlgo):
             self.env.num_envs, device=self.device, dtype=torch.float
         )
         self._curr_ep_len = torch.zeros(self.env.num_envs, device=self.device, dtype=torch.float)
+
+        # Adaptive learning rate tracking
+        self._current_lr = cfg.lr
+
         #
         self._build_actor_critic()
         self._build_rollouts()
@@ -64,7 +68,7 @@ class PPO(BaseAlgo):
             policy_backbone=policy_backbone,
             action_dim=self._action_dim,
         ).to(self.device)
-        self._actor_optimizer = torch.optim.Adam(self._actor.parameters(), lr=self.cfg.lr)
+        self._actor_optimizer = torch.optim.Adam(self._actor.parameters(), lr=self._current_lr)
 
         critic_backbone = NetworkFactory.create_network(
             network_backbone_args=self.cfg.critic_backbone,
@@ -88,6 +92,26 @@ class PPO(BaseAlgo):
             device=self.device,
         )
 
+    def _update_learning_rate(self, kl_mean: float) -> None:
+        """Update learning rate adaptively based on KL divergence."""
+        if self.cfg.lr_type == LearningRateType.ADAPTIVE:
+            # If KL is too high, reduce learning rate
+            if kl_mean > self.cfg.target_kl * 1.5:  # 1.5x threshold
+                self._current_lr = max(
+                    self._current_lr / self.cfg.lr_adaptive_factor,
+                    self.cfg.lr_min
+                )
+            # If KL is too low, increase learning rate
+            elif kl_mean < self.cfg.target_kl * 0.5:  # 0.5x threshold
+                self._current_lr = min(
+                    self._current_lr * self.cfg.lr_adaptive_factor,
+                    self.cfg.lr_max
+                )
+            
+            # Update only actor optimizer learning rate
+            for param_group in self._actor_optimizer.param_groups:
+                param_group['lr'] = self._current_lr
+
     def _collect_rollouts(self, num_steps: int) -> dict[str, Any]:
         """Collect rollouts from the environment."""
         obs = self.env.get_observations()
@@ -96,7 +120,7 @@ class PPO(BaseAlgo):
         with torch.inference_mode():
             # collect rollouts and compute returns & advantages
             for _step in range(num_steps):
-                action, log_prob = self._actor(obs)
+                action, log_prob, mu, sigma = self._actor.forward_with_dist_params(obs)
                 # Step environment
                 next_obs, reward, terminated, truncated, _extra_infos = self.env.step(action)
 
@@ -108,6 +132,8 @@ class PPO(BaseAlgo):
                     GAEBufferKey.DONES: terminated,
                     GAEBufferKey.VALUES: self._critic(obs),
                     GAEBufferKey.ACTION_LOGPROBS: log_prob,
+                    GAEBufferKey.MU: mu,
+                    GAEBufferKey.SIGMA: sigma,
                 }
                 self._rollouts.append(transition)
 
@@ -168,6 +194,8 @@ class PPO(BaseAlgo):
         obs = mini_batch[GAEBufferKey.ACTOR_OBS]
         act = mini_batch[GAEBufferKey.ACTIONS]
         old_log_prob = mini_batch[GAEBufferKey.ACTION_LOGPROBS]
+        old_mu = mini_batch[GAEBufferKey.MU]
+        old_sigma = mini_batch[GAEBufferKey.SIGMA]
         advantage = mini_batch[GAEBufferKey.ADVANTAGES]
         returns = mini_batch[GAEBufferKey.RETURNS]
 
@@ -180,7 +208,25 @@ class PPO(BaseAlgo):
         )
         policy_loss = torch.max(surr1, surr2).mean()
 
-        approx_kl = (new_log_prob - old_log_prob).mean()
+        # Rename approx_kl to log_ratio
+        log_ratio = (new_log_prob - old_log_prob).mean()
+        
+        # Calculate true KL divergence between old and new distributions
+        # Get new distribution parameters
+        dist = self._actor._dist_from_obs(obs)
+        new_mu = dist.mean
+        new_sigma = dist.stddev
+        
+        # KL divergence between two Gaussian distributions
+        # KL(P||Q) = 0.5 * [log(det(Σ_Q)/det(Σ_P)) - d + tr(Σ_Q^{-1} * Σ_P) + (μ_Q - μ_P)^T * Σ_Q^{-1} * (μ_Q - μ_P)]
+        # For diagonal Gaussians: KL = 0.5 * [sum(log(σ_Q^2/σ_P^2)) - d + sum(σ_P^2/σ_Q^2) + sum((μ_Q - μ_P)^2/σ_Q^2)]
+        kl_div = 0.5 * (
+            torch.log(new_sigma**2 / (old_sigma**2 + 1e-8)).sum(dim=-1, keepdim=True)  # log ratio of variances
+            - new_mu.shape[-1]  # dimension
+            + (old_sigma**2 / (new_sigma**2 + 1e-8)).sum(dim=-1, keepdim=True)  # trace term
+            + ((new_mu - old_mu)**2 / (new_sigma**2 + 1e-8)).sum(dim=-1, keepdim=True)  # mean difference term
+        )
+        kl_mean = kl_div.mean()
 
         # Calculate value loss
         values = self._critic(obs)
@@ -210,7 +256,8 @@ class PPO(BaseAlgo):
             "policy_loss": policy_loss.item(),
             "value_loss": value_loss.item(),
             "entropy_loss": entropy_loss.item(),
-            "approx_kl": approx_kl.item(),
+            "log_ratio": log_ratio.item(),
+            "kl_mean": kl_mean.item(),
         }
 
     def train_one_iteration(self) -> dict[str, Any]:
@@ -232,6 +279,10 @@ class PPO(BaseAlgo):
         t2 = time.time()
         train_time = t2 - t1
 
+        # Update learning rate adaptively based on KL divergence
+        avg_kl_mean = statistics.mean([metrics["kl_mean"] for metrics in train_metrics_list])
+        self._update_learning_rate(avg_kl_mean)
+
         self._rollouts.reset()
 
         iteration_infos = {
@@ -249,9 +300,13 @@ class PPO(BaseAlgo):
                 "entropy_loss": statistics.mean(
                     [metrics["entropy_loss"] for metrics in train_metrics_list]
                 ),
-                "approx_kl": statistics.mean(
-                    [metrics["approx_kl"] for metrics in train_metrics_list]
+                "log_ratio": statistics.mean(
+                    [metrics["log_ratio"] for metrics in train_metrics_list]
                 ),
+                "kl_mean": statistics.mean(
+                    [metrics["kl_mean"] for metrics in train_metrics_list]
+                ),
+                "learning_rate": self._current_lr,
             },
             "speed": {
                 "rollout_time": rollouts_time,

@@ -33,7 +33,7 @@ class GaussianPolicy(Policy):
             deterministic: Whether to use deterministic action.
 
         Returns:
-            GaussianPolicyOutput: Policy output.
+            tuple: (action, log_prob)
         """
         # Convert observation to tensor format
         dist = self._dist_from_obs(obs)
@@ -44,6 +44,36 @@ class GaussianPolicy(Policy):
         # Compute log probability with tanh transformation
         log_prob = dist.log_prob(action).sum(-1, keepdim=True)
         return action, log_prob
+
+    def forward_with_dist_params(
+        self,
+        obs: torch.Tensor,
+        *,
+        deterministic: bool = False,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Forward pass of the policy with distribution parameters.
+
+        Args:
+            obs: Typed observation batch.
+            deterministic: Whether to use deterministic action.
+
+        Returns:
+            tuple: (action, log_prob, mu, sigma)
+        """
+        # Convert observation to tensor format
+        dist = self._dist_from_obs(obs)
+        if deterministic:
+            action = dist.mean
+        else:
+            action = dist.sample()
+        # Compute log probability with tanh transformation
+        log_prob = dist.log_prob(action).sum(-1, keepdim=True)
+        
+        # Extract mu and sigma from the distribution
+        mu = dist.mean
+        sigma = dist.stddev
+        
+        return action, log_prob, mu, sigma
 
     def _dist_from_obs(self, obs: torch.Tensor) -> Normal:
         feature = self.backbone(obs)
