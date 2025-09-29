@@ -73,10 +73,10 @@ EnvArgsRegistry["walk_default"] = LeggedRobotEnvArgs(
         "LinVelZPenalty": 2.0,
         "AngVelXYPenalty": 1.0,
         ### Pose Tracking ###
-        "OrientationPenalty": 50.0,
+        "OrientationPenalty": 500.0,
         ### Regularization ###
         "TorquePenalty": 0.0001,
-        "ActionRatePenalty": 0.1,
+        "ActionRatePenalty": 0.03,
         "DofPosLimitPenalty": 100.0,
         "G1BaseHeightPenalty": 300.0,
         "ActionLimitPenalty": 1.0,
@@ -84,42 +84,42 @@ EnvArgsRegistry["walk_default"] = LeggedRobotEnvArgs(
         "AnkleTorquePenalty": 0.001,
         "HipYawPenalty": 10.0,
         "UpperBodyDofPenalty": 10.0,
-        "FeetAirTimeReward": 1.0,
-    },
-    img_resolution=(480, 270),
-    action_latency=1,
-    obs_history_len=1,
-)
-
-
-EnvArgsRegistry["custom_desk"] = LeggedRobotEnvArgs(
-    gs_init_args=GenesisInitArgsRegistry["default"],
-    scene_args=SceneArgsRegistry["custom_scene_desk"],
-    robot_args=RobotArgsRegistry["g1_default"],
-    objects_args=[],
-    sensors_args=[],
-    reward_term="g1",
-    reward_args={
-        ### Velocity Tracking ###
-        "LinVelXYReward": 10.0,
-        "AngVelZReward": 10.0,
-        "LinVelZPenalty": 2.0,
-        "AngVelXYPenalty": 1.0,
-        ### Pose Tracking ###
-        "OrientationPenalty": 100.0,
-        ### Regularization ###
-        "TorquePenalty": 0.0001,
-        "ActionRatePenalty": 0.1,
-        "DofPosLimitPenalty": 100.0,
-        "G1BaseHeightPenalty": 300.0,
-        "ActionLimitPenalty": 1.0,
-        ### Motion Constraints ###
-        "AnkleTorquePenalty": 0.0001,
-        "HipYawPenalty": 1.0,
-        "UpperBodyDofPenalty": 3.0,
         "FeetAirTimeReward": 10.0,
     },
     img_resolution=(480, 270),
     action_latency=1,
     obs_history_len=1,
 )
+
+
+# EnvArgsRegistry["custom_desk"] = LeggedRobotEnvArgs(
+#     gs_init_args=GenesisInitArgsRegistry["default"],
+#     scene_args=SceneArgsRegistry["custom_scene_desk"],
+#     robot_args=RobotArgsRegistry["g1_default"],
+#     objects_args=[],
+#     sensors_args=[],
+#     reward_term="g1",
+#     reward_args={
+#         ### Velocity Tracking ###
+#         "LinVelXYReward": 10.0,
+#         "AngVelZReward": 10.0,
+#         "LinVelZPenalty": 2.0,
+#         "AngVelXYPenalty": 1.0,
+#         ### Pose Tracking ###
+#         "OrientationPenalty": 500.0,
+#         ### Regularization ###
+#         "TorquePenalty": 0.0001,
+#         "ActionRatePenalty": 0.1,
+#         "DofPosLimitPenalty": 100.0,
+#         "G1BaseHeightPenalty": 300.0,
+#         "ActionLimitPenalty": 1.0,
+#         ### Motion Constraints ###
+#         "AnkleTorquePenalty": 0.0001,
+#         "HipYawPenalty": 1.0,
+#         "UpperBodyDofPenalty": 3.0,
+#         "FeetAirTimeReward": 20.0,
+#     },
+#     img_resolution=(480, 270),
+#     action_latency=1,
+#     obs_history_len=1,
+# )
