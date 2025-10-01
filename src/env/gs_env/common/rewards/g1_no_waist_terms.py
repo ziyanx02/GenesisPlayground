@@ -7,8 +7,8 @@ from .leggedrobot_terms import (
     AngVelZReward,  # noqa
     BaseHeightPenalty,
     DofPosLimitPenalty,  # noqa
-    FeetAirTimeReward,  # noqa
     FeetAirTimePenalty,  # noqa
+    FeetAirTimeReward,  # noqa
     FeetHeightPenalty,
     FeetZVelocityPenalty,  # noqa
     LinVelXYReward,  # noqa
@@ -35,7 +35,9 @@ class UpperBodyDofPenalty(RewardTerm):
     required_keys = ("dof_pos", "dof_vel")
 
     def _compute(self, dof_pos: torch.Tensor, dof_vel: torch.Tensor) -> torch.Tensor:  # type: ignore
-        return -torch.sum(torch.square(dof_pos[:, 12:]), dim=-1) - 0.01 * torch.sum(torch.square(dof_vel[:, 12:]), dim=-1)
+        return -torch.sum(torch.square(dof_pos[:, 12:]), dim=-1) - 0.01 * torch.sum(
+            torch.square(dof_vel[:, 12:]), dim=-1
+        )
 
 
 class UpperBodyActionPenalty(RewardTerm):
@@ -111,3 +113,18 @@ class G1FeetContactForcePenalty(RewardTerm):
     def _compute(self, feet_contact_force: torch.Tensor) -> torch.Tensor:  # type: ignore
         contact_force_diff = 200 - feet_contact_force.max(dim=-1).values.clamp(max=200)
         return -torch.square(contact_force_diff / 200)
+
+
+class FeetOrientationPenalty(RewardTerm):
+    """
+    Penalize the feet orientation.
+
+    Args:
+        feet_orientation: Feet orientation tensor of shape (B, 2, 3) where B is the batch size.
+    """
+
+    required_keys = ("feet_orientation",)
+
+    def _compute(self, feet_orientation: torch.Tensor) -> torch.Tensor:  # type: ignore
+        feet_orientation_deviation = feet_orientation[:, :, :2].square().sum(dim=-1)
+        return -feet_orientation_deviation.sum(dim=-1)

@@ -91,6 +91,7 @@ EnvArgsRegistry["walk_default"] = LeggedRobotEnvArgs(
         "G1FeetHeightPenalty": 100.0,
         "G1FeetContactForcePenalty": 30.0,
         "FeetZVelocityPenalty": 10.0,
+        "FeetOrientationPenalty": 30.0,
     },
     img_resolution=(480, 270),
     action_latency=1,

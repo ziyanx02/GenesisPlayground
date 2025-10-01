@@ -352,6 +352,10 @@ class LeggedRobotBase(BaseGymRobot):
         return self._robot.get_links_pos()
 
     @property
+    def link_quaternions(self) -> torch.Tensor:
+        return self._robot.get_links_quat()
+
+    @property
     def link_velocities(self) -> torch.Tensor:
         return self._robot.get_links_vel()
 
