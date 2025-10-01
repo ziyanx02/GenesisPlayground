@@ -148,7 +148,7 @@ class ActionLimitPenalty(RewardTerm):
     required_keys = ("action",)
 
     def _compute(self, action: torch.Tensor) -> torch.Tensor:  # type: ignore
-        return -torch.sum(torch.square(torch.abs(action).clip(min=8) - 8), dim=1)
+        return -torch.sum(torch.square(torch.abs(action).clip(min=12) - 12), dim=1)
 
 
 class FeetAirTimeReward(RewardTerm):
@@ -171,6 +171,26 @@ class FeetAirTimeReward(RewardTerm):
         return rew_air_time
 
 
+class FeetAirTimePenalty(RewardTerm):
+    """
+    Penalize the feet air time.
+
+    Args:
+        feet_air_time: Feet air time tensor of shape (B, 2) where B is the batch size.
+        feet_first_contact: Feet first contact tensor of shape (B, 2) where B is the batch size.
+        commands: Commands tensor of shape (B, 3) where B is the batch size.
+    """
+
+    required_keys = ("feet_first_contact", "feet_air_time", "commands")
+
+    def _compute(
+        self, feet_first_contact: torch.Tensor, feet_air_time: torch.Tensor, commands: torch.Tensor
+    ) -> torch.Tensor:  # type: ignore
+        pen_air_time = torch.sum((feet_air_time.clip(max=0.5) - 0.5) * feet_first_contact, dim=1)
+        pen_air_time *= torch.norm(commands, dim=1) > 0.1
+        return pen_air_time
+
+
 class FeetHeightPenalty(RewardTerm):
     """
     Reward the feet air time.
@@ -187,5 +207,18 @@ class FeetHeightPenalty(RewardTerm):
         feet_height = feet_height.max(dim=1)[0] - self.target_height
         feet_height = feet_height.clip(max=0.0)
         feet_height *= torch.norm(commands, dim=1) > 0.1
-        print(feet_height)
         return feet_height
+
+class FeetZVelocityPenalty(RewardTerm):
+    """
+    Penalize the feet vertical velocity.
+
+    Args:
+        feet_z_velocity: Feet vertical velocity tensor of shape (B, 2) where B is the batch size.
+    """
+
+    required_keys = ("feet_z_velocity",)
+
+    def _compute(self, feet_z_velocity: torch.Tensor) -> torch.Tensor:  # type: ignore
+        feet_z_velocity = torch.square(feet_z_velocity).sum(dim=1)
+        return -feet_z_velocity

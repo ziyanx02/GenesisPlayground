@@ -161,13 +161,14 @@ def evaluate_policy(
     total_reward = 0.0
 
     try:
-        while True:
+        for _ in range(200):
             # Get action from policy
             with torch.no_grad():
                 action, _log_prob = inference_policy(obs, deterministic=True)
 
             # Step environment
             obs, reward, terminated, truncated, _ = wrapped_env.step(action)
+            print(wrapped_env.env.feet_contact_force[0].cpu().numpy())
 
             # Accumulate reward
             total_reward += reward.item()

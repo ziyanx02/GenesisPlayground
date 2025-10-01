@@ -66,7 +66,7 @@ class WalkingEnv(BaseEnv):
         # == set up camera ==
         self._floating_camera = self._scene.scene.add_camera(
             res=(480, 480),
-            fov=40,
+            fov=60,
             GUI=False,
         )
 
@@ -74,7 +74,7 @@ class WalkingEnv(BaseEnv):
         self._scene.build()
 
         # == setup reward scalars and functions ==
-        self.dt = self._scene.scene.dt
+        self.dt = self._scene.scene.dt * args.robot_args.decimation
         self._reward_functions = {}
         module_name = f"gs_env.common.rewards.{self._args.reward_term}_terms"
         module = importlib.import_module(module_name)
@@ -156,8 +156,13 @@ class WalkingEnv(BaseEnv):
         self.link_positions = torch.zeros(
             (self.num_envs, self._robot.n_links, 3), device=self.device, dtype=torch.float32
         )
+        self.link_velocities = torch.zeros(
+            (self.num_envs, self._robot.n_links, 3), device=self.device, dtype=torch.float32
+        )
         self.feet_height = torch.zeros((self.num_envs, 2), device=self.device, dtype=torch.float32)
+        self.feet_z_velocity = torch.zeros((self.num_envs, 2), device=self.device, dtype=torch.float32)
         self.feet_contact = torch.zeros((self.num_envs, 2), device=self.device, dtype=torch.float32)
+        self.feet_contact_force = torch.zeros((self.num_envs, 2), device=self.device, dtype=torch.float32)
         self.feet_first_contact = torch.zeros(
             (self.num_envs, 2), device=self.device, dtype=torch.float32
         )
@@ -198,8 +203,8 @@ class WalkingEnv(BaseEnv):
     def get_terminated(self) -> torch.Tensor:
         reset_buf = self.get_truncated()
         tilt_mask = torch.logical_or(
-            torch.abs(self.base_euler[:, 0]) > 0.5,
-            torch.abs(self.base_euler[:, 1]) > 0.5,
+            torch.abs(self.base_euler[:, 0]) > 0.3,
+            torch.abs(self.base_euler[:, 1]) > 0.3,
         )
         height_mask = self.base_pos[:, 2] < 0.3
         reset_buf |= tilt_mask
@@ -281,16 +286,20 @@ class WalkingEnv(BaseEnv):
             self._resample_commands(envs_idx=torch.IntTensor(range(self.num_envs)))
 
         self.link_contact_forces[:] = self._robot.link_contact_forces
-        self.feet_contact[:] = (
+        self.feet_contact_force[:] = (
             self.link_contact_forces[
                 :, [self._robot.left_foot_link_idx, self._robot.right_foot_link_idx], 2
             ]
-            > 1.0
         )
+        self.feet_contact[:] = self.feet_contact_force > 1.0
         self.feet_first_contact[:] = (self.feet_air_time > 0.0) * self.feet_contact
         self.feet_air_time += self.dt
         self.link_positions[:] = self._robot.link_positions
         self.feet_height[:] = self.link_positions[
+            :, [self._robot.left_foot_link_idx, self._robot.right_foot_link_idx], 2
+        ]
+        self.link_velocities[:] = self._robot.link_velocities
+        self.feet_z_velocity[:] = self.link_velocities[
             :, [self._robot.left_foot_link_idx, self._robot.right_foot_link_idx], 2
         ]
 
@@ -322,13 +331,14 @@ class WalkingEnv(BaseEnv):
                     "feet_first_contact": self.feet_first_contact,
                     "feet_air_time": self.feet_air_time,
                     "feet_height": self.feet_height,
+                    "feet_z_velocity": self.feet_z_velocity,
+                    "feet_contact_force": self.feet_contact_force,
                 }
             )
             if reward.sum() >= 0:
                 reward_total_pos += reward
             else:
                 reward_total_neg += reward
-            print(key, reward)
             reward_dict[f"{key}"] = reward.clone()
         reward_total = reward_total_pos * torch.exp(reward_total_neg)
         reward_dict["Total"] = reward_total
@@ -340,6 +350,7 @@ class WalkingEnv(BaseEnv):
     def _render_headless(self) -> None:
         if self._rendering and len(self._rendered_images) < 1000:
             robot_pos = self._robot.base_pos[0]
+            robot_pos[2] = 0.7
             self._floating_camera.set_pose(
                 pos=robot_pos + self.camera_pos,
                 lookat=robot_pos + self.camera_lookat,
@@ -393,6 +404,7 @@ class WalkingEnv(BaseEnv):
 
     def _resample_commands(self, envs_idx: torch.IntTensor) -> None:
         self.commands[envs_idx, :] = torch.rand(len(envs_idx), 3, device=self._device)
+        self.commands[:, 1] *= 0
         self.commands[:, :2] *= torch.norm(self.commands[:, :2], dim=-1, keepdim=True) > 0.3
         self.commands[:, 2] *= torch.abs(self.commands[:, 2]) > 0.3
 

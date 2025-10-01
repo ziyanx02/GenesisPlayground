@@ -279,7 +279,7 @@ RobotArgsRegistry["g1_default"] = HumanoidRobotArgs(
         "wrist_pitch": 0.2,
         "wrist_yaw": 0.2,
     },
-    action_scale=0.15,
+    action_scale=0.25,
     ctrl_freq=50,
     decimation=4,
 )

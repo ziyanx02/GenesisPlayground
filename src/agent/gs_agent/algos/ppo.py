@@ -258,6 +258,8 @@ class PPO(BaseAlgo):
             "entropy_loss": entropy_loss.item(),
             "log_ratio": log_ratio.item(),
             "kl_mean": kl_mean.item(),
+            "mean_std": self._actor.action_std.mean().item(),
+            "max_std": self._actor.action_std.max().item(),
         }
 
     def train_one_iteration(self) -> dict[str, Any]:
@@ -305,6 +307,12 @@ class PPO(BaseAlgo):
                 ),
                 "kl_mean": statistics.mean(
                     [metrics["kl_mean"] for metrics in train_metrics_list]
+                ),
+                "mean_std": statistics.mean(
+                    [metrics["mean_std"] for metrics in train_metrics_list]
+                ),
+                "max_std": statistics.mean(
+                    [metrics["max_std"] for metrics in train_metrics_list]
                 ),
                 "learning_rate": self._current_lr,
             },

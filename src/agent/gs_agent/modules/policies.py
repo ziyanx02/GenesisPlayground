@@ -11,7 +11,7 @@ class GaussianPolicy(Policy):
     def __init__(self, policy_backbone: NetworkBackbone, action_dim: int) -> None:
         super().__init__(policy_backbone, action_dim)
         self.mu = nn.Linear(self.backbone.output_dim, self.action_dim)
-        self.log_std = nn.Parameter(torch.ones(self.action_dim) * 1.0)
+        self.log_std = nn.Parameter(torch.ones(self.action_dim) * 0.0)
         Normal.set_default_validate_args(False)
 
         self._init_params()
@@ -108,6 +108,10 @@ class GaussianPolicy(Policy):
 
     def get_action_shape(self) -> tuple[int, ...]:
         return (self.action_dim,)
+
+    @property
+    def action_std(self) -> torch.Tensor:
+        return self.log_std.exp()
 
 
 class DeterministicPolicy(Policy):
