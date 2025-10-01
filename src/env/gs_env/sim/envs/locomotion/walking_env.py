@@ -315,7 +315,7 @@ class WalkingEnv(BaseEnv):
             :, [self._robot.left_foot_link_idx, self._robot.right_foot_link_idx]
         ].reshape(-1, 4)
         self.feet_orientation[:] = quat_apply(
-            quat_inv(feet_quaternions), self.global_gravity.repeat(2 * self.num_envs, 1)
+            quat_inv(feet_quaternions), self.global_gravity.repeat(2, 1)
         ).reshape(self.num_envs, 2, 3)
 
     def get_info(self, envs_idx: torch.IntTensor | None = None) -> dict[str, Any]:
