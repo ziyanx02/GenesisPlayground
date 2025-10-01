@@ -108,7 +108,8 @@ EnvArgsRegistry["teleop_teacher_default"] = TeleopTeacherEnvArgs(
     img_resolution=(480, 270),
     action_latency=1,
     obs_history_len=1,
-    motion_path="",
+    motion_path="/home/h975894552/dataset/retargeted/walk1.npy",
+    # motion_path="/home/h975894552/GenesisPlayground-telepo/g1_toy_trajs.npz",
     future_steps=20,
     resample_interval=1000,
 )

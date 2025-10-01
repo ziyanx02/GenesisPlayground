@@ -5,6 +5,7 @@ import genesis as gs
 import gymnasium as gym
 import numpy as np
 import torch
+from PIL import Image
 
 from gs_env.common.bases.base_env import BaseEnv
 from gs_env.common.utils.math_utils import (
@@ -58,6 +59,13 @@ class TeleopTeacherEnv(BaseEnv):
             scene=self._scene.scene,
             args=args.robot_args,
             device=self._device,
+        )
+
+        # == set up camera ==
+        self._floating_camera = self._scene.scene.add_camera(
+            res=(480, 480),
+            fov=40,
+            GUI=False,
         )
 
         # == build the scene ==
@@ -142,10 +150,17 @@ class TeleopTeacherEnv(BaseEnv):
         self.reset_buf = torch.zeros(self.num_envs, dtype=torch.bool, device=self._device)
         self.time_out_buf = torch.zeros(self.num_envs, dtype=torch.bool, device=self._device)
         self.time_since_reset = torch.zeros(self.num_envs, device=self._device)
+
+        # rendering
+        self._rendered_images = []
+        self._rendering = False
+        self.camera_lookat = torch.tensor([0.0, 0.0, 0.0], device=self._device)
+        self.camera_pos = torch.tensor([-1.0, -1.0, 0.5], device=self._device)
     
     def load_trajectories(self) -> None:
-        # data = np.load(self._args.motion_path, allow_pickle=True)
-        data = {"tmp": {"dof_pos": np.zeros((100, 36)), "length": 100, "fps": 30}}
+        data = np.load(self._args.motion_path, allow_pickle=True)
+        data = data.item()
+        # data = {"tmp": {"dof_pos": np.zeros((100, 36)), "length": 100, "fps": 30}}
         # "name": {"dof_pos": ndarray(T, 36), "length": int, "fps": int}
         self.raw_motion = []
         self.raw_motion_lengths = []
@@ -189,9 +204,9 @@ class TeleopTeacherEnv(BaseEnv):
         self._reset_buffers(envs_idx=envs_idx)
         self.resample_start_time(envs_idx=envs_idx)
         
-        default_pos = self._ref_pos[envs_idx, self._ref_start]
-        default_quat = self._ref_quat[envs_idx, self._ref_start]
-        default_dof_pos = self._ref_dof_pos[envs_idx, self._ref_start]
+        default_pos = self._ref_pos[envs_idx, self._ref_start[envs_idx]]
+        default_quat = self._ref_quat[envs_idx, self._ref_start[envs_idx]]
+        default_dof_pos = self._ref_dof_pos[envs_idx, self._ref_start[envs_idx]]
         dof_pos = (
             default_dof_pos
             + (torch.rand(len(envs_idx), self._robot.dof_dim, device=self._device) - 0.5) * 0.3
@@ -201,13 +216,10 @@ class TeleopTeacherEnv(BaseEnv):
         self._episode_length[envs_idx] = 0
 
     def get_terminated(self) -> torch.Tensor:
-        reset_buf = self.get_truncated()
-        reset_buf |= self._ref_start[:] + self._episode_length[:] >= self._ref_len[:]
-        reset_buf |= torch.logical_or(
-            torch.abs(self.base_euler[:, 0]) > 0.3,
-            torch.abs(self.base_euler[:, 1]) > 0.3,
-        )
-        reset_buf |= self.base_pos[:, 2] < 0.3
+        reset_buf  = torch.zeros(self.num_envs, dtype=torch.bool, device=self._device)
+        reset_buf |= (self._ref_start + self._episode_length) >= self._ref_len
+        reset_buf |= (torch.abs(self.base_euler[:, 0]) > 0.3) | (torch.abs(self.base_euler[:, 1]) > 0.3)
+        reset_buf |= (self.base_pos[:, 2] < 0.3)
         self.reset_buf[:] = reset_buf
         return reset_buf
 
@@ -246,13 +258,21 @@ class TeleopTeacherEnv(BaseEnv):
         return obs_tensor
 
     def apply_action(self, action: torch.Tensor) -> None:
-        action = action.detach().to(self._device)
+        low  = torch.as_tensor(self._action_space.low,  device=self._device, dtype=torch.float32)
+        high = torch.as_tensor(self._action_space.high, device=self._device, dtype=torch.float32)
+        action = torch.clamp(action, min=low, max=high)
+
         self._action = action
+        print(torch.mean(action))
+        # update action buffer
         self._action_buf[:] = torch.cat(
             [self._action_buf[:, :, 1:], action.unsqueeze(-1)], dim=-1
         )
+        # delayed action execution
         exec_action = self._action_buf[:, :, 0]
+        # scale and clip again after scaling (optional but safe)
         exec_action *= self._args.robot_args.action_scale
+        exec_action = torch.clamp(exec_action, low * self._args.robot_args.action_scale, high * self._args.robot_args.action_scale)
 
         self._torque *= 0
 
@@ -274,6 +294,9 @@ class TeleopTeacherEnv(BaseEnv):
         # resample
         if self._common_step_counter % self._args.resample_interval == 0:
             self.resample_trajectories_and_reset()
+        
+        # Render if rendering is enabled
+        self._render_headless()
 
     def get_extra_infos(self) -> dict[str, Any]:
         return self._extra_info
@@ -337,6 +360,60 @@ class TeleopTeacherEnv(BaseEnv):
         reward_dict["reward_total"] = reward_total
 
         return reward_total, reward_dict
+
+    def _render_headless(self) -> None:
+        if self._rendering and len(self._rendered_images) < 1000:
+            robot_pos = self._robot.base_pos[0]
+            self._floating_camera.set_pose(
+                pos=robot_pos + self.camera_pos,
+                lookat=robot_pos + self.camera_lookat,
+            )
+            rgb, _, _, _ = self._floating_camera.render()
+            self._rendered_images.append(rgb)
+
+    def start_rendering(self) -> None:
+        self._rendering = True
+        self._rendered_images = []
+
+    def stop_rendering(self, save_gif: bool = True, gif_path: str = ".") -> None:
+        self._rendering = False
+        if save_gif and self._rendered_images:
+            self.save_gif(gif_path)
+
+    def save_gif(self, gif_path: str, duration: int = 300) -> None:
+        """
+        Save the rendered images as a GIF.
+
+        Args:
+            gif_path: Path to save the GIF. If None, generates a timestamped filename.
+            duration: Duration of each frame in milliseconds (default: 100ms)
+        """
+        if not self._rendered_images:
+            print("No rendered images to save.")
+            return
+
+        # Convert numpy arrays to PIL Images
+        pil_images = []
+        for img_array in self._rendered_images:
+            # Convert from numpy array to PIL Image
+            # Assuming the image is in RGB format (H, W, 3)
+            if img_array.dtype != np.uint8:
+                img_array = (img_array * 255).astype(np.uint8)
+            pil_img = Image.fromarray(img_array)
+            pil_images.append(pil_img)
+
+        # Save as GIF
+        if pil_images:
+            pil_images[0].save(
+                gif_path,
+                save_all=True,
+                append_images=pil_images[1:],
+                duration=duration,
+                loop=0,  # Infinite loop
+            )
+            print(f"GIF saved to: {gif_path}")
+        else:
+            print("No images to save as GIF.")
 
     @property
     def num_envs(self) -> int:
