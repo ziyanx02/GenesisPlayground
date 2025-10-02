@@ -184,7 +184,7 @@ class WalkingEnv(BaseEnv):
         self.reset_buf = torch.zeros(self.num_envs, dtype=torch.bool, device=self._device)
         self.time_out_buf = torch.zeros(self.num_envs, dtype=torch.bool, device=self._device)
         self.time_since_reset = torch.zeros(self.num_envs, device=self._device)
-        self.time_since_resample = 0.0
+        self.time_since_resample = torch.zeros(self.num_envs, device=self._device)
 
         # rendering
         self._rendered_images = []
@@ -209,6 +209,7 @@ class WalkingEnv(BaseEnv):
         self.feet_air_time[envs_idx] = 0.0
         self._robot.set_state(pos=default_pos, quat=quat, dof_pos=dof_pos, envs_idx=envs_idx)
         self._resample_commands(envs_idx=envs_idx)
+        self.time_since_resample[envs_idx] = 0.0
 
     def get_terminated(self) -> torch.Tensor:
         reset_buf = self.get_truncated()
@@ -276,6 +277,11 @@ class WalkingEnv(BaseEnv):
         self._last_action = self._action.clone()
         self.feet_air_time *= 1 - self.feet_contact
 
+        resample_env_ids = torch.nonzero(self.time_since_resample > self._command_resample_time, as_tuple=False).squeeze(-1)
+        self._resample_commands(envs_idx=resample_env_ids)
+        self.time_since_resample[resample_env_ids] = 0.0
+
+
     def get_extra_infos(self) -> dict[str, Any]:
         return self._extra_info
 
@@ -290,10 +296,6 @@ class WalkingEnv(BaseEnv):
         )
         self.base_lin_vel[:] = quat_apply(inv_quat_yaw, self._robot.get_vel())
         self.base_ang_vel[:] = quat_apply(quat_inv(base_quat_rel), self._robot.get_ang())
-
-        if self.time_since_resample > self._command_resample_time:
-            self.time_since_resample = 0.0
-            self._resample_commands(envs_idx=torch.IntTensor(range(self.num_envs)))
 
         self.link_contact_forces[:] = self._robot.link_contact_forces
         self.feet_contact_force[:] = self.link_contact_forces[

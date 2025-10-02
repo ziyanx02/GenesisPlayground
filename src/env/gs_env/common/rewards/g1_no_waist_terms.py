@@ -15,6 +15,8 @@ from .leggedrobot_terms import (
     LinVelZPenalty,  # noqa
     OrientationPenalty,  # noqa
     TorquePenalty,  # noqa
+    StandStillFeetContactPenalty,  # noqa
+    FeetContactForceLimitPenalty,
 )
 from .reward_terms import RewardTerm
 
@@ -108,10 +110,11 @@ class G1FeetContactForcePenalty(RewardTerm):
         feet_contact_force: Feet contact force tensor of shape (B, D) where B is the batch size and D is the number of DoFs.
     """
 
-    required_keys = ("feet_contact_force",)
+    required_keys = ("feet_contact_force", "commands")
 
-    def _compute(self, feet_contact_force: torch.Tensor) -> torch.Tensor:  # type: ignore
+    def _compute(self, feet_contact_force: torch.Tensor, commands: torch.Tensor) -> torch.Tensor:  # type: ignore
         contact_force_diff = 200 - feet_contact_force.max(dim=-1).values.clamp(max=200)
+        contact_force_diff *= torch.norm(commands, dim=1) > 0.1
         return -torch.square(contact_force_diff / 200)
 
 
@@ -128,3 +131,6 @@ class FeetOrientationPenalty(RewardTerm):
     def _compute(self, feet_orientation: torch.Tensor) -> torch.Tensor:  # type: ignore
         feet_orientation_deviation = feet_orientation[:, :, :2].square().sum(dim=-1)
         return -feet_orientation_deviation.sum(dim=-1)
+
+class G1FeetContactForceLimitPenalty(FeetContactForceLimitPenalty):
+    contact_force_limit = 300.0

@@ -203,7 +203,16 @@ def evaluate_policy(
     total_reward = 0.0
 
     try:
-        for _ in range(200):
+        for _ in range(300):
+            if step_count < 100:
+                wrapped_env.env.commands[:] = 0.0  # Forward velocity command
+            elif step_count < 200:
+                wrapped_env.env.commands[:, 0] = 0.0  # Stop command
+                wrapped_env.env.commands[:, 2] = 1.0  # Stop command
+            else:
+                wrapped_env.env.commands[:, 0] = 1.0  # Backward velocity command
+                wrapped_env.env.commands[:, 2] = 0.0  # Stop command
+
             # Get action from policy
             with torch.no_grad():
                 action, _log_prob = inference_policy(obs, deterministic=True)

@@ -182,13 +182,14 @@ class FeetAirTimePenalty(RewardTerm):
     """
 
     required_keys = ("feet_first_contact", "feet_air_time", "commands")
+    target_feet_air_time = 0.5
 
     def _compute(
         self, feet_first_contact: torch.Tensor, feet_air_time: torch.Tensor, commands: torch.Tensor
     ) -> torch.Tensor:  # type: ignore
-        pen_air_time = torch.sum((feet_air_time.clip(max=0.5) - 0.5) * feet_first_contact, dim=1)
+        pen_air_time = torch.sum(torch.square(feet_air_time - self.target_feet_air_time) * feet_first_contact, dim=1)
         pen_air_time *= torch.norm(commands, dim=1) > 0.1
-        return pen_air_time
+        return -pen_air_time
 
 
 class FeetHeightPenalty(RewardTerm):
@@ -209,6 +210,7 @@ class FeetHeightPenalty(RewardTerm):
         feet_height *= torch.norm(commands, dim=1) > 0.1
         return feet_height
 
+
 class FeetZVelocityPenalty(RewardTerm):
     """
     Penalize the feet vertical velocity.
@@ -222,3 +224,35 @@ class FeetZVelocityPenalty(RewardTerm):
     def _compute(self, feet_z_velocity: torch.Tensor) -> torch.Tensor:  # type: ignore
         feet_z_velocity = torch.square(feet_z_velocity).sum(dim=1)
         return -feet_z_velocity
+    
+
+class StandStillFeetContactPenalty(RewardTerm):
+    """
+    Penalize the uneven feet contact force when stand still.
+
+    Args:
+        feet_contact_force: Feet contact force tensor of shape (B, 2) where B is the batch size.
+    """
+
+    required_keys = ("feet_contact_force", "commands")
+
+    def _compute(self, feet_contact_force: torch.Tensor, commands: torch.Tensor) -> torch.Tensor:  # type: ignore
+        contact_force_diff = feet_contact_force - feet_contact_force.mean(dim=1, keepdim=True)
+        contact_force_diff = torch.square(contact_force_diff).sum(dim=1)
+        contact_force_diff *= torch.norm(commands, dim=1) < 0.1
+        return -contact_force_diff
+
+class FeetContactForceLimitPenalty(RewardTerm):
+    """
+    Penalize the feet contact force limit violations.
+
+    Args:
+        feet_contact_force: Feet contact force tensor of shape (B, 2) where B is the batch size.
+    """
+
+    required_keys = ("feet_contact_force",)
+    contact_force_limit: float = 0.0
+
+    def _compute(self, feet_contact_force: torch.Tensor) -> torch.Tensor:  # type: ignore
+        out_of_limits = (feet_contact_force - self.contact_force_limit).clip(min=0.0).square()
+        return -torch.sum(out_of_limits, dim=1)
