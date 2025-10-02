@@ -3,8 +3,9 @@
 
 import glob
 import os
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
+from typing import Any
 
 import fire
 import torch
@@ -18,15 +19,33 @@ from gs_agent.wrappers.gs_env_wrapper import GenesisEnvWrapper
 from gs_env.common.bases.base_env import BaseEnv
 from gs_env.sim.envs.config.registry import EnvArgsRegistry
 from gs_env.sim.envs.locomotion.walking_env import WalkingEnv
+from utils import apply_overrides_generic
+
+
+def _apply_env_overrides(env_name: str, overrides: dict[str, Any] | None) -> Any:
+    """Create a copied env args from registry with deep overrides applied.
+
+    Supports dot-path keys addressing all fields under EnvArgs/LeggedRobotEnvArgs:
+    - Top-level: reward_term, img_resolution, action_latency, obs_history_len, ...
+    - Dict fields: reward_args.<KEY>=<val>
+    - Nested models: robot_args.morph_args.file=..., scene_args.floor_height=...
+    - Lists by index: objects_args.0.morph_args.scale=1.1, sensors_args[1].name=...
+
+    Optional prefixes accepted: cfgs., env.
+    Values are parsed to bool/int/float when possible; comma-separated values become lists/tuples
+    if the target field is a sequence.
+    """
+    base_args = EnvArgsRegistry[env_name]
+    return apply_overrides_generic(base_args, overrides, prefixes=("cfgs.", "env."))
 
 
 def create_gs_env(
-    env_name: str = "walk_default",
     show_viewer: bool = False,
     num_envs: int = 4096,
     device: str = "cuda",
+    args: Any = None,
 ) -> BaseEnv:
-    """Create gym environment wrapper."""
+    """Create gym environment wrapper with optional config overrides."""
     if torch.backends.mps.is_available():
         device_tensor = torch.device("mps")
     elif torch.cuda.is_available() and device == "cuda":
@@ -36,14 +55,29 @@ def create_gs_env(
     print(f"Using device: {device_tensor}")
 
     return WalkingEnv(
-        args=EnvArgsRegistry[env_name],
+        args=args,
         num_envs=num_envs,
         show_viewer=show_viewer,
         device=device_tensor,  # type: ignore
     )
 
 
-def create_ppo_runner_from_registry(env: BaseEnv, exp_name: str | None = None) -> OnPolicyRunner:
+def _apply_algo_overrides(cfg: Any, overrides: dict[str, Any] | None) -> Any:
+    """Deep-apply overrides to PPOArgs (and nested models)."""
+    return apply_overrides_generic(cfg, overrides, prefixes=("cfgs.", "ppo.", "algo."))
+
+
+def _apply_runner_overrides(runner_args: Any, overrides: dict[str, Any] | None) -> Any:
+    """Deep-apply overrides to RunnerArgs."""
+    return apply_overrides_generic(runner_args, overrides, prefixes=("cfgs.", "runner."))
+
+
+def create_ppo_runner_from_registry(
+    env: BaseEnv,
+    exp_name: str | None = None,
+    algo_cfg: Any = None,
+    runner_args: Any = None,
+) -> OnPolicyRunner:
     """Create PPO runner using configuration from the registry."""
     # Environment setup
     wrapped_env = GenesisEnvWrapper(env, device=env.device)
@@ -51,12 +85,11 @@ def create_ppo_runner_from_registry(env: BaseEnv, exp_name: str | None = None) -
     # Create PPO algorithm
     ppo = PPO(
         env=wrapped_env,
-        cfg=PPO_WALKING_MLP,
+        cfg=algo_cfg,
         device=wrapped_env.device,
     )
 
     # Create PPO runner
-    runner_args = RUNNER_WALKING_MLP
     if exp_name is not None:
         # Avoid mutating a frozen Pydantic model; create a copied config with updated save_path
         runner_args = RUNNER_WALKING_MLP.model_copy(
@@ -71,7 +104,11 @@ def create_ppo_runner_from_registry(env: BaseEnv, exp_name: str | None = None) -
 
 
 def evaluate_policy(
-    exp_name: str | None = None, show_viewer: bool = False, num_ckpt: int | None = None
+    exp_name: str | None = None,
+    show_viewer: bool = False,
+    num_ckpt: int | None = None,
+    env_args: Any = None,
+    algo_cfg: Any = None,
 ) -> None:
     """Evaluate the policy."""
     # Find the experiment directory without creating a new runner
@@ -112,7 +149,12 @@ def evaluate_policy(
     print(f"Loading checkpoint: {ckpt_path}")
 
     # Create environment for evaluation
-    env = create_gs_env(show_viewer=show_viewer, num_envs=1, device="cuda")
+    env = create_gs_env(
+        show_viewer=show_viewer,
+        num_envs=1,
+        device="cuda",
+        args=env_args,
+    )
     wrapped_env = GenesisEnvWrapper(env, device=env.device)
 
     # Setup GIF recording if not showing viewer
@@ -139,7 +181,7 @@ def evaluate_policy(
     # Create PPO algorithm and load checkpoint
     ppo = PPO(
         env=wrapped_env,
-        cfg=PPO_WALKING_MLP,
+        cfg=algo_cfg,
         device=wrapped_env.device,
     )
     ppo.load(ckpt_path, load_optimizer=False)
@@ -211,14 +253,27 @@ def train_policy(
     num_envs: int = 4096,
     device: str = "cuda",
     use_wandb: bool = True,
+    env_args: Any = None,
+    algo_cfg: Any = None,
+    runner_args: Any = None,
 ) -> None:
     """Train the policy using PPO."""
 
     # Create environment
-    env = create_gs_env(show_viewer=show_viewer, num_envs=num_envs, device=device)
+    env = create_gs_env(
+        show_viewer=show_viewer,
+        num_envs=num_envs,
+        device=device,
+        args=env_args,
+    )
 
     # Get configuration and runner from registry
-    runner = create_ppo_runner_from_registry(env, exp_name=exp_name)
+    runner = create_ppo_runner_from_registry(
+        env,
+        exp_name=exp_name,
+        algo_cfg=algo_cfg,
+        runner_args=runner_args,
+    )
 
     # Set up logging with proper configuration
     if exp_name is not None:
@@ -226,9 +281,7 @@ def train_policy(
     else:
         save_path = RUNNER_WALKING_MLP.save_path
     logger = logger_configure(
-        folder=str(
-            save_path / datetime.now().strftime("%Y%m%d_%H%M%S")
-        ),
+        folder=str(save_path / datetime.now().strftime("%Y%m%d_%H%M%S")),
         format_strings=["stdout", "csv", "wandb"],
         entity=None,
         project=None,
@@ -238,6 +291,12 @@ def train_policy(
 
     # Train using Runner
     print("Starting training...")
+    train_summary_info = {
+        "total_time": 0.0,
+        "total_episodes": 0,
+        "total_steps": 0,
+        "final_reward": 0.0,
+    }
     try:
         train_summary_info = runner.train(metric_logger=logger)
     except KeyboardInterrupt:
@@ -258,17 +317,62 @@ def main(
     exp_name: str | None = None,
     num_ckpt: int | None = None,
     use_wandb: bool = True,
+    env_name: str = "walk_default",
+    **cfg_overrides: Any,
 ) -> None:
-    """Main function demonstrating proper registry usage."""
+    """Entry point.
+
+    You can override environment configs via dot-notation, e.g.:
+    --cfgs.env.reward_args.LinVelXYReward=20.0
+    --env.reward_args.AngVelZReward=5
+    --reward_args.G1BaseHeightPenalty=50
+    --action_latency=2
+    """
+    # Bucket overrides into env / algo / runner
+    env_overrides: dict[str, Any] = {}
+    algo_overrides: dict[str, Any] = {}
+    runner_overrides: dict[str, Any] = {}
+
+    for k, v in cfg_overrides.items():
+        if k.startswith("cfgs.env.") or k.startswith("env.") or k.startswith("reward_args."):
+            env_overrides[k] = v
+            continue
+        if k.startswith("cfgs.algo.") or k.startswith("algo."):
+            algo_overrides[k] = v
+            continue
+        if k.startswith("cfgs.runner.") or k.startswith("runner."):
+            runner_overrides[k] = v
+            continue
+
+    env_args = EnvArgsRegistry[env_name]
+    env_args = apply_overrides_generic(env_args, env_overrides, prefixes=("cfgs.", "env."))
+    algo_cfg = _apply_algo_overrides(PPO_WALKING_MLP, algo_overrides)
+    runner_args = _apply_runner_overrides(RUNNER_WALKING_MLP, runner_overrides)
+
     if eval:
         # Evaluation mode - don't create runner to avoid creating empty log dir
         num_envs = 1
         print("Evaluation mode: Loading trained policy")
-        evaluate_policy(exp_name=exp_name, show_viewer=show_viewer, num_ckpt=num_ckpt)
+        evaluate_policy(
+            exp_name=exp_name,
+            show_viewer=show_viewer,
+            num_ckpt=num_ckpt,
+            env_args=env_args,
+            algo_cfg=algo_cfg,
+        )
     else:
         # Training mode
         print("Training mode: Starting policy training")
-        train_policy(exp_name=exp_name, show_viewer=show_viewer, num_envs=num_envs, device=device, use_wandb=use_wandb)
+        train_policy(
+            exp_name=exp_name,
+            show_viewer=show_viewer,
+            num_envs=num_envs,
+            device=device,
+            use_wandb=use_wandb,
+            env_args=env_args,
+            algo_cfg=algo_cfg,
+            runner_args=runner_args,
+        )
 
 
 if __name__ == "__main__":
