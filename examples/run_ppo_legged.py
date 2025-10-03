@@ -203,7 +203,7 @@ def evaluate_policy(
     total_reward = 0.0
 
     try:
-        for _ in range(300):
+        while True:
             if step_count < 100:
                 wrapped_env.env.commands[:] = 0.0  # Forward velocity command
             elif step_count < 200:
@@ -219,7 +219,7 @@ def evaluate_policy(
 
             # Step environment
             obs, reward, terminated, truncated, _ = wrapped_env.step(action)
-            print(wrapped_env.env.feet_contact_force[0].cpu().numpy())
+            # print(wrapped_env.env.feet_contact_force[0].cpu().numpy())
 
             # Accumulate reward
             total_reward += reward.item()

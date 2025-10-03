@@ -87,6 +87,7 @@ class WalkingEnv(BaseEnv):
         # some auxiliary variables
         self._max_sim_time = 20.0  # seconds
         self._command_resample_time = 10.0  # seconds
+        self._random_push_time = 10.0  # seconds
         #
         self._init()
         self.reset()
@@ -185,6 +186,10 @@ class WalkingEnv(BaseEnv):
         self.time_out_buf = torch.zeros(self.num_envs, dtype=torch.bool, device=self._device)
         self.time_since_reset = torch.zeros(self.num_envs, device=self._device)
         self.time_since_resample = torch.zeros(self.num_envs, device=self._device)
+        self.time_since_random_push = torch.remainder(
+            torch.arange(self.num_envs, device=self._device, dtype=torch.float32) * self.dt,
+            self._random_push_time,
+        )
 
         # rendering
         self._rendered_images = []
@@ -264,6 +269,8 @@ class WalkingEnv(BaseEnv):
         for _ in range(self._args.robot_args.decimation):
             self.time_since_reset += self._scene.scene.dt
             self.time_since_resample += self._scene.scene.dt
+            self.time_since_random_push += self._scene.scene.dt
+
             self._robot.apply_action(action=exec_action)
             self._scene.scene.step()
             self._torque = torch.max(self._torque, torch.abs(self._robot.torque))
@@ -277,10 +284,16 @@ class WalkingEnv(BaseEnv):
         self._last_action = self._action.clone()
         self.feet_air_time *= 1 - self.feet_contact
 
-        resample_env_ids = torch.nonzero(self.time_since_resample > self._command_resample_time, as_tuple=False).squeeze(-1)
+        resample_env_ids = torch.nonzero(
+            self.time_since_resample > self._command_resample_time, as_tuple=False
+        ).squeeze(-1)
         self._resample_commands(envs_idx=resample_env_ids)
         self.time_since_resample[resample_env_ids] = 0.0
-
+        push_env_ids = torch.nonzero(
+            self.time_since_random_push >= self._random_push_time, as_tuple=False
+        ).squeeze(-1)
+        self._random_push(envs_idx=push_env_ids)
+        self.time_since_random_push[push_env_ids] = 0.0
 
     def get_extra_infos(self) -> dict[str, Any]:
         return self._extra_info
@@ -420,11 +433,20 @@ class WalkingEnv(BaseEnv):
         else:
             print("No images to save as GIF.")
 
-    def _resample_commands(self, envs_idx: torch.IntTensor) -> None:
+    def _resample_commands(self, envs_idx: torch.Tensor) -> None:
         self.commands[envs_idx, :] = torch.rand(len(envs_idx), 3, device=self._device)
         self.commands[:, 1] *= 0
         self.commands[:, :2] *= torch.norm(self.commands[:, :2], dim=-1, keepdim=True) > 0.3
         self.commands[:, 2] *= torch.abs(self.commands[:, 2]) > 0.3
+
+    def _random_push(self, envs_idx: torch.Tensor) -> None:
+        if envs_idx.numel() > 0:
+            # sample delta v in [-2, 2] for x and y
+            delta_xy = torch.rand((len(envs_idx), 2), device=self._device) * 4.0 - 2.0
+            cur_vel = self._robot.get_vel()[envs_idx]  # world-frame linear velocity (x,y,z)
+            new_vel = cur_vel.clone()
+            new_vel[:, :2] = new_vel[:, :2] + delta_xy
+            self._robot.set_dofs_velocity(new_vel, envs_idx=envs_idx, dofs_idx_local=[0, 1, 2])
 
     @property
     def num_envs(self) -> int:
