@@ -1,0 +1,18 @@
+base_init_quat:
+- 0.9238795638084412
+- 0.0
+- 0.3826834559440613
+- 2.7533756608022486e-08
+base_link_name: base
+body_init_quat:
+- 0.9238795638084412
+- 0.0
+- 0.3826834559440613
+- 2.7533756608022486e-08
+robot:
+  asset_path: urdf/go2/urdf/go2.urdf
+  merge_fixed_links: false
+  name: go2
+  numeric_adjustment: true
+  scale: 1.0
+task: walk with only front legs, body lean downward 45 degrees

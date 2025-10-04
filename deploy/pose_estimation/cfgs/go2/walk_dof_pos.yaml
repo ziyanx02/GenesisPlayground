@@ -1,0 +1,50 @@
+base_init_quat:
+- 1.0
+- 0.0
+- 0.0
+- 0.0
+base_link_name: base
+body_init_quat:
+- 1.0
+- 0.0
+- 0.0
+- 0.0
+default_joint_angles:
+  FL_calf_joint: -1.4434962272644043
+  FL_hip_joint: -0.19204583764076233
+  FL_thigh_joint: 0.8555803298950195
+  FR_calf_joint: -1.4318302869796753
+  FR_hip_joint: 0.19008463621139526
+  FR_thigh_joint: 0.8537113666534424
+  RL_calf_joint: -1.442496418952942
+  RL_hip_joint: -0.19020424783229828
+  RL_thigh_joint: 0.5835341811180115
+  RR_calf_joint: -1.4434244632720947
+  RR_hip_joint: 0.19196908175945282
+  RR_thigh_joint: 0.5840409398078918
+diameter: 15.056638385645922
+dof_names:
+- FL_hip_joint
+- FR_hip_joint
+- RL_hip_joint
+- RR_hip_joint
+- FL_thigh_joint
+- FR_thigh_joint
+- RL_thigh_joint
+- RR_thigh_joint
+- FL_calf_joint
+- FR_calf_joint
+- RL_calf_joint
+- RR_calf_joint
+extremity ids:
+- 24
+- 18
+- 20
+- 22
+robot:
+  asset_path: urdf/go2/urdf/go2.urdf
+  merge_fixed_links: false
+  name: anymal
+  numeric_adjustment: true
+  scale: 1.0
+task: walk with four legs

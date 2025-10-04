@@ -1,0 +1,7 @@
+robot:
+  name: h1
+  asset_path: urdf/h1_2/h1_2_simp.urdf
+  scale: 1.0
+  merge_fixed_links: True
+  numeric_adjustment: True
+task: walk with 2 legs

@@ -1,0 +1,85 @@
+base_init_pos:
+- 0.0
+- 0.0
+- 0.8398998379707336
+base_init_quat:
+- 1.0
+- 0.0
+- 0.0
+- 0.0
+base_link_name: pelvis
+body_init_pos:
+- 0.0
+- 0.0
+- 0.8398998379707336
+body_init_quat:
+- 1.0
+- 0.0
+- 0.0
+- 0.0
+default_joint_angles:
+  left_ankle_pitch_joint: -0.4536249339580536
+  left_ankle_roll_joint: 0.03406848385930061
+  left_hip_pitch_joint: -0.6872670650482178
+  left_hip_roll_joint: -0.022207733243703842
+  left_hip_yaw_joint: 0.02584964968264103
+  left_knee_joint: 1.1406059265136719
+  right_ankle_pitch_joint: -0.7781105041503906
+  right_ankle_roll_joint: -0.04557903856039047
+  right_hip_pitch_joint: -1.0540350675582886
+  right_hip_roll_joint: 0.015289269387722015
+  right_hip_yaw_joint: -0.04293869063258171
+  right_knee_joint: 1.8318159580230713
+diameter: 1.3955285549163818
+dof_names:
+- left_hip_pitch_joint
+- right_hip_pitch_joint
+- left_hip_roll_joint
+- right_hip_roll_joint
+- left_hip_yaw_joint
+- right_hip_yaw_joint
+- left_knee_joint
+- right_knee_joint
+- left_ankle_pitch_joint
+- right_ankle_pitch_joint
+- left_ankle_roll_joint
+- right_ankle_roll_joint
+extremity ids:
+- 11
+- 12
+feet_link_names:
+- left_ankle_roll_link
+gait:
+  base_height_target: 0.6499162316322327
+  duration:
+  - 0.5
+  frequency:
+  - 3.0
+  offset:
+  - 0.0
+  stationary_position:
+  - - 0.08199740201234818
+    - 0.10000679641962051
+link_names:
+- pelvis
+- left_hip_pitch_link
+- right_hip_pitch_link
+- left_hip_roll_link
+- right_hip_roll_link
+- left_hip_yaw_link
+- right_hip_yaw_link
+- left_knee_link
+- right_knee_link
+- left_ankle_pitch_link
+- right_ankle_pitch_link
+- left_ankle_roll_link
+- right_ankle_roll_link
+mass: 34.13385727999999
+robot:
+  asset_path: urdf/g1/g1_12dof.urdf
+  merge_fixed_links: true
+  name: g1
+  numeric_adjustment: true
+  scale: 1.0
+task: Hopping on only its left leg. Left foot on the ground and right foot in the
+  air.

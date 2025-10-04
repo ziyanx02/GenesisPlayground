@@ -1,0 +1,131 @@
+robot:
+  name: h1_2
+  asset_path: urdf/h1_2/h1_2_simp.urdf
+  scale: 1.0
+  body_name: pelvis
+  foot_names:
+  - left_ankle_roll_link
+  - right_ankle_roll_link
+  links_to_keep:
+  - left_ankle_roll_link
+  - right_ankle_roll_link
+  link_names:
+  - pelvis
+  - left_hip_yaw_link
+  - right_hip_yaw_link
+  - left_hip_pitch_link
+  - right_hip_pitch_link
+  - left_hip_roll_link
+  - right_hip_roll_link
+  - left_knee_link
+  - right_knee_link
+  - left_ankle_pitch_link
+  - right_ankle_pitch_link
+  - left_ankle_roll_link
+  - right_ankle_roll_link
+  dof_names:
+  - left_hip_yaw_joint
+  - right_hip_yaw_joint
+  - left_hip_pitch_joint
+  - right_hip_pitch_joint
+  - left_hip_roll_joint
+  - right_hip_roll_joint
+  - left_knee_joint
+  - right_knee_joint
+  - left_ankle_pitch_joint
+  - right_ankle_pitch_joint
+  - left_ankle_roll_joint
+  - right_ankle_roll_joint
+  diameter: 1.3356688022613525
+  mass: 66.98400000000002
+control:
+  control_freq: 50
+  kp: 30.0
+  kd: 2.0
+  armature: 0.0
+  damping: 0.0
+learning:
+  num_iterations: 3
+  num_samples: 4
+  num_logpoints: 10
+  command:
+    lin_vel_x_range:
+    - -0.5
+    - 1.0
+    lin_vel_y_range:
+    - -0.5
+    - 0.5
+    ang_vel_range:
+    - -1.0
+    - 1.0
+  note: walk with 2 legs
+pose:
+  base_reset_pos:
+  - 0.0
+  - 0.0
+  - 1.1
+  base_reset_quat:
+  - 1.0
+  - 0.0
+  - 0.0
+  - 0.0
+  reset_joint_angles:
+    left_ankle_pitch_joint: -0.2
+    left_ankle_roll_joint: 0.0
+    left_hip_pitch_joint: -0.2
+    left_hip_roll_joint: 0.0
+    left_hip_yaw_joint: 0.0
+    left_knee_joint: 0.4
+    right_ankle_pitch_joint: -0.2
+    right_ankle_roll_joint: 0.0
+    right_hip_pitch_joint: -0.2
+    right_hip_roll_joint: 0.0
+    right_hip_yaw_joint: 0.0
+    right_knee_joint: 0.4
+  base_init_pos:
+  - 0.0
+  - 0.0
+  - 0.8208392262458801
+  base_init_quat:
+  - 1.0
+  - 0.0
+  - 0.0
+  - 0.0
+  body_init_pos:
+  - 0.0
+  - 0.0
+  - 0.8208392262458801
+  body_init_quat:
+  - 1.0
+  - 0.0
+  - 0.0
+  - 0.0
+  default_joint_angles:
+    left_ankle_pitch_joint: -0.4722197651863098
+    left_ankle_roll_joint: -0.005618227180093527
+    left_hip_pitch_joint: -0.9384012818336487
+    left_hip_roll_joint: 0.009504256770014763
+    left_hip_yaw_joint: -0.007665748707950115
+    left_knee_joint: 1.410642147064209
+    right_ankle_pitch_joint: -0.5714282393455505
+    right_ankle_roll_joint: 0.017110060900449753
+    right_hip_pitch_joint: -0.8925706148147583
+    right_hip_roll_joint: -0.027152638882398605
+    right_hip_yaw_joint: 0.02109365165233612
+    right_knee_joint: 1.464012861251831
+  gait:
+    base_height_target: 0.7731738090515137
+    duration:
+    - 0.5
+    - 0.5
+    frequency:
+    - 3.0
+    - 3.0
+    offset:
+    - 0.0
+    - 0.5
+    stationary_position:
+    - - 0.1412840038537979
+      - 0.16643953323364258
+    - - 0.09683762490749359
+      - -0.17333441972732544

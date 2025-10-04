@@ -1,0 +1,17 @@
+base_init_quat:
+- 1.0
+- 0.0
+- 0.0
+- 0.0
+base_link_name: base_link
+body_init_quat:
+- 1.0
+- 0.0
+- 0.0
+- 0.0
+robot:
+  name: tripod
+  asset_path: urdf/tripod/tripod.urdf
+  merge_fixed_links: false
+  scale: 1.0
+task: walk

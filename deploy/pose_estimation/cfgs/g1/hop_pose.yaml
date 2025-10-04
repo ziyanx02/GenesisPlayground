@@ -1,0 +1,19 @@
+base_init_quat:
+- 1.0
+- 0.0
+- 0.0
+- 0.0
+base_link_name: pelvis
+body_init_quat:
+- 1.0
+- 0.0
+- 0.0
+- 0.0
+robot:
+  asset_path: urdf/g1/g1_12dof.urdf
+  merge_fixed_links: true
+  name: g1
+  numeric_adjustment: true
+  scale: 1.0
+task: Hopping on only its left leg. Left foot on the ground and right foot in the
+  air.

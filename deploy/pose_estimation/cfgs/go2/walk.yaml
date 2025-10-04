@@ -1,0 +1,7 @@
+robot:
+  name: anymal
+  asset_path: urdf/go2/urdf/go2.urdf
+  scale: 1.0
+  merge_fixed_links: False
+  numeric_adjustment: True
+task: walk with four legs

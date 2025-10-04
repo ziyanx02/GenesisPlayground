@@ -1,0 +1,136 @@
+robot:
+  name: leap_hand
+  asset_path: urdf/leap_hand/leap_hand_right_glb.urdf
+  scale: 2.0
+  body_name: base
+  foot_names:
+  - thumb_fingertip
+  - fingertip
+  - fingertip_2
+  - fingertip_3
+  links_to_keep:
+  - thumb_fingertip
+  - fingertip
+  - fingertip_2
+  - fingertip_3
+  link_names:
+  - base
+  - mcp_joint
+  - mcp_joint_2
+  - mcp_joint_3
+  - thumb_temp_base
+  - pip
+  - pip_2
+  - pip_3
+  - thumb_pip
+  - dip
+  - dip_2
+  - dip_3
+  - thumb_dip
+  - fingertip
+  - fingertip_2
+  - fingertip_3
+  - thumb_fingertip
+  dof_names:
+  - '1'
+  - '5'
+  - '9'
+  - '12'
+  - '0'
+  - '4'
+  - '8'
+  - '13'
+  - '2'
+  - '6'
+  - '10'
+  - '14'
+  - '3'
+  - '7'
+  - '11'
+  - '15'
+  diameter: 0.6839863061904907
+  mass: 5.968000000000002
+control:
+  control_freq: 50
+  kp: 40.0
+  kd: 2.0
+  armature: 0.05
+  damping: 0.0
+learning:
+  num_iterations: 3
+  num_samples: 4
+  num_logpoints: 10
+  command:
+    lin_vel_x_range:
+    - -0.25
+    - 0.5
+    lin_vel_y_range:
+    - -0.25
+    - 0.25
+    ang_vel_range:
+    - -1.0
+    - 1.0
+  note: walk with palm parallel to the ground, middle finger pointing forward, all
+    fingertips placing on the ground
+pose:
+  base_init_pos:
+  - 0.0
+  - 0.0
+  - 0.24511127173900604
+  base_init_quat:
+  - 0.7071067690849304
+  - 0.0
+  - 0.7071068286895752
+  - 3.615632238052058e-09
+  body_init_pos:
+  - 0.0
+  - 0.0
+  - 0.24511127173900604
+  body_init_quat:
+  - 0.7071067690849304
+  - 0.0
+  - 0.7071068286895752
+  - 4.214685134229512e-08
+  default_joint_angles:
+    '0': -0.07969321310520172
+    '1': 0.5207895636558533
+    '10': 1.4418764114379883
+    '11': 0.04350859671831131
+    '12': 0.8239645957946777
+    '13': 1.7568249702453613
+    '14': -0.11537574976682663
+    '15': -0.07586806267499924
+    '2': 1.3024652004241943
+    '3': 1.2720533609390259
+    '4': 0.5138404369354248
+    '5': 1.1846344470977783
+    '6': 1.66377854347229
+    '7': 0.6174675226211548
+    '8': 0.617369532585144
+    '9': 0.44045883417129517
+  gait:
+    base_height_target: 0.15948888659477234
+    duration:
+    - 0.6
+    - 0.5
+    - 0.5
+    - 0.5
+    frequency:
+    - 3.0
+    - 3.0
+    - 3.0
+    - 3.0
+    offset:
+    - 0.0
+    - 0.5
+    - 0.0
+    - 0.5
+    stationary_position:
+    - - 0.062277525663375854
+      - 0.18276312947273254
+    - - 0.25320619344711304
+      - 0.1250235140323639
+    - - 0.15528419613838196
+      - 0.015308305621147156
+    - - 0.26328352093696594
+      - -0.08834296464920044

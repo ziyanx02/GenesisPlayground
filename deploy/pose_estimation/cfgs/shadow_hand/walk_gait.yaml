@@ -1,0 +1,141 @@
+base_init_pos:
+- 0.0
+- 0.0
+- 0.08399958908557892
+base_init_quat:
+- 0.49999988079071045
+- 0.4999999403953552
+- 0.5000000596046448
+- 0.5000000596046448
+base_link_name: palm
+body_init_pos:
+- 0.0
+- 0.0
+- 0.08399958908557892
+body_init_quat:
+- 0.49999991059303284
+- 0.4999999701976776
+- 0.5000000596046448
+- 0.5000001192092896
+default_joint_angles:
+  index_finger_join2: 0.953139066696167
+  index_finger_joint1: 0.34440475702285767
+  index_finger_joint3: 0.1712527722120285
+  index_finger_joint4: 1.387776255607605
+  little_finger_joint1: 0.0
+  little_finger_joint2: -0.28092581033706665
+  little_finger_joint3: 0.9684144258499146
+  little_finger_joint4: 1.0084116458892822
+  little_finger_joint5: 0.754939079284668
+  middle_finger_joint1: 0.3490658402442932
+  middle_finger_joint2: 0.8843120336532593
+  middle_finger_joint3: 0.0
+  middle_finger_joint4: 0.6583521366119385
+  ring_finger_joint1: 0.20294004678726196
+  ring_finger_joint2: 0.8272097706794739
+  ring_finger_joint3: 3.081948761973763e-06
+  ring_finger_joint4: 0.35353177785873413
+  thumb_joint1: 0.5437341332435608
+  thumb_joint2: 0.73011714220047
+  thumb_joint3: 0.01005181297659874
+  thumb_joint4: -0.04925376549363136
+  thumb_joint5: 0.9656602740287781
+diameter: 0.26247963309288025
+dof_names:
+- thumb_joint1
+- index_finger_joint1
+- middle_finger_joint1
+- ring_finger_joint1
+- little_finger_joint1
+- thumb_joint2
+- index_finger_join2
+- middle_finger_joint2
+- ring_finger_joint2
+- little_finger_joint2
+- thumb_joint3
+- index_finger_joint3
+- middle_finger_joint3
+- ring_finger_joint3
+- little_finger_joint3
+- thumb_joint4
+- index_finger_joint4
+- middle_finger_joint4
+- ring_finger_joint4
+- little_finger_joint4
+- thumb_joint5
+- little_finger_joint5
+extremity ids:
+- 17
+- 18
+- 19
+- 21
+- 22
+feet_link_names:
+- index_finger_distal
+- middle_finger_distal
+- ring_finger_distal
+- thumb_distal
+- little_finger_distal
+gait:
+  base_height_target: 0.0548800528049469
+  duration:
+  - 0.5
+  - 0.5
+  - 0.5
+  - 0.5
+  - 0.5
+  frequency:
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  offset:
+  - 0.0
+  - 0.0
+  - 0.5
+  - 0.5
+  - 0.5
+  stationary_position:
+  - - 0.12968963384628296
+    - 0.020556844770908356
+  - - 0.1406918317079544
+    - -0.004174537491053343
+  - - 0.14141274988651276
+    - -0.0014494694769382477
+  - - 0.08191052079200745
+    - 0.054504651576280594
+  - - 0.10151073336601257
+    - -0.03733142092823982
+link_names:
+- palm
+- thumb_base
+- index_finger_knuckle
+- middle_finger_knuckle
+- ring_finger_knuckle
+- little_finger_metacarpal
+- thumb_proximal
+- index_finger_proximal
+- middle_finger_proximal
+- ring_finger_proximal
+- little_finger_knuckle
+- thumb_hub
+- index_finger_middle
+- middle_finger_middle
+- ring_finger_middle
+- little_finger_proximal
+- thumb_middle
+- index_finger_distal
+- middle_finger_distal
+- ring_finger_distal
+- little_finger_middle
+- thumb_distal
+- little_finger_distal
+mass: 0.07948381170051888
+robot:
+  asset_path: urdf/shadow_hand/shadow_hand_simplified.urdf
+  merge_fixed_links: true
+  numeric_adjustment: false
+  scale: 1.0
+task: walk with palm parallel to the ground, middle finger pointing forward, all fingertips
+  placing on the ground

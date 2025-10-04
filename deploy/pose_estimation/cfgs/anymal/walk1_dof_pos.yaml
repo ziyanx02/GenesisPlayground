@@ -1,0 +1,51 @@
+base_init_quat:
+- 1.0
+- 0.0
+- 0.0
+- 0.0
+base_link_name: base
+body_init_quat:
+- 1.0
+- 0.0
+- 0.0
+- 0.0
+default_joint_angles:
+  LF_HAA: -0.2506140172481537
+  LF_HFE: 0.007756722159683704
+  LF_KFE: -0.00019866482762154192
+  LH_HAA: -0.2506275773048401
+  LH_HFE: -0.007755461148917675
+  LH_KFE: 0.00028638963703997433
+  RF_HAA: 0.2506140172481537
+  RF_HFE: 0.007756722159683704
+  RF_KFE: -0.00019866482762154192
+  RH_HAA: 0.2506275773048401
+  RH_HFE: -0.007755461148917675
+  RH_KFE: 0.00028638963703997433
+diameter: 1.5357242822647095
+dof_names:
+- LF_HAA
+- RF_HAA
+- LH_HAA
+- RH_HAA
+- LF_HFE
+- RF_HFE
+- LH_HFE
+- RH_HFE
+- LF_KFE
+- RF_KFE
+- LH_KFE
+- RH_KFE
+extremity ids:
+- 9
+- 10
+- 11
+- 12
+mass: 52.13484999999999
+robot:
+  asset_path: urdf/anymal_c/urdf/anymal_c.urdf
+  merge_fixed_links: true
+  name: anymal
+  numeric_adjustment: true
+  scale: 1.0
+task: walk naturally with four feet on the ground

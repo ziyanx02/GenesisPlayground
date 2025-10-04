@@ -1,0 +1,7 @@
+robot:
+  name: lamp
+  asset_path: urdf/lamp/lamp.urdf
+  scale: 1.0
+  merge_fixed_links: True
+  numeric_adjustment: False
+task: The lamp hops forward on its base as the only foot maintaining an upright posture. Base should be on the ground.

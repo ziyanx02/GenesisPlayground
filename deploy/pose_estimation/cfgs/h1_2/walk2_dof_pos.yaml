@@ -1,0 +1,49 @@
+base_init_quat:
+- 1.0
+- 0.0
+- 0.0
+- 0.0
+base_link_name: pelvis
+body_init_quat:
+- 1.0
+- 0.0
+- 0.0
+- 0.0
+default_joint_angles:
+  left_ankle_pitch_joint: -0.48035866022109985
+  left_ankle_roll_joint: 0.1278015375137329
+  left_hip_pitch_joint: -0.6669669151306152
+  left_hip_roll_joint: -0.16293570399284363
+  left_hip_yaw_joint: 0.10134632140398026
+  left_knee_joint: 1.1538156270980835
+  right_ankle_pitch_joint: -0.48035866022109985
+  right_ankle_roll_joint: -0.1278015375137329
+  right_hip_pitch_joint: -0.6669669151306152
+  right_hip_roll_joint: 0.16293570399284363
+  right_hip_yaw_joint: -0.10134632140398026
+  right_knee_joint: 1.1538156270980835
+diameter: 1.2477588653564453
+dof_names:
+- left_hip_yaw_joint
+- right_hip_yaw_joint
+- left_hip_pitch_joint
+- right_hip_pitch_joint
+- left_hip_roll_joint
+- right_hip_roll_joint
+- left_knee_joint
+- right_knee_joint
+- left_ankle_pitch_joint
+- right_ankle_pitch_joint
+- left_ankle_roll_joint
+- right_ankle_roll_joint
+extremity ids:
+- 11
+- 12
+mass: 66.98400000000002
+robot:
+  asset_path: urdf/h1_2/h1_2_simp.urdf
+  merge_fixed_links: true
+  name: h1
+  numeric_adjustment: true
+  scale: 1.0
+task: walk with 2 legs

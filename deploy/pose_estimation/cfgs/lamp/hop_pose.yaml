@@ -1,0 +1,18 @@
+base_init_quat:
+- 0.5
+- 0.5
+- 0.5
+- 0.5
+base_link_name: base
+body_init_quat:
+- 0.5
+- 0.5
+- 0.5
+- 0.5
+robot:
+  asset_path: urdf/lamp/lamp.urdf
+  merge_fixed_links: true
+  name: lamp
+  numeric_adjustment: false
+  scale: 1.0
+task: The lamp hops with lamp itself hang over the base.

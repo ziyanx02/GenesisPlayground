@@ -1,0 +1,7 @@
+robot:
+  name: g1
+  asset_path: urdf/g1/g1_12dof.urdf
+  scale: 1.0
+  merge_fixed_links: True
+  numeric_adjustment: True
+task: Hopping on only its left leg. Left foot on the ground and right foot in the air.

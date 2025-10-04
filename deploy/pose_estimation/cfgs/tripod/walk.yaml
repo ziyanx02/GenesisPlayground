@@ -1,0 +1,6 @@
+robot:
+  name: tripod
+  asset_path: urdf/tripod/tripod.urdf
+  merge_fixed_links: false
+  scale: 1.0
+task: walk

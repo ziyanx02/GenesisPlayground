@@ -1,0 +1,7 @@
+robot:
+  asset_path: urdf/leap_hand/leap_hand_right_glb.urdf
+  scale: 2.0
+  merge_fixed_links: true
+  numeric_adjustment: false
+task: walk with palm parallel to the ground, middle finger pointing forward, all fingertips
+  placing on the ground

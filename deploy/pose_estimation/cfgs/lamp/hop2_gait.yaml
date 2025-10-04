@@ -1,0 +1,56 @@
+base_init_pos:
+- 0.0
+- 0.0
+- 2.3290515400731238e-06
+base_init_quat:
+- 0.5
+- 0.5
+- 0.5
+- 0.5
+base_link_name: light
+body_init_pos:
+- 0.07778415083885193
+- 0.0
+- 0.30235886573791504
+body_init_quat:
+- 0.07789361476898193
+- 0.7028034329414368
+- 0.7028034329414368
+- 0.07789361476898193
+default_joint_angles:
+  base_rod1_joint: 0.23062029480934143
+  rod1_rod2_joint: 0.08953799307346344
+  rod2_light_joint: -0.3201262950897217
+diameter: 0.3911784589290619
+dof_names:
+- base_rod1_joint
+- rod1_rod2_joint
+- rod2_light_joint
+extremity ids:
+- 3
+feet_link_names:
+- base
+gait:
+  base_height_target: 0.3023565411567688
+  duration:
+  - 0.5
+  frequency:
+  - 3.0
+  offset:
+  - 0.0
+  stationary_position:
+  - - 7.450580596923828e-08
+    - 0.0
+link_names:
+- base
+- rod1
+- rod2
+- light
+mass: 2.1
+robot:
+  asset_path: urdf/lamp/lamp.urdf
+  merge_fixed_links: true
+  name: lamp
+  numeric_adjustment: false
+  scale: 1.0
+task: The lamp hops with lamp itself hang over the base.

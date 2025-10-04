@@ -1,0 +1,129 @@
+robot:
+  name: leap_hand
+  asset_path: urdf/leap_hand/leap_hand_right_glb.urdf
+  scale: 2.0
+  body_name: base
+  foot_names:
+  - thumb_fingertip
+  - fingertip
+  - fingertip_3
+  links_to_keep:
+  - thumb_fingertip
+  - fingertip
+  - fingertip_3
+  link_names:
+  - base
+  - mcp_joint
+  - mcp_joint_2
+  - mcp_joint_3
+  - thumb_temp_base
+  - pip
+  - pip_2
+  - pip_3
+  - thumb_pip
+  - dip
+  - dip_2
+  - dip_3
+  - thumb_dip
+  - fingertip
+  - fingertip_2
+  - fingertip_3
+  - thumb_fingertip
+  dof_names:
+  - '1'
+  - '5'
+  - '9'
+  - '12'
+  - '0'
+  - '4'
+  - '8'
+  - '13'
+  - '2'
+  - '6'
+  - '10'
+  - '14'
+  - '3'
+  - '7'
+  - '11'
+  - '15'
+  diameter: 0.6839863061904907
+  mass: 5.968000000000002
+control:
+  control_freq: 50
+  kp: 40.0
+  kd: 2.0
+  armature: 0.05
+  damping: 0.0
+learning:
+  num_iterations: 3
+  num_samples: 4
+  num_logpoints: 10
+  command:
+    lin_vel_x_range:
+    - -0.25
+    - 0.5
+    lin_vel_y_range:
+    - -0.25
+    - 0.25
+    ang_vel_range:
+    - -1.0
+    - 1.0
+  note: walk with palm parallel to the ground, middle finger pointing forward, all
+    fingertips placing on the ground
+pose:
+  base_init_pos:
+  - 0.0
+  - 0.0
+  - 0.22900965809822083
+  base_init_quat:
+  - 0.7071067690849304
+  - 0.0
+  - 0.7071068286895752
+  - 3.615632238052058e-09
+  body_init_pos:
+  - 0.0
+  - 0.0
+  - 0.22900965809822083
+  body_init_quat:
+  - 0.7071067690849304
+  - 0.0
+  - 0.7071068286895752
+  - 4.214685134229512e-08
+  default_joint_angles:
+    '0': 0.9679180979728699
+    '1': 0.35345199704170227
+    '10': -0.14902904629707336
+    '11': 1.529264211654663
+    '12': 1.2077796459197998
+    '13': 0.6221209168434143
+    '14': -0.8962180614471436
+    '15': -0.9426296353340149
+    '2': 1.863461971282959
+    '3': -0.3659999966621399
+    '4': -1.0101619958877563
+    '5': 1.8461413383483887
+    '6': 0.266817569732666
+    '7': 2.0288119316101074
+    '8': 1.0470000505447388
+    '9': 0.8921648859977722
+  gait:
+    base_height_target: 0.14067934453487396
+    duration:
+    - 0.5
+    - 0.5
+    - 0.5
+    frequency:
+    - 3.0
+    - 3.0
+    - 3.0
+    offset:
+    - 0.0
+    - 0.5
+    - 0.0
+    stationary_position:
+    - - -0.010615982115268707
+      - 0.17848658561706543
+    - - 0.25567707419395447
+      - 0.10143805295228958
+    - - 0.28390800952911377
+      - -0.1622823029756546

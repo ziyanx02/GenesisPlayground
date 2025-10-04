@@ -1,0 +1,7 @@
+robot:
+  name: go2
+  asset_path: urdf/go2/urdf/go2.urdf
+  scale: 1.0
+  merge_fixed_links: False
+  numeric_adjustment: true
+task: walk with only front legs, body lean downward 45 degrees

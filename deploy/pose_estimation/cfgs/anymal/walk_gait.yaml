@@ -1,0 +1,104 @@
+base_init_pos:
+- 0.0
+- 0.0
+- 0.6612265706062317
+base_init_quat:
+- 1.0
+- 0.0
+- 0.0
+- 0.0
+base_link_name: base
+body_init_pos:
+- 0.0
+- 0.0
+- 0.6612265706062317
+body_init_quat:
+- 1.0
+- 0.0
+- 0.0
+- 0.0
+default_joint_angles:
+  LF_HAA: -0.2506093978881836
+  LF_HFE: 0.007757686544209719
+  LF_KFE: -0.00015137089940253645
+  LH_HAA: -0.25065767765045166
+  LH_HFE: -0.007759144064038992
+  LH_KFE: 0.000237498024944216
+  RF_HAA: 0.2506093978881836
+  RF_HFE: 0.007757686544209719
+  RF_KFE: -0.00015137089940253645
+  RH_HAA: 0.25065767765045166
+  RH_HFE: -0.007759144064038992
+  RH_KFE: 0.000237498024944216
+diameter: 1.373038411140442
+dof_names:
+- LF_HAA
+- RF_HAA
+- LH_HAA
+- RH_HAA
+- LF_HFE
+- RF_HFE
+- LH_HFE
+- RH_HFE
+- LF_KFE
+- RF_KFE
+- LH_KFE
+- RH_KFE
+extremity ids:
+- 9
+- 10
+- 11
+- 12
+feet_link_names:
+- LF_SHANK
+- RF_SHANK
+- LH_SHANK
+- RH_SHANK
+gait:
+  base_height_target: 0.3217495381832123
+  duration:
+  - 0.5
+  - 0.5
+  - 0.5
+  - 0.5
+  frequency:
+  - 3.0
+  - 3.0
+  - 3.0
+  - 3.0
+  offset:
+  - 0.0
+  - 0.5
+  - 0.5
+  - 0.0
+  stationary_position:
+  - - 0.35758906602859497
+    - 0.21168243885040283
+  - - 0.35758906602859497
+    - -0.21168243885040283
+  - - -0.35758864879608154
+    - 0.21166689693927765
+  - - -0.35758864879608154
+    - -0.21166689693927765
+link_names:
+- base
+- LF_HIP
+- RF_HIP
+- LH_HIP
+- RH_HIP
+- LF_THIGH
+- RF_THIGH
+- LH_THIGH
+- RH_THIGH
+- LF_SHANK
+- RF_SHANK
+- LH_SHANK
+- RH_SHANK
+mass: 52.13484999999999
+robot:
+  asset_path: urdf/anymal_c/urdf/anymal_c.urdf
+  merge_fixed_links: true
+  name: anymal
+  numeric_adjustment: true
+  scale: 1.0
+task: walk naturally with four feet on the ground

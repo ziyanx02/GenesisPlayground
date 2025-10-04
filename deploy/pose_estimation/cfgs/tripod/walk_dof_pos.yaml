@@ -1,0 +1,37 @@
+base_init_quat:
+- 1.0
+- 0.0
+- 0.0
+- 0.0
+base_link_name: base_link
+body_init_quat:
+- 1.0
+- 0.0
+- 0.0
+- 0.0
+default_joint_angles:
+  leg1_joint: 0.24093922972679138
+  leg1_slide: 0.10212590545415878
+  leg2_joint: 0.35514411330223083
+  leg2_slide: 0.07321809977293015
+  leg3_joint: 0.4235139489173889
+  leg3_slide: 0.03656277060508728
+diameter: 0.7313922643661499
+dof_names:
+- leg1_joint
+- leg2_joint
+- leg3_joint
+- leg1_slide
+- leg2_slide
+- leg3_slide
+extremity ids:
+- 12
+- 13
+- 14
+mass: 0.6505820242504765
+robot:
+  asset_path: urdf/tripod/tripod.urdf
+  merge_fixed_links: false
+  name: tripod
+  scale: 1.0
+task: walk
