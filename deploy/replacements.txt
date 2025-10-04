@@ -1,0 +1,4 @@
+# redact common Azure OpenAI patterns (add more if needed)
+regex: (?i)(AZURE_OPENAI_API_KEY\s*=\s*['"])[^'"]+(['"]) ==> \1<REDACTED>\2
+regex: (?i)(api_key\s*=\s*['"])[^'"]+(['"]) ==> \1<REDACTED>\2
+regex: (?i)(AZURE_OPENAI_ENDPOINT\s*=\s*['"])[^'"]+(['"]) ==> \1<REDACTED>\2

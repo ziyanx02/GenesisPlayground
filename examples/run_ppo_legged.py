@@ -388,6 +388,11 @@ def save_deploy_cfgs(
     robot = env._robot
 
     # Extract and save relevant config parameters for deployment
+    cfg["robot"]["foot_name"] = [
+    robot._args.left_foot_link_name,
+    robot._args.right_foot_link_name]
+    cfg["robot"]["asset_path"] = robot._morph.file
+    cfg["robot"]["scale"] = robot._morph.scale
     cfg["environment"]["base_init_quat"] = robot._default_quat.tolist()
     cfg["environment"]["num_actions"] = robot.action_space.shape[0]
     cfg["environment"]["action_scale"] = env._args.robot_args.action_scale
