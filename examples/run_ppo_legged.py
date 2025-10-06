@@ -22,23 +22,6 @@ from gs_env.sim.envs.locomotion.walking_env import WalkingEnv
 from utils import apply_overrides_generic
 
 
-def _apply_env_overrides(env_name: str, overrides: dict[str, Any] | None) -> Any:
-    """Create a copied env args from registry with deep overrides applied.
-
-    Supports dot-path keys addressing all fields under EnvArgs/LeggedRobotEnvArgs:
-    - Top-level: reward_term, img_resolution, action_latency, obs_history_len, ...
-    - Dict fields: reward_args.<KEY>=<val>
-    - Nested models: robot_args.morph_args.file=..., scene_args.floor_height=...
-    - Lists by index: objects_args.0.morph_args.scale=1.1, sensors_args[1].name=...
-
-    Optional prefixes accepted: cfgs., env.
-    Values are parsed to bool/int/float when possible; comma-separated values become lists/tuples
-    if the target field is a sequence.
-    """
-    base_args = EnvArgsRegistry[env_name]
-    return apply_overrides_generic(base_args, overrides, prefixes=("cfgs.", "env."))
-
-
 def create_gs_env(
     show_viewer: bool = False,
     num_envs: int = 4096,
@@ -191,7 +174,7 @@ def evaluate_policy(
     inference_policy = ppo.get_inference_policy()
 
     # Reset environment
-    obs = wrapped_env.get_observations()
+    obs, _ = wrapped_env.get_observations()
 
     print("Starting evaluation...")
     if show_viewer:
@@ -238,7 +221,7 @@ def evaluate_policy(
                 # For viewer mode, check termination conditions
                 if terminated.item() or truncated.item():
                     print(f"Episode ended at step {step_count}, Total reward: {total_reward:.2f}")
-                    obs = wrapped_env.get_observations()
+                    obs, _ = wrapped_env.get_observations()
                     total_reward = 0.0
 
     except KeyboardInterrupt:

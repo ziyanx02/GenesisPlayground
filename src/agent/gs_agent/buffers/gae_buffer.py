@@ -85,6 +85,7 @@ class GAEBuffer(BaseBuffer):
         num_envs: int,
         max_steps: int,
         actor_obs_size: int,
+        critic_obs_size: int,
         action_size: int,
         device: torch.device = _DEFAULT_DEVICE,
         gae_gamma: float = 0.98,
@@ -104,6 +105,7 @@ class GAEBuffer(BaseBuffer):
         self._num_envs = num_envs
         self._max_steps = max_steps
         self._actor_obs_dim = actor_obs_size
+        self._critic_obs_dim = critic_obs_size
         self._action_dim = action_size
         self._device = device
 
@@ -119,13 +121,14 @@ class GAEBuffer(BaseBuffer):
         self._final_value = None
 
         # Initialize buffer
-        self._buffer = self._init_buffers(actor_obs_size, action_size)
+        self._buffer = self._init_buffers(actor_obs_size, critic_obs_size, action_size)
 
-    def _init_buffers(self, actor_obs_dim: int, action_dim: int) -> TensorDict:
+    def _init_buffers(self, actor_obs_dim: int, critic_obs_dim: int, action_dim: int) -> TensorDict:
         max_steps, num_envs = self._max_steps, self._num_envs
         buffer = TensorDict(
             {
                 GAEBufferKey.ACTOR_OBS: torch.zeros(max_steps, num_envs, actor_obs_dim),
+                GAEBufferKey.CRITIC_OBS: torch.zeros(max_steps, num_envs, critic_obs_dim),
                 GAEBufferKey.ACTIONS: torch.zeros(max_steps, num_envs, action_dim),
                 GAEBufferKey.REWARDS: torch.zeros(max_steps, num_envs, 1),
                 GAEBufferKey.DONES: torch.zeros(max_steps, num_envs, 1).byte(),
@@ -148,6 +151,7 @@ class GAEBuffer(BaseBuffer):
             raise ValueError(f"Buffer full! Cannot append more than {self._max_steps} steps.")
         idx = self._idx
         self._buffer[GAEBufferKey.ACTOR_OBS][idx] = transition[GAEBufferKey.ACTOR_OBS]
+        self._buffer[GAEBufferKey.CRITIC_OBS][idx] = transition[GAEBufferKey.CRITIC_OBS]
         self._buffer[GAEBufferKey.ACTIONS][idx] = transition[GAEBufferKey.ACTIONS]
         self._buffer[GAEBufferKey.REWARDS][idx] = transition[GAEBufferKey.REWARDS]
         self._buffer[GAEBufferKey.DONES][idx] = transition[GAEBufferKey.DONES]
@@ -210,6 +214,9 @@ class GAEBuffer(BaseBuffer):
                 mini_batch_size = bucket.numel()
                 yield {
                     GAEBufferKey.ACTOR_OBS: self._buffer[GAEBufferKey.ACTOR_OBS][
+                        t_idx, b_idx
+                    ].reshape(mini_batch_size, -1),
+                    GAEBufferKey.CRITIC_OBS: self._buffer[GAEBufferKey.CRITIC_OBS][
                         t_idx, b_idx
                     ].reshape(mini_batch_size, -1),
                     GAEBufferKey.ACTIONS: self._buffer[GAEBufferKey.ACTIONS][t_idx, b_idx].reshape(

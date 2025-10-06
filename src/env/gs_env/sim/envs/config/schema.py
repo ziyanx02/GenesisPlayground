@@ -38,4 +38,7 @@ class EnvArgs(BaseModel):
 class LeggedRobotEnvArgs(EnvArgs):
     action_latency: int = 1
     obs_history_len: int = 1
-    obs_scales: dict[str, list[float]]
+    obs_scales: dict[str, float]
+    obs_noises: dict[str, float]
+    actor_obs_terms: list[str]
+    critic_obs_terms: list[str]

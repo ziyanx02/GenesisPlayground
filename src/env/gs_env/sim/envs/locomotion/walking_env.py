@@ -98,7 +98,7 @@ class WalkingEnv(BaseEnv):
 
         # specify the space attributes
         self._action_space = self._robot.action_space
-        self._observation_space = gym.spaces.Dict(
+        self._actor_observation_space = gym.spaces.Dict(
             {
                 "last_action": gym.spaces.Box(
                     low=-np.inf, high=np.inf, shape=(self._robot.dof_dim,), dtype=np.float32
@@ -114,9 +114,35 @@ class WalkingEnv(BaseEnv):
                 ),
                 "ang_vel": gym.spaces.Box(low=-np.inf, high=np.inf, shape=(3,), dtype=np.float32),
                 "commands": gym.spaces.Box(low=-np.inf, high=np.inf, shape=(3,), dtype=np.float32),
-                # "img": spaces.Box(
-                #     low=0.0, high=255.0, shape=self._args.img_resolution, dtype=NP_SCALAR
-                # ),  # RGB image
+            }
+        )
+        self._critic_observation_space = gym.spaces.Dict(
+            {
+                "last_action": gym.spaces.Box(
+                    low=-np.inf, high=np.inf, shape=(self._robot.dof_dim,), dtype=np.float32
+                ),
+                "dof_pos": gym.spaces.Box(
+                    low=-np.inf, high=np.inf, shape=(self._robot.dof_dim,), dtype=np.float32
+                ),
+                "dof_vel": gym.spaces.Box(
+                    low=-np.inf, high=np.inf, shape=(self._robot.dof_dim,), dtype=np.float32
+                ),
+                "projected_gravity": gym.spaces.Box(
+                    low=-1.0, high=1.0, shape=(3,), dtype=np.float32
+                ),
+                "base_lin_vel": gym.spaces.Box(
+                    low=-np.inf, high=np.inf, shape=(3,), dtype=np.float32
+                ),
+                "base_ang_vel": gym.spaces.Box(
+                    low=-np.inf, high=np.inf, shape=(3,), dtype=np.float32
+                ),
+                "commands": gym.spaces.Box(low=-np.inf, high=np.inf, shape=(3,), dtype=np.float32),
+                "feet_height": gym.spaces.Box(
+                    low=-np.inf, high=np.inf, shape=(2,), dtype=np.float32
+                ),
+                "feet_contact_force": gym.spaces.Box(
+                    low=-np.inf, high=np.inf, shape=(2,), dtype=np.float32
+                ),
             }
         )
         self._info_space = gym.spaces.Dict({})
@@ -238,20 +264,20 @@ class WalkingEnv(BaseEnv):
         self.time_out_buf[:] = time_out_buf
         return time_out_buf
 
-    def get_observations(self) -> torch.Tensor:
+    def get_observations(self) -> tuple[torch.Tensor, torch.Tensor]:
         self._update_buffers()
-        # Prepare observation components
-        # import ipdb; ipdb.set_trace()
         obs_components = []
-        for key in self._args.obs_scales.keys():
-            obs_gt = getattr(self, key) * self._args.obs_scales[key][0]
-            obs_noise = torch.randn_like(obs_gt) * self._args.obs_scales[key][1]
+        for key in self._args.actor_obs_terms:
+            obs_gt = getattr(self, key) * self._args.obs_scales.get(key, 1.0)
+            obs_noise = torch.randn_like(obs_gt) * self._args.obs_noises.get(key, 0.0)
             obs_components.append(obs_gt + obs_noise)
-        obs_tensor = torch.cat(obs_components, dim=-1)
-
-        self._extra_info["observations"] = {"critic": obs_tensor}
-        self._extra_info["time_outs"] = self.time_out_buf.clone()
-        return obs_tensor
+        actor_obs = torch.cat(obs_components, dim=-1)
+        obs_components = []
+        for key in self._args.critic_obs_terms:
+            obs_gt = getattr(self, key) * self._args.obs_scales.get(key, 1.0)
+            obs_components.append(obs_gt)
+        critic_obs = torch.cat(obs_components, dim=-1)
+        return actor_obs, critic_obs
 
     def apply_action(self, action: torch.Tensor) -> None:
         action = action.detach().to(self._device)
@@ -293,6 +319,14 @@ class WalkingEnv(BaseEnv):
         self.time_since_random_push[push_env_ids] = 0.0
 
     def get_extra_infos(self) -> dict[str, Any]:
+        self._update_buffers()
+        obs_components = []
+        for key in self._args.critic_obs_terms:
+            obs_gt = getattr(self, key) * self._args.obs_scales.get(key, 1.0)
+            obs_components.append(obs_gt)
+        obs_tensor = torch.cat(obs_components, dim=-1)
+        self._extra_info["observations"] = {"critic": obs_tensor}
+        self._extra_info["time_outs"] = self.time_out_buf.clone()
         return self._extra_info
 
     def _update_buffers(self) -> None:
@@ -329,11 +363,6 @@ class WalkingEnv(BaseEnv):
         self.feet_orientation[:] = quat_apply(
             quat_inv(feet_quaternions), self.global_gravity.repeat(2, 1)
         ).reshape(self.num_envs, 2, 3)
-
-    def get_info(self, envs_idx: torch.IntTensor | None = None) -> dict[str, Any]:
-        if envs_idx is None:
-            envs_idx = torch.IntTensor(range(self.num_envs))
-        return dict()
 
     def get_reward(self) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
         reward_total = torch.zeros(self.num_envs, device=self._device)
@@ -456,12 +485,11 @@ class WalkingEnv(BaseEnv):
 
     @property
     def actor_obs_dim(self) -> int:
-        return get_space_dim(self._observation_space)
+        return get_space_dim(self._actor_observation_space)
 
     @property
     def critic_obs_dim(self) -> int:
-        num_critic_obs = get_space_dim(self._observation_space)
-        return num_critic_obs
+        return get_space_dim(self._critic_observation_space)
 
     @property
     def last_action(self) -> torch.Tensor:

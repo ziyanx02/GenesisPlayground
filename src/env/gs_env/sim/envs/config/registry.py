@@ -99,13 +99,34 @@ EnvArgsRegistry["walk_default"] = LeggedRobotEnvArgs(
     action_latency=1,
     obs_history_len=1,
     obs_scales={
-        "last_action": [1.0, 0.0],
-        "dof_pos": [1.0, 0.01],
-        "dof_vel": [0.1, 0.2],
-        "projected_gravity": [1.0, 0.05],
-        "base_ang_vel": [0.5, 0.2],
-        "commands": [1.0, 0.0],
+        "dof_vel": 0.1,
+        "base_ang_vel": 0.5,
     },
+    obs_noises={
+        "dof_pos": 0.01,
+        "dof_vel": 0.2,
+        "projected_gravity": 0.05,
+        "base_ang_vel": 0.2,
+    },
+    actor_obs_terms=[
+        "last_action",
+        "dof_pos",
+        "dof_vel",
+        "projected_gravity",
+        "base_ang_vel",
+        "commands",
+    ],
+    critic_obs_terms=[
+        "last_action",
+        "dof_pos",
+        "dof_vel",
+        "projected_gravity",
+        "base_lin_vel",
+        "base_ang_vel",
+        "commands",
+        "feet_height",
+        "feet_contact_force",
+    ],
 )
 
 
