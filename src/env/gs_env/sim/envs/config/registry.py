@@ -98,6 +98,14 @@ EnvArgsRegistry["walk_default"] = LeggedRobotEnvArgs(
     img_resolution=(480, 270),
     action_latency=1,
     obs_history_len=1,
+    obs_scales={
+        "last_action": [1.0, 0.0],
+        "dof_pos": [1.0, 0.01],
+        "dof_vel": [0.1, 0.2],
+        "projected_gravity": [1.0, 0.05],
+        "base_ang_vel": [0.5, 0.2],
+        "commands": [1.0, 0.0],
+    },
 )
 
 

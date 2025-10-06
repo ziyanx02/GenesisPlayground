@@ -38,3 +38,4 @@ class EnvArgs(BaseModel):
 class LeggedRobotEnvArgs(EnvArgs):
     action_latency: int = 1
     obs_history_len: int = 1
+    obs_scales: dict[str, list[float]]

@@ -87,7 +87,7 @@ class WalkingEnv(BaseEnv):
         # some auxiliary variables
         self._max_sim_time = 20.0  # seconds
         self._command_resample_time = 10.0  # seconds
-        self._random_push_time = 10.0  # seconds
+        self._random_push_time = 4.0  # seconds
         #
         self._init()
         self.reset()
@@ -242,14 +242,11 @@ class WalkingEnv(BaseEnv):
         self._update_buffers()
         # Prepare observation components
         # import ipdb; ipdb.set_trace()
-        obs_components = [
-            self._last_action,  # last action
-            self._robot.dof_pos,  # joint positions
-            self._robot.dof_vel,  # joint velocities
-            self.projected_gravity,  # projected gravity in base frame
-            self.base_ang_vel,  # angular velocity in base frame
-            self.commands,  # command velocities
-        ]
+        obs_components = []
+        for key in self._args.obs_scales.keys():
+            obs_gt = getattr(self, key) * self._args.obs_scales[key][0]
+            obs_noise = torch.randn_like(obs_gt) * self._args.obs_scales[key][1]
+            obs_components.append(obs_gt + obs_noise)
         obs_tensor = torch.cat(obs_components, dim=-1)
 
         self._extra_info["observations"] = {"critic": obs_tensor}
@@ -465,6 +462,18 @@ class WalkingEnv(BaseEnv):
     def critic_obs_dim(self) -> int:
         num_critic_obs = get_space_dim(self._observation_space)
         return num_critic_obs
+
+    @property
+    def last_action(self) -> torch.Tensor:
+        return self._last_action
+
+    @property
+    def dof_pos(self) -> torch.Tensor:
+        return self._robot.dof_pos
+
+    @property
+    def dof_vel(self) -> torch.Tensor:
+        return self._robot.dof_vel
 
     # @property
     # def depth_shape(self):
