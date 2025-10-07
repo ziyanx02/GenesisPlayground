@@ -326,7 +326,7 @@ class WalkingEnv(BaseEnv):
             obs_components.append(obs_gt)
         obs_tensor = torch.cat(obs_components, dim=-1)
         self._extra_info["observations"] = {"critic": obs_tensor}
-        self._extra_info["time_outs"] = self.time_out_buf.clone()
+        self._extra_info["time_outs"] = self.time_out_buf.clone()[:, None]
         return self._extra_info
 
     def _update_buffers(self) -> None:
