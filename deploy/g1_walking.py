@@ -88,11 +88,7 @@ if __name__ == '__main__':
             print(obs)
             obs_t = torch.as_tensor(obs, dtype=torch.float32, device=device).unsqueeze(0)
             with torch.no_grad():
-                out = policy(obs_t)  
-                act_t = out[0] if isinstance(out, (tuple, list)) else out
-                if act_t.dim() == 2 and act_t.size(0) == 1:
-                    act_t = act_t.squeeze(0)                # [act_dim]
-                action = act_t.detach().cpu().numpy().astype(np.float32)
+                action = policy(obs_t)[0].squeeze(0).detach().cpu().numpy().astype(np.float32)
             last_action = action
             # action[[5, 11]] = 0
 

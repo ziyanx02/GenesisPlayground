@@ -2,9 +2,9 @@ import time
 import sys
 
 from unitree_sdk2py.core.channel import ChannelPublisher, ChannelSubscriber, ChannelFactoryInitialize
-from unitree_sdk2py.idl.default import unitree_go_msg_dds__HeightMap_
 from unitree_sdk2py.idl.default import std_msgs_msg_dds__String_
-from unitree_sdk2py.idl.unitree_go.msg.dds_ import HeightMap_
+# from unitree_sdk2py.idl.unitree_go.msg.dds_ import HeightMap_
+from unitree_sdk2py.idl.sensor_msgs.msg.dds_ import PointCloud2_
 from unitree_sdk2py.idl.std_msgs.msg.dds_ import String_
 from unitree_sdk2py.utils.crc import CRC
 from unitree_sdk2py.utils.thread import RecurrentThread
@@ -28,7 +28,7 @@ class HeightMapHandler:
     def init(self):
 
         try:
-            ChannelFactoryInitialize(0)
+            ChannelFactoryInitialize(0, "enx2c16dbaafd43") # MANUAL SET NETWORK INTERFACE
         except:
             pass
 
@@ -39,18 +39,34 @@ class HeightMapHandler:
         self.lidar_switch_publisher.Write(self.lidar_switch)
 
         # create subscriber # 
-        self.heightmap_subscriber = ChannelSubscriber("rt/utlidar/height_map_array", HeightMap_)
-        self.heightmap_subscriber.Init(self.LowStateMessageHandler, 10)
+        # self.heightmap_subscriber = ChannelSubscriber("rt/utlidar/height_map_array", HeightMap_)
+        # self.heightmap_subscriber.Init(self.LowStateMessageHandler, 10)
+        self.lidar_subscriber = ChannelSubscriber("rt/utlidar/cloud_livox_mid360", PointCloud2_)
+        self.lidar_subscriber.Init(self.LidarMessageHandler, 10)
 
-    def LowStateMessageHandler(self, msg: HeightMap_):
-        if msg.stamp > self.stamp + 0.1:
+    # def LowStateMessageHandler(self, msg: HeightMap_):
+    #     if msg.stamp > self.stamp + 0.1:
+    #         self.msg = msg
+    #         self.width = msg.width
+    #         self.height = msg.height
+    #         self.resolution = msg.resolution
+    #         self.origin = msg.origin
+    #         self.stamp = msg.stamp
+    #         self.data = msg.data
+    def LidarMessageHandler(self, msg: PointCloud2_):
+        print("LidarMessageHandler called.")
+        exit()
+        if msg.header.stamp > self.header.stamp + 0.1:
             self.msg = msg
-            self.width = msg.width
+            self.header = msg.header
             self.height = msg.height
-            self.resolution = msg.resolution
-            self.origin = msg.origin
-            self.stamp = msg.stamp
+            self.width = msg.width
+            self.fields = msg.fields
+            self.is_bigendian = msg.is_bigendian
+            self.point_step = msg.point_step
+            self.row_step = msg.row_step
             self.data = msg.data
+            self.is_dense = msg.is_dense
 
     @property
     def height_map(self):
