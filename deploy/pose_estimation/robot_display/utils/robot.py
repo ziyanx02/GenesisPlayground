@@ -82,7 +82,7 @@ class Robot:
                     is_availible[i] = False
                     self.foot_names.append(link.name)
                     self.foot_links.append(link)
-                    self.foot_joints.append(link.joint)
+                    self.foot_joints.append(link.joints[0])
 
         self.camera = self.scene.add_camera(
             pos=np.array([1, 0, 0]),
@@ -193,7 +193,7 @@ class Robot:
 
         body_joint_name = []
         for idx in self.body_link.child_idxs_local:
-            body_joint_name.append(self.links[idx].joint.name)
+            body_joint_name.append(self.links[idx].joints[0].name)
         if self.body_link.idx_local != 0: # If the base link is not the root link
             body_joint_name.append(self.body_link.joint.name)
 
@@ -250,7 +250,7 @@ class Robot:
 
         joint_pos = {}
         for joint in self.joints:
-            joint_pos[joint.name] = joint.get_pos()
+            joint_pos[joint.name] = joint.get_anchor_pos()
 
         max_dist = 0
         for path in paths:

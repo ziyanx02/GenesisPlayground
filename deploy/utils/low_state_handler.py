@@ -97,11 +97,10 @@ JointID = {
 
 class LowStateMsgHandler:
     def __init__(self, cfg, freq=1000):
-
         self.cfg = cfg
         self.update_interval = 1.0 / freq
-        self.robot_name = cfg["robot_name"]
-        self.dof_names = cfg["environment"]["dof_names"]
+        self.robot_name = cfg.robot_args.morph_args.file.split("/")[2].split("_")[-1]
+        self.dof_names = cfg.robot_args.dof_names
         self.num_dof = len(self.dof_names)
         self.dof_index = [JointID[self.robot_name][name] for name in self.dof_names]
 

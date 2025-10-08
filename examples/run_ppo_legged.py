@@ -24,29 +24,6 @@ from gs_env.sim.envs.config.registry import EnvArgsRegistry
 from gs_env.sim.envs.locomotion.walking_env import WalkingEnv
 from utils import apply_overrides_generic
 
-def to_builtin(obj):
-    """Recursively convert objects to YAML-serializable builtins."""
-    # defaultdict first (it's also a dict subclass)
-    if isinstance(obj, defaultdict):
-        return {k: to_builtin(v) for k, v in obj.items()}
-    if isinstance(obj, dict):
-        return {to_builtin(k): to_builtin(v) for k, v in obj.items()}
-    if isinstance(obj, (list, tuple, set)):
-        seq = [to_builtin(x) for x in obj]
-        return seq if not isinstance(obj, tuple) else tuple(seq)
-    if isinstance(obj, np.ndarray):
-        return obj.tolist()
-    if isinstance(obj, (np.floating, np.integer, np.bool_)):
-        return obj.item()
-    if torch is not None and isinstance(obj, getattr(torch, "Tensor", ())):
-        return obj.detach().cpu().tolist()
-    if isinstance(obj, Path):
-        return str(obj)
-    return obj
-
-def nested_dict():
-    return defaultdict(nested_dict)
-
 def _apply_env_overrides(env_name: str, overrides: dict[str, Any] | None) -> Any:
     """Create a copied env args from registry with deep overrides applied.
 
@@ -342,7 +319,7 @@ def train_policy(
     print(f"Total steps: {train_summary_info['total_steps']}.")
     print(f"Total reward: {train_summary_info['final_reward']:.2f}.")
 
-def save_deploy_cfgs(
+def save_deploy_policy(
     exp_name: str | None = None,
     num_ckpt: int | None = None,
     env_args: Any = None,
@@ -379,50 +356,9 @@ def save_deploy_cfgs(
         ckpt_path = load_latest_model(Path(exp_dir))
     print(f"Converting checkpoint: {ckpt_path}")
 
-    yaml_path = Path(exp_dir) / "cfgs" / (output_file + ".yaml")
     pt_path = Path(exp_dir) / "ckpts" / (output_file + ".pt")
-
     # ---- build environment & PPO as in evaluate_policy ----
     env = create_gs_env(show_viewer=False, num_envs=1, device="cuda", args=env_args)
-    cfg = nested_dict()
-    robot = env._robot
-
-    # Extract and save relevant config parameters for deployment
-    cfg["robot"]["foot_name"] = [
-    robot._args.left_foot_link_name,
-    robot._args.right_foot_link_name]
-    cfg["robot"]["asset_path"] = robot._morph.file
-    cfg["robot"]["scale"] = robot._morph.scale
-    cfg["environment"]["base_init_quat"] = robot._default_quat.tolist()
-    cfg["environment"]["num_actions"] = robot.action_space.shape[0]
-    cfg["environment"]["action_scale"] = env._args.robot_args.action_scale
-    cfg["environment"]["observation"]["obs_scales"]["dof_pos"] = 1.0
-    cfg["environment"]["observation"]["obs_scales"]["dof_vel"] = 1.0
-    cfg["environment"]["observation"]["obs_scales"]["ang_vel"] = 1.0
-    pd_stiffness = {}
-    pd_damping = {}
-
-    for dof_name in robot._args.dof_names:
-        for key in robot._args.dof_kp.keys():
-            if key in dof_name:  # match partial name
-                pd_stiffness[dof_name] = robot._args.dof_kp[key]
-                pd_damping[dof_name] = robot._args.dof_kd[key]
-
-    cfg["environment"]["PD_stiffness"] = pd_stiffness
-    cfg["environment"]["PD_damping"] = pd_damping
-    cfg["environment"]["dof_names"] = robot._args.dof_names
-    cfg["environment"]["default_joint_angles"] = {
-    name: robot._args.default_dof[name] for name in robot._args.dof_names
-    }
-
-    yaml_path.parent.mkdir(parents=True, exist_ok=True)
-    cfg_clean = to_builtin(cfg)
-
-
-    with open(yaml_path, "w") as f:
-        yaml.safe_dump(cfg_clean, f, default_flow_style=False, sort_keys=False)
-
-    print(f"✅ Config saved to {yaml_path}")
 
     wrapped_env = GenesisEnvWrapper(env, device=env.device)
 
@@ -493,7 +429,7 @@ def main(
         # Export to TorchScript mode
         num_envs = 1
         print("Export mode: Exporting trained policy to TorchScript")
-        save_deploy_cfgs(exp_name=exp_name, num_ckpt=num_ckpt, env_args=env_args, output_file=output_file)
+        save_deploy_policy(exp_name=exp_name, num_ckpt=num_ckpt, env_args=env_args, output_file=output_file)
     else:
         # Training mode
         print("Training mode: Starting policy training")

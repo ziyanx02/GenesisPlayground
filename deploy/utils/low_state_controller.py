@@ -25,22 +25,19 @@ class LowStateCmdHandler(LowStateMsgHandler):
     def __init__(self, cfg, freq=1000):
         super().__init__(cfg, freq)
 
-        if self.robot_name == "go2":
-            self.kp = [self.cfg["environment"]["PD_stiffness"]["joint"],] * self.num_dof
-        else:
-            self.kp = [self.cfg["environment"]["PD_stiffness"][name] for name in self.dof_names]
-        if self.robot_name == "go2":
-            self.kd = [self.cfg["environment"]["PD_damping"]["joint"],] * self.num_dof
-        else:
-            self.kd = [self.cfg["environment"]["PD_damping"][name] for name in self.dof_names]
+        kp_groups = self.cfg.robot_args.dof_kp
+        self.kp = [kp_groups[self.group_from_name(name, kp_groups.keys())] for name in self.dof_names]
 
-        self.default_pos = np.array([self.cfg["environment"]["default_joint_angles"][name] for name in self.dof_names])
-        if "reset_joint_angles" in self.cfg["environment"].keys():
-            self.reset_pos = np.array([self.cfg["environment"]["reset_joint_angles"][name] for name in self.dof_names])
-            self.target_pos = np.array([self.cfg["environment"]["reset_joint_angles"][name] for name in self.dof_names])
+        kd_groups = self.cfg.robot_args.dof_kd
+        self.kd = [kd_groups[self.group_from_name(name, kd_groups.keys())] for name in self.dof_names]
+
+        self.default_pos = np.array([self.cfg.robot_args.default_dof[name] for name in self.dof_names])
+        if "reset_joint_angles" in vars(self.cfg.robot_args).keys():
+            self.reset_pos = np.array([self.cfg.robot_args.reset_joint_angles[name] for name in self.dof_names])
+            self.target_pos = np.array([self.cfg.robot_args.reset_joint_angles[name] for name in self.dof_names])
         else:
-            self.reset_pos = np.array([self.cfg["environment"]["default_joint_angles"][name] for name in self.dof_names])
-            self.target_pos = np.array([self.cfg["environment"]["default_joint_angles"][name] for name in self.dof_names])
+            self.reset_pos = np.array([self.cfg.robot_args.default_dof[name] for name in self.dof_names])
+            self.target_pos = np.array([self.cfg.robot_args.default_dof[name] for name in self.dof_names])
         self.full_default_pos = np.zeros(self.num_full_dof)
         for i in range(self.num_dof):
             self.full_default_pos[self.dof_index[i]] = self.default_pos[i]
@@ -191,6 +188,11 @@ class LowStateCmdHandler(LowStateMsgHandler):
 
     def emrgence_stop(self):
         self.emergency_stop = True
+
+    def group_from_name(self, joint_name: str, groups) -> str:
+        for g in sorted(groups, key=len, reverse=True):
+            if joint_name.endswith(g + "_joint") or joint_name.endswith(g):
+                return g
 
 if __name__ == "__main__":
 

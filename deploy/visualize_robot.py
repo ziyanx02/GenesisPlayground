@@ -4,25 +4,16 @@ import time
 
 from pose_estimation.robot_display.display import Display
 from utils.low_state_handler import LowStateMsgHandler
+from gs_env.sim.envs.config.registry import EnvArgsRegistry
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-r', '--robot', type=str, default='g1')
-parser.add_argument('-c', '--cfg', type=str, default=None)
+parser.add_argument('-c', '--cfg', type=str, default='walk_default')
 args = parser.parse_args()
 
-cfg = yaml.safe_load(open(f"./pose_estimation/cfgs/{args.robot}/basic.yaml"))
-if args.cfg is not None:
-    cfg = yaml.safe_load(open(f"./pose_estimation/cfgs/{args.robot}/{args.cfg}.yaml"))
+cfg = EnvArgsRegistry[args.cfg]
 
 robot = Display(cfg)
-
-if args.robot == "go2":
-    cfg_path = "go2-handstand.yaml"
-elif args.robot == "g1":
-    cfg_path = "./pose_estimation/cfgs/g1/g1-walking.yaml"
-with open(cfg_path, "r") as f:
-    cfg = yaml.safe_load(f)
-cfg["robot_name"] = args.robot
 
 low_state_handler = LowStateMsgHandler(cfg)
 low_state_handler.init()

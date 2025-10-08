@@ -5,17 +5,12 @@ import yaml
 
 from utils.low_state_controller import LowStateCmdHandler
 from transforms3d import quaternions
+from gs_env.sim.envs.config.registry import EnvArgsRegistry
 
 task_name = "g1-walking"
 ckpt_path = f"./ckpts/{task_name}.pt"
-cfg_path = f"./cfgs/{task_name}.yaml"
 
-with open(cfg_path, "r") as f:
-    cfg = yaml.safe_load(f)
-
-cfg["robot_name"] = task_name.split('-')[0]
-
-base_init_quat = torch.tensor(cfg["environment"]["base_init_quat"])
+# base_init_quat = torch.tensor(cfg["environment"]["base_init_quat"])
 
 def gs_transform_by_quat(pos, quat):
     qw, qx, qy, qz = quat.unbind(-1)
@@ -42,6 +37,7 @@ if __name__ == '__main__':
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
+    cfg = EnvArgsRegistry["walk_default"]
     handler = LowStateCmdHandler(cfg)
     handler.init()
     handler.start()
@@ -54,7 +50,7 @@ if __name__ == '__main__':
     default_dof_pos = handler.default_pos
     reset_dof_pos = handler.reset_pos.copy()
     commands = np.array([0., 0., 0.,])
-    last_action = np.array([0.0] * cfg["environment"]["num_actions"])
+    last_action = np.array([0.0] * len(cfg.robot_args.dof_names))
     try:
         while not handler.Start:
             time.sleep(0.1)
@@ -78,10 +74,13 @@ if __name__ == '__main__':
             obs = np.concatenate(
                 [   
                     last_action,
-                    (np.array(handler.joint_pos) - default_dof_pos) * cfg["environment"]["observation"]["obs_scales"]["dof_pos"],
-                    np.array(handler.joint_vel) * cfg["environment"]["observation"]["obs_scales"]["dof_vel"],
+                    # (np.array(handler.joint_pos) - default_dof_pos) * cfg["environment"]["observation"]["obs_scales"]["dof_pos"],
+                    (np.array(handler.joint_pos) - default_dof_pos) * 1.0,
+                    # np.array(handler.joint_vel) * cfg["environment"]["observation"]["obs_scales"]["dof_vel"],
+                    np.array(handler.joint_vel) * 1.0,
                     projected_gravity,
-                    np.array(handler.ang_vel) * cfg["environment"]["observation"]["obs_scales"]["ang_vel"],
+                    # np.array(handler.ang_vel) * cfg["environment"]["observation"]["obs_scales"]["ang_vel"],
+                    np.array(handler.ang_vel) * 1.0,
                     commands[:3],
                 ]
             )
@@ -98,7 +97,7 @@ if __name__ == '__main__':
             # print(action[dof_id])
             #### START FROM SMALL VALUES ####
             print(action)
-            handler.target_pos = reset_dof_pos + 0.3 * (default_dof_pos + action * cfg["environment"]["action_scale"] - reset_dof_pos)
+            handler.target_pos = reset_dof_pos + 0.3 * (default_dof_pos + action * cfg.robot_args.action_scale - reset_dof_pos)
             step_id += 1
             cnt += 1
             # print(time.time() - last_update_time)
