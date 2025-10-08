@@ -101,6 +101,7 @@ EnvArgsRegistry["walk_default"] = LeggedRobotEnvArgs(
     obs_scales={
         "dof_vel": 0.1,
         "base_ang_vel": 0.5,
+        "feet_contact_force": 0.001,
     },
     obs_noises={
         "dof_pos": 0.01,
