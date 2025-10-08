@@ -308,6 +308,18 @@ class LeggedRobotBase(BaseGymRobot):
         self._robot.control_dofs_force(force=q_force, dofs_idx_local=self._dofs_idx_local)
 
     @property
+    def action_space(self) -> spaces.Box:
+        return self._action_space
+
+    @property
+    def n_links(self) -> int:
+        return self._robot.n_links
+
+    @property
+    def n_joints(self) -> int:
+        return self._robot.n_joints
+
+    @property
     def dof_dim(self) -> int:
         return self._dof_dim
 

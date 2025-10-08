@@ -96,66 +96,14 @@ class WalkingEnv(BaseEnv):
         # domain randomization
         self._robot.post_build_init()
 
-        # specify the space attributes
-        self._action_space = self._robot.action_space
-        self._actor_observation_space = gym.spaces.Dict(
-            {
-                "last_action": gym.spaces.Box(
-                    low=-np.inf, high=np.inf, shape=(self._robot.dof_dim,), dtype=np.float32
-                ),
-                "dof_pos": gym.spaces.Box(
-                    low=-np.inf, high=np.inf, shape=(self._robot.dof_dim,), dtype=np.float32
-                ),
-                "dof_vel": gym.spaces.Box(
-                    low=-np.inf, high=np.inf, shape=(self._robot.dof_dim,), dtype=np.float32
-                ),
-                "projected_gravity": gym.spaces.Box(
-                    low=-1.0, high=1.0, shape=(3,), dtype=np.float32
-                ),
-                "ang_vel": gym.spaces.Box(low=-np.inf, high=np.inf, shape=(3,), dtype=np.float32),
-                "commands": gym.spaces.Box(low=-np.inf, high=np.inf, shape=(3,), dtype=np.float32),
-            }
-        )
-        self._critic_observation_space = gym.spaces.Dict(
-            {
-                "last_action": gym.spaces.Box(
-                    low=-np.inf, high=np.inf, shape=(self._robot.dof_dim,), dtype=np.float32
-                ),
-                "dof_pos": gym.spaces.Box(
-                    low=-np.inf, high=np.inf, shape=(self._robot.dof_dim,), dtype=np.float32
-                ),
-                "dof_vel": gym.spaces.Box(
-                    low=-np.inf, high=np.inf, shape=(self._robot.dof_dim,), dtype=np.float32
-                ),
-                "projected_gravity": gym.spaces.Box(
-                    low=-1.0, high=1.0, shape=(3,), dtype=np.float32
-                ),
-                "base_lin_vel": gym.spaces.Box(
-                    low=-np.inf, high=np.inf, shape=(3,), dtype=np.float32
-                ),
-                "base_ang_vel": gym.spaces.Box(
-                    low=-np.inf, high=np.inf, shape=(3,), dtype=np.float32
-                ),
-                "commands": gym.spaces.Box(low=-np.inf, high=np.inf, shape=(3,), dtype=np.float32),
-                "feet_height": gym.spaces.Box(
-                    low=-np.inf, high=np.inf, shape=(2,), dtype=np.float32
-                ),
-                "feet_contact_force": gym.spaces.Box(
-                    low=-np.inf, high=np.inf, shape=(2,), dtype=np.float32
-                ),
-            }
-        )
-        self._info_space = gym.spaces.Dict({})
-        self._extra_info = {}
-
         # initialize buffers
         self._action_buf = torch.zeros(
             (self.num_envs, self.action_dim, self._args.action_latency + 1), device=self._device
         )
         self._action = torch.zeros((self.num_envs, self.action_dim), device=self._device)
-        self._last_action = torch.zeros((self.num_envs, self.action_dim), device=self._device)
-        self._last_last_action = torch.zeros((self.num_envs, self.action_dim), device=self._device)
-        self._torque = torch.zeros((self.num_envs, self.action_dim), device=self._device)
+        self.last_action = torch.zeros((self.num_envs, self.action_dim), device=self._device)
+        self.last_last_action = torch.zeros((self.num_envs, self.action_dim), device=self._device)
+        self.torque = torch.zeros((self.num_envs, self.action_dim), device=self._device)
 
         self.base_default_pos: torch.Tensor = self._robot.default_pos[None, :].repeat(
             self.num_envs, 1
@@ -216,6 +164,34 @@ class WalkingEnv(BaseEnv):
             torch.arange(self.num_envs, device=self._device, dtype=torch.float32) * self.dt,
             self._random_push_time,
         )
+
+        # specify the space attributes
+        actor_obs_spaces = {}
+        for obs_term in self._args.actor_obs_terms:
+            assert hasattr(self, obs_term), (
+                f"Observation term {obs_term} not found in the environment."
+            )
+            actor_obs_spaces[obs_term] = gym.spaces.Box(
+                low=-np.inf,
+                high=np.inf,
+                shape=(getattr(self, obs_term).shape[-1],),
+                dtype=np.float32,
+            )
+        self._actor_observation_space = gym.spaces.Dict(actor_obs_spaces)
+        critic_obs_spaces = {}
+        for obs_term in self._args.critic_obs_terms:
+            assert hasattr(self, obs_term), (
+                f"Observation term {obs_term} not found in the environment."
+            )
+            critic_obs_spaces[obs_term] = gym.spaces.Box(
+                low=-np.inf,
+                high=np.inf,
+                shape=(getattr(self, obs_term).shape[-1],),
+                dtype=np.float32,
+            )
+        self._critic_observation_space = gym.spaces.Dict(critic_obs_spaces)
+        self._info_space = gym.spaces.Dict({})
+        self._extra_info = {}
 
         # rendering
         self._rendered_images = []
@@ -286,7 +262,7 @@ class WalkingEnv(BaseEnv):
         exec_action = self._action_buf[:, :, 0]
         exec_action *= self._args.robot_args.action_scale
 
-        self._torque *= 0
+        self.torque *= 0
 
         # Apply actions and simulate physics
         for _ in range(self._args.robot_args.decimation):
@@ -296,15 +272,15 @@ class WalkingEnv(BaseEnv):
 
             self._robot.apply_action(action=exec_action)
             self._scene.scene.step()
-            self._torque = torch.max(self._torque, torch.abs(self._robot.torque))
+            self.torque = torch.max(self.torque, torch.abs(self._robot.torque))
 
         # Render if rendering is enabled
         self._render_headless()
 
     def update_history(self) -> None:
         # save for reward computation
-        self._last_last_action = self._last_action.clone()
-        self._last_action = self._action.clone()
+        self.last_last_action = self.last_action.clone()
+        self.last_action = self._action.clone()
         self.feet_air_time *= 1 - self.feet_contact
 
         resample_env_ids = torch.nonzero(
@@ -373,15 +349,15 @@ class WalkingEnv(BaseEnv):
             reward = func(
                 {
                     "action": self._action,
-                    "last_action": self._last_action,
-                    "last_last_action": self._last_last_action,
+                    "last_action": self.last_action,
+                    "last_last_action": self.last_last_action,
                     "base_pos": self.base_pos,
                     "lin_vel": self.base_lin_vel,
                     "ang_vel": self.base_ang_vel,
-                    "dof_pos": self._robot.dof_pos,
-                    "dof_vel": self._robot.dof_vel,
+                    "dof_pos": self.dof_pos,
+                    "dof_vel": self.dof_vel,
                     "projected_gravity": self.projected_gravity,
-                    "torque": self._torque,
+                    "torque": self.torque,
                     "dof_pos_limits": self._robot.dof_pos_limits,
                     "commands": self.commands,
                     "feet_first_contact": self.feet_first_contact,
@@ -479,8 +455,12 @@ class WalkingEnv(BaseEnv):
         return self._scene.num_envs
 
     @property
+    def action_space(self) -> gym.spaces.Box:
+        return self._robot.action_space
+
+    @property
     def action_dim(self) -> int:
-        act_dim = get_space_dim(self._action_space)
+        act_dim = get_space_dim(self.action_space)
         return act_dim
 
     @property
@@ -490,10 +470,6 @@ class WalkingEnv(BaseEnv):
     @property
     def critic_obs_dim(self) -> int:
         return get_space_dim(self._critic_observation_space)
-
-    @property
-    def last_action(self) -> torch.Tensor:
-        return self._last_action
 
     @property
     def dof_pos(self) -> torch.Tensor:
