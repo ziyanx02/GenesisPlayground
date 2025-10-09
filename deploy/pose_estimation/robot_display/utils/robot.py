@@ -182,7 +182,7 @@ class Robot:
                 joint_pos.append(joint.get_anchor_pos())
             # calculate longest distance between joints and store it as self.diameter
 
-        _, self.diameter = self.center_diameter
+        _, self.diameter = self.get_center_diameter()
 
         print("--------- Link Names ----------")
         print(self.link_name)
@@ -304,7 +304,7 @@ class Robot:
                     if (path[i + 1], path[i]) not in self.leg:
                         self.leg.append((path[i + 1], path[i]))
 
-        _, self.diameter = self.center_diameter
+        _, self.diameter = self.get_center_diameter()
 
     def reset(self) -> None:
         self.target_body_pos = self.init_body_pos.clone()
@@ -833,19 +833,16 @@ class Robot:
 
         return rgb_arr, seg_arr, labelled_image, unique_labels[unique_labels != -1]
 
-    @property
-    def center(self) -> torch.Tensor:
+    def get_center(self):
         AABB = self.entity.get_AABB()
         return (AABB[1] + AABB[0]) / 2
 
-    @property
-    def diameter(self) -> torch.Tensor:
+    def get_diameter(self):
         AABB = self.entity.get_AABB()
         return torch.norm(AABB[1] - AABB[0])
 
-    @property
-    def center_diameter(self) -> tuple[torch.Tensor, torch.Tensor]:
-        return self.center, self.diameter
+    def get_center_diameter(self):
+        return self.get_center(), self.get_diameter()
 
     @property
     def links(self) -> Sequence[Any]:
