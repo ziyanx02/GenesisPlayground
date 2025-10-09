@@ -90,6 +90,7 @@ def evaluate_policy(
     exp_name: str | None = None,
     show_viewer: bool = False,
     num_ckpt: int | None = None,
+    device: str = "cuda",
     env_args: Any = None,
     algo_cfg: Any = None,
 ) -> None:
@@ -135,7 +136,7 @@ def evaluate_policy(
     env = create_gs_env(
         show_viewer=show_viewer,
         num_envs=1,
-        device="cuda",
+        device=device,
         args=env_args,
     )
     wrapped_env = GenesisEnvWrapper(env, device=env.device)

@@ -153,17 +153,11 @@ class LeggedRobotBase(BaseGymRobot):
         # mass
         min_mass, max_mass = self._args.dr_args.mass_range
         added_mass = torch.rand(len(envs_idx), 1) * (max_mass - min_mass) + min_mass
-        solver.set_links_mass_shift(
-            added_mass,
-            [
-                self._body_link_idx,
-            ],
-            envs_idx,
-        )
+        self._robot.set_mass_shift(added_mass, [self._body_link_idx,], envs_idx)
         # com displacement
         min_com, max_com = self._args.dr_args.com_displacement_range
-        # displacement = (torch.rand(len(envs_idx), 3) - 0.5) * (max_com - min_com) + min_com
-        # solver.set_links_COM_shift(displacement, [self._body_link_idx,], envs_idx)
+        displacement = (torch.rand(len(envs_idx), 1, 3) - 0.5) * (max_com - min_com) + min_com
+        self._robot.set_COM_shift(displacement, [self._body_link_idx,], envs_idx)
 
     def _randomize_controls(self, envs_idx: torch.IntTensor) -> None:
         # kp
