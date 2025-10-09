@@ -3,6 +3,7 @@
 
 import glob
 import os
+import platform
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -16,7 +17,6 @@ from gs_agent.runners.onpolicy_runner import OnPolicyRunner
 from gs_agent.utils.logger import configure as logger_configure
 from gs_agent.utils.policy_loader import load_latest_model
 from gs_agent.wrappers.gs_env_wrapper import GenesisEnvWrapper
-from gs_env.common.bases.base_env import BaseEnv
 from gs_env.sim.envs.config.registry import EnvArgsRegistry
 from gs_env.sim.envs.locomotion.walking_env import WalkingEnv
 from utils import apply_overrides_generic
@@ -27,11 +27,9 @@ def create_gs_env(
     num_envs: int = 4096,
     device: str = "cuda",
     args: Any = None,
-) -> BaseEnv:
+) -> WalkingEnv:
     """Create gym environment wrapper with optional config overrides."""
-    if torch.backends.mps.is_available():
-        device_tensor = torch.device("mps")
-    elif torch.cuda.is_available() and device == "cuda":
+    if torch.cuda.is_available() and device == "cuda":
         device_tensor = torch.device("cuda")
     else:
         device_tensor = torch.device("cpu")
@@ -56,7 +54,7 @@ def _apply_runner_overrides(runner_args: Any, overrides: dict[str, Any] | None) 
 
 
 def create_ppo_runner_from_registry(
-    env: BaseEnv,
+    env: WalkingEnv,
     exp_name: str | None = None,
     algo_cfg: Any = None,
     runner_args: Any = None,
@@ -174,19 +172,21 @@ def evaluate_policy(
     # Get inference policy
     inference_policy = ppo.get_inference_policy()
 
-    # Reset environment
-    obs, _ = wrapped_env.get_observations()
-
     print("Starting evaluation...")
-    if show_viewer:
-        print("Running endlessly (press Ctrl+C to stop)")
-    else:
-        print("Running until all environments are done")
 
-    step_count = 0
-    total_reward = 0.0
+    def evaluate() -> None:
+        nonlocal wrapped_env, inference_policy, gif_path, show_viewer
+        if show_viewer:
+            print("Running endlessly (press Ctrl+C to stop)")
+        else:
+            print("Running until all environments are done")
 
-    try:
+        step_count = 0
+        total_reward = 0.0
+
+        # Reset environment
+        obs, _ = wrapped_env.get_observations()
+
         while True:
             if step_count < 100:
                 wrapped_env.env.commands[:] = 0.0  # Forward velocity command
@@ -225,19 +225,27 @@ def evaluate_policy(
                     obs, _ = wrapped_env.get_observations()
                     total_reward = 0.0
 
+        # Stop rendering and save GIF if recording
+        if not show_viewer and gif_path is not None:
+            print("Stopping rendering and saving GIF...")
+            env.stop_rendering(save_gif=True, gif_path=str(gif_path))  # type: ignore
+            print(f"GIF saved to: {gif_path}")
+
+        print(f"Evaluation of checkpoint {ckpt_path} completed successfully!")
+        print("Final evaluation results:")
+        print(f"Total steps: {step_count}")
+        print(f"Final reward: {total_reward:.2f}")
+
+    try:
+        if platform.system() == "Darwin" and show_viewer:
+            import threading
+
+            threading.Thread(target=evaluate).start()
+            env.scene.scene.viewer.run()  # type: ignore
+        else:
+            evaluate()
     except KeyboardInterrupt:
-        print(f"\nEvaluation interrupted at step {step_count}")
-
-    # Stop rendering and save GIF if recording
-    if not show_viewer and gif_path is not None:
-        print("Stopping rendering and saving GIF...")
-        env.stop_rendering(save_gif=True, gif_path=str(gif_path))  # type: ignore
-        print(f"GIF saved to: {gif_path}")
-
-    print(f"Evaluation of checkpoint {ckpt_path} completed successfully!")
-    print("Final evaluation results:")
-    print(f"Total steps: {step_count}")
-    print(f"Final reward: {total_reward:.2f}")
+        pass
 
 
 def train_policy(
@@ -284,22 +292,32 @@ def train_policy(
 
     # Train using Runner
     print("Starting training...")
-    train_summary_info = {
-        "total_time": 0.0,
-        "total_episodes": 0,
-        "total_steps": 0,
-        "final_reward": 0.0,
-    }
-    try:
+
+    def train() -> None:
+        nonlocal runner, logger
+        train_summary_info = {
+            "total_time": 0.0,
+            "total_episodes": 0,
+            "total_steps": 0,
+            "final_reward": 0.0,
+        }
         train_summary_info = runner.train(metric_logger=logger)
+        print("Training completed successfully!")
+        print(f"Training completed in {train_summary_info['total_time']:.2f} seconds.")
+        print(f"Total episodes: {train_summary_info['total_episodes']}.")
+        print(f"Total steps: {train_summary_info['total_steps']}.")
+        print(f"Total reward: {train_summary_info['final_reward']:.2f}.")
+
+    try:
+        if platform.system() == "Darwin" and show_viewer:
+            import threading
+
+            threading.Thread(target=train).start()
+            env.scene.scene.viewer.run()  # type: ignore
+        else:
+            train()
     except KeyboardInterrupt:
         pass
-
-    print("Training completed successfully!")
-    print(f"Training completed in {train_summary_info['total_time']:.2f} seconds.")
-    print(f"Total episodes: {train_summary_info['total_episodes']}.")
-    print(f"Total steps: {train_summary_info['total_steps']}.")
-    print(f"Total reward: {train_summary_info['final_reward']:.2f}.")
 
 
 def main(

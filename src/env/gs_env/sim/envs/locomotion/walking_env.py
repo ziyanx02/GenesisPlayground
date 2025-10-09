@@ -1,4 +1,5 @@
 import importlib
+import platform
 from typing import Any
 
 import genesis as gs
@@ -41,6 +42,7 @@ class WalkingEnv(BaseEnv):
         self._num_envs = num_envs
         self._device = device
         self._show_viewer = show_viewer
+        self._refresh_visualizer = False if platform.system() == "Darwin" else True
         self._args = args
 
         if not gs._initialized:  # noqa: SLF001
@@ -271,7 +273,7 @@ class WalkingEnv(BaseEnv):
             self.time_since_random_push += self._scene.scene.dt
 
             self._robot.apply_action(action=exec_action)
-            self._scene.scene.step()
+            self._scene.scene.step(refresh_visualizer=self._refresh_visualizer)
             self.torque = torch.max(self.torque, torch.abs(self._robot.torque))
 
         # Render if rendering is enabled
@@ -449,6 +451,14 @@ class WalkingEnv(BaseEnv):
             new_vel = cur_vel.clone()
             new_vel[:, :2] = new_vel[:, :2] + delta_xy
             self._robot.set_dofs_velocity(new_vel, envs_idx=envs_idx, dofs_idx_local=[0, 1, 2])
+
+    @property
+    def scene(self) -> FlatScene:
+        return self._scene
+
+    @property
+    def robot(self) -> G1Robot:
+        return self._robot
 
     @property
     def num_envs(self) -> int:
