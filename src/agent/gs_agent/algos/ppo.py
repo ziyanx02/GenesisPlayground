@@ -347,7 +347,7 @@ class PPO(BaseAlgo):
 
     def load(self, path: Path, load_optimizer: bool = True) -> None:
         """Load the algorithm from a file."""
-        checkpoint = torch.load(path)
+        checkpoint = torch.load(path, map_location=self.device)
         self._actor.load_state_dict(checkpoint["model_state_dict"])
         if load_optimizer:
             self._actor_optimizer.load_state_dict(checkpoint["actor_optimizer_state_dict"])
