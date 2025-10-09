@@ -88,6 +88,7 @@ class PPO(BaseAlgo):
             num_envs=self._num_envs,
             max_steps=self._num_steps,
             actor_obs_size=self._actor_obs_dim,
+            critic_obs_size=self._critic_obs_dim,
             action_size=self._action_dim,
             device=self.device,
         )
@@ -98,39 +99,45 @@ class PPO(BaseAlgo):
             # If KL is too high, reduce learning rate
             if kl_mean > self.cfg.target_kl * 1.5:  # 1.5x threshold
                 self._current_lr = max(
-                    self._current_lr / self.cfg.lr_adaptive_factor,
-                    self.cfg.lr_min
+                    self._current_lr / self.cfg.lr_adaptive_factor, self.cfg.lr_min
                 )
             # If KL is too low, increase learning rate
             elif kl_mean < self.cfg.target_kl * 0.5:  # 0.5x threshold
                 self._current_lr = min(
-                    self._current_lr * self.cfg.lr_adaptive_factor,
-                    self.cfg.lr_max
+                    self._current_lr * self.cfg.lr_adaptive_factor, self.cfg.lr_max
                 )
-            
+
             # Update only actor optimizer learning rate
             for param_group in self._actor_optimizer.param_groups:
-                param_group['lr'] = self._current_lr
+                param_group["lr"] = self._current_lr
 
     def _collect_rollouts(self, num_steps: int) -> dict[str, Any]:
         """Collect rollouts from the environment."""
-        obs = self.env.get_observations()
+        actor_obs, critic_obs = self.env.get_observations()
         termination_buffer = []
         reward_terms_buffer = []
         with torch.inference_mode():
             # collect rollouts and compute returns & advantages
             for _step in range(num_steps):
-                action, log_prob, mu, sigma = self._actor.forward_with_dist_params(obs)
+                action, log_prob, mu, sigma = self._actor.forward_with_dist_params(actor_obs)
                 # Step environment
-                next_obs, reward, terminated, truncated, _extra_infos = self.env.step(action)
+                _, reward, terminated, truncated, _extra_infos = self.env.step(action)
+                next_actor_obs, next_critic_obs = self.env.get_observations()
+
+                # add next value to reward of truncated steps
+                if "time_outs" in _extra_infos:
+                    time_outs = _extra_infos["time_outs"]
+                    next_values = self._critic(_extra_infos["observations"]["critic"])
+                    reward = reward + next_values * time_outs
 
                 # all tensors are of shape: [num_envs, dim]
                 transition = {
-                    GAEBufferKey.ACTOR_OBS: obs,
+                    GAEBufferKey.ACTOR_OBS: actor_obs,
+                    GAEBufferKey.CRITIC_OBS: critic_obs,
                     GAEBufferKey.ACTIONS: action,
                     GAEBufferKey.REWARDS: reward,
                     GAEBufferKey.DONES: terminated,
-                    GAEBufferKey.VALUES: self._critic(obs),
+                    GAEBufferKey.VALUES: self._critic(critic_obs),
                     GAEBufferKey.ACTION_LOGPROBS: log_prob,
                     GAEBufferKey.MU: mu,
                     GAEBufferKey.SIGMA: sigma,
@@ -159,9 +166,9 @@ class PPO(BaseAlgo):
                     self._curr_reward_sum[new_ids] = 0
                     self._curr_ep_len[new_ids] = 0
 
-                obs = next_obs
+                actor_obs, critic_obs = next_actor_obs, next_critic_obs
         with torch.no_grad():
-            last_value = self._critic(self.env.get_observations())
+            last_value = self._critic(critic_obs)
             self._rollouts.set_final_value(last_value)
 
         mean_reward = 0.0
@@ -191,7 +198,8 @@ class PPO(BaseAlgo):
 
     def _train_one_batch(self, mini_batch: dict[GAEBufferKey, torch.Tensor]) -> dict[str, Any]:
         """Train one batch of rollouts."""
-        obs = mini_batch[GAEBufferKey.ACTOR_OBS]
+        actor_obs = mini_batch[GAEBufferKey.ACTOR_OBS]
+        critic_obs = mini_batch[GAEBufferKey.CRITIC_OBS]
         act = mini_batch[GAEBufferKey.ACTIONS]
         old_log_prob = mini_batch[GAEBufferKey.ACTION_LOGPROBS]
         old_mu = mini_batch[GAEBufferKey.MU]
@@ -200,7 +208,7 @@ class PPO(BaseAlgo):
         returns = mini_batch[GAEBufferKey.RETURNS]
 
         #
-        new_log_prob = self._actor.evaluate_log_prob(obs, act)
+        new_log_prob = self._actor.evaluate_log_prob(actor_obs, act)
         ratio = torch.exp(new_log_prob - old_log_prob)
         surr1 = -advantage * ratio
         surr2 = -advantage * torch.clamp(
@@ -210,30 +218,34 @@ class PPO(BaseAlgo):
 
         # Rename approx_kl to log_ratio
         log_ratio = (new_log_prob - old_log_prob).mean()
-        
+
         # Calculate true KL divergence between old and new distributions
         # Get new distribution parameters
-        dist = self._actor._dist_from_obs(obs)
+        dist = self._actor.dist_from_obs(actor_obs)
         new_mu = dist.mean
         new_sigma = dist.stddev
-        
+
         # KL divergence between two Gaussian distributions
         # KL(P||Q) = 0.5 * [log(det(Σ_Q)/det(Σ_P)) - d + tr(Σ_Q^{-1} * Σ_P) + (μ_Q - μ_P)^T * Σ_Q^{-1} * (μ_Q - μ_P)]
         # For diagonal Gaussians: KL = 0.5 * [sum(log(σ_Q^2/σ_P^2)) - d + sum(σ_P^2/σ_Q^2) + sum((μ_Q - μ_P)^2/σ_Q^2)]
         kl_div = 0.5 * (
-            torch.log(new_sigma**2 / (old_sigma**2 + 1e-8)).sum(dim=-1, keepdim=True)  # log ratio of variances
+            torch.log(new_sigma**2 / (old_sigma**2 + 1e-8)).sum(
+                dim=-1, keepdim=True
+            )  # log ratio of variances
             - new_mu.shape[-1]  # dimension
             + (old_sigma**2 / (new_sigma**2 + 1e-8)).sum(dim=-1, keepdim=True)  # trace term
-            + ((new_mu - old_mu)**2 / (new_sigma**2 + 1e-8)).sum(dim=-1, keepdim=True)  # mean difference term
+            + ((new_mu - old_mu) ** 2 / (new_sigma**2 + 1e-8)).sum(
+                dim=-1, keepdim=True
+            )  # mean difference term
         )
         kl_mean = kl_div.mean()
 
         # Calculate value loss
-        values = self._critic(obs)
+        values = self._critic(critic_obs)
         value_loss = (returns - values).pow(2).mean()
 
         # Calculate entropy loss
-        entropy = self._actor.entropy_on(obs)
+        entropy = self._actor.entropy_on(actor_obs)
         entropy_loss = entropy.mean()
 
         # Total loss
@@ -305,15 +317,11 @@ class PPO(BaseAlgo):
                 "log_ratio": statistics.mean(
                     [metrics["log_ratio"] for metrics in train_metrics_list]
                 ),
-                "kl_mean": statistics.mean(
-                    [metrics["kl_mean"] for metrics in train_metrics_list]
-                ),
+                "kl_mean": statistics.mean([metrics["kl_mean"] for metrics in train_metrics_list]),
                 "mean_std": statistics.mean(
                     [metrics["mean_std"] for metrics in train_metrics_list]
                 ),
-                "max_std": statistics.mean(
-                    [metrics["max_std"] for metrics in train_metrics_list]
-                ),
+                "max_std": statistics.mean([metrics["max_std"] for metrics in train_metrics_list]),
                 "learning_rate": self._current_lr,
             },
             "speed": {

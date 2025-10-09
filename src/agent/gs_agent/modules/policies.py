@@ -36,7 +36,7 @@ class GaussianPolicy(Policy):
             tuple: (action, log_prob)
         """
         # Convert observation to tensor format
-        dist = self._dist_from_obs(obs)
+        dist = self.dist_from_obs(obs)
         if deterministic:
             action = dist.mean
         else:
@@ -61,21 +61,21 @@ class GaussianPolicy(Policy):
             tuple: (action, log_prob, mu, sigma)
         """
         # Convert observation to tensor format
-        dist = self._dist_from_obs(obs)
+        dist = self.dist_from_obs(obs)
         if deterministic:
             action = dist.mean
         else:
             action = dist.sample()
         # Compute log probability with tanh transformation
         log_prob = dist.log_prob(action).sum(-1, keepdim=True)
-        
+
         # Extract mu and sigma from the distribution
         mu = dist.mean
         sigma = dist.stddev
-        
+
         return action, log_prob, mu, sigma
 
-    def _dist_from_obs(self, obs: torch.Tensor) -> Normal:
+    def dist_from_obs(self, obs: torch.Tensor) -> Normal:
         feature = self.backbone(obs)
         action_mu = self.mu(feature)
         action_std = torch.exp(self.log_std)
@@ -91,7 +91,7 @@ class GaussianPolicy(Policy):
         Returns:
             Log probability of the action.
         """
-        dist = self._dist_from_obs(obs)
+        dist = self.dist_from_obs(obs)
         return dist.log_prob(act).sum(-1, keepdim=True)
 
     def entropy_on(self, obs: torch.Tensor) -> torch.Tensor:
@@ -103,7 +103,7 @@ class GaussianPolicy(Policy):
         Returns:
             Entropy of the action distribution.
         """
-        dist = self._dist_from_obs(obs)
+        dist = self.dist_from_obs(obs)
         return dist.entropy().sum(-1)
 
     def get_action_shape(self) -> tuple[int, ...]:

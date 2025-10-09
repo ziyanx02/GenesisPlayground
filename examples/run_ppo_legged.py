@@ -24,6 +24,7 @@ from gs_env.sim.envs.config.registry import EnvArgsRegistry
 from gs_env.sim.envs.locomotion.walking_env import WalkingEnv
 from utils import apply_overrides_generic
 
+
 def _apply_env_overrides(env_name: str, overrides: dict[str, Any] | None) -> Any:
     """Create a copied env args from registry with deep overrides applied.
 
@@ -193,7 +194,7 @@ def evaluate_policy(
     inference_policy = ppo.get_inference_policy()
 
     # Reset environment
-    obs = wrapped_env.get_observations()
+    obs, _ = wrapped_env.get_observations()
 
     print("Starting evaluation...")
     if show_viewer:
@@ -240,7 +241,7 @@ def evaluate_policy(
                 # For viewer mode, check termination conditions
                 if terminated.item() or truncated.item():
                     print(f"Episode ended at step {step_count}, Total reward: {total_reward:.2f}")
-                    obs = wrapped_env.get_observations()
+                    obs, _ = wrapped_env.get_observations()
                     total_reward = 0.0
 
     except KeyboardInterrupt:
