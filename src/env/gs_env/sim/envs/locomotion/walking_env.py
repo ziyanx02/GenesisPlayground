@@ -221,10 +221,10 @@ class WalkingEnv(BaseEnv):
     def get_terminated(self) -> torch.Tensor:
         reset_buf = self.get_truncated()
         tilt_mask = torch.logical_or(
-            torch.abs(self.base_euler[:, 0]) > 0.3,
-            torch.abs(self.base_euler[:, 1]) > 0.3,
+            torch.abs(self.base_euler[:, 0]) > 0.5,
+            torch.abs(self.base_euler[:, 1]) > 0.5,
         )
-        height_mask = self.base_pos[:, 2] < 0.3
+        height_mask = self.base_pos[:, 2] < 0.5
         reset_buf |= tilt_mask
         reset_buf |= height_mask
         self.reset_buf[:] = reset_buf
@@ -276,6 +276,8 @@ class WalkingEnv(BaseEnv):
 
         # Render if rendering is enabled
         self._render_headless()
+        self.feet_first_contact[:] = (self.feet_air_time > 0.0) * self.feet_contact
+        self.feet_air_time += self.dt
 
     def update_history(self) -> None:
         # save for reward computation
@@ -322,8 +324,6 @@ class WalkingEnv(BaseEnv):
             :, [self._robot.left_foot_link_idx, self._robot.right_foot_link_idx], 2
         ]
         self.feet_contact[:] = self.feet_contact_force > 1.0
-        self.feet_first_contact[:] = (self.feet_air_time > 0.0) * self.feet_contact
-        self.feet_air_time += self.dt
         self.link_positions[:] = self._robot.link_positions
         self.link_quaternions[:] = self._robot.link_quaternions
         self.feet_height[:] = self.link_positions[
@@ -444,7 +444,7 @@ class WalkingEnv(BaseEnv):
     def _random_push(self, envs_idx: torch.Tensor) -> None:
         if envs_idx.numel() > 0:
             # sample delta v in [-2, 2] for x and y
-            delta_xy = torch.rand((len(envs_idx), 2), device=self._device) * 4.0 - 2.0
+            delta_xy = torch.rand((len(envs_idx), 2), device=self._device) * 2.0 - 1.0
             cur_vel = self._robot.get_vel()[envs_idx]  # world-frame linear velocity (x,y,z)
             new_vel = cur_vel.clone()
             new_vel[:, :2] = new_vel[:, :2] + delta_xy
