@@ -1,13 +1,28 @@
 import numpy as np
 import torch
-
 from robot_display.utils.gui import start_gui
 from robot_display.utils.robot import Robot
 
+
 class GUIDisplay:
-    def __init__(self, cfg: dict, body_pos=True, body_pose=True, dofs_pos=True, foot_pos=False, pd_control=False, save_callable=None, vis_options=False, **kwargs):
-        assert body_pos or body_pose or dofs_pos or foot_pos, "At least one of the interaction modes should be enabled"
-        assert not (dofs_pos and foot_pos), "Dofs pos and foot position cannot be enabled at the same time"
+    def __init__(
+        self,
+        cfg: dict,
+        body_pos=True,
+        body_pose=True,
+        dofs_pos=True,
+        foot_pos=False,
+        pd_control=False,
+        save_callable=None,
+        vis_options=False,
+        **kwargs,
+    ):
+        assert body_pos or body_pose or dofs_pos or foot_pos, (
+            "At least one of the interaction modes should be enabled"
+        )
+        assert not (dofs_pos and foot_pos), (
+            "Dofs pos and foot position cannot be enabled at the same time"
+        )
         self.cfg = cfg
         self.pd_control = pd_control
         self.control_body_height = body_pos
@@ -63,7 +78,7 @@ class GUIDisplay:
             self.value_body_height_idx = idx
             idx += 1
         if self.control_body_pose:
-            self.labels.extend(["Body Roll", "Body Pitch" , "Body Yaw"])
+            self.labels.extend(["Body Roll", "Body Pitch", "Body Yaw"])
             self.limits["Body Roll"] = [-180, 180]
             self.limits["Body Pitch"] = [-180, 180]
             self.limits["Body Yaw"] = [-180, 180]
@@ -73,12 +88,20 @@ class GUIDisplay:
         if self.control_dofs_pos:
             self.labels.extend(self.robot.dof_name)
             dof_limits = self.robot.dof_limit
-            dof_limits = (torch.clip(dof_limits[0], -np.pi, np.pi), torch.clip(dof_limits[1], -np.pi, np.pi))
+            dof_limits = (
+                torch.clip(dof_limits[0], -np.pi, np.pi),
+                torch.clip(dof_limits[1], -np.pi, np.pi),
+            )
             for i in range(len(self.robot.dof_name)):
-                self.limits[self.robot.dof_name[i]] = [dof_limits[0][i].item(), dof_limits[1][i].item()]
+                self.limits[self.robot.dof_name[i]] = [
+                    dof_limits[0][i].item(),
+                    dof_limits[1][i].item(),
+                ]
                 soft_limits = [
-                    dof_limits[1][i].item() - 0.9 * (dof_limits[1][i].item() - dof_limits[0][i].item()),
-                    dof_limits[0][i].item() + 0.9 * (dof_limits[1][i].item() - dof_limits[0][i].item()),
+                    dof_limits[1][i].item()
+                    - 0.9 * (dof_limits[1][i].item() - dof_limits[0][i].item()),
+                    dof_limits[0][i].item()
+                    + 0.9 * (dof_limits[1][i].item() - dof_limits[0][i].item()),
                 ]
                 if "pose" in self.cfg.keys() and "default_joint_angles" in self.cfg["pose"].keys():
                     value = self.cfg["pose"]["default_joint_angles"][self.robot.dof_name[i]]
@@ -127,15 +150,22 @@ class GUIDisplay:
         if self.control_body_height:
             self.robot.set_body_height(self.values[self.value_body_height_idx])
         if self.control_body_pose:
-            self.robot.set_body_pose(*self.values[self.value_body_pose_idx:self.value_body_pose_idx+3])
+            self.robot.set_body_pose(
+                *self.values[self.value_body_pose_idx : self.value_body_pose_idx + 3]
+            )
         if self.control_dofs_pos:
-            self.robot.set_dofs_position(self.values[self.value_dofs_pos_idx_start:self.value_dofs_pos_idx_end])
+            self.robot.set_dofs_position(
+                self.values[self.value_dofs_pos_idx_start : self.value_dofs_pos_idx_end]
+            )
         if self.control_foot_pos:
             poss = []
             quats = []
             body_pos = self.robot.target_body_pos
             for i in range(len(self.robot.foot_links)):
-                pos = self.values[self.value_foot_pos_idx_start + 3 * i:self.value_foot_pos_idx_start + 3 * (i + 1)]
+                pos = self.values[
+                    self.value_foot_pos_idx_start + 3 * i : self.value_foot_pos_idx_start
+                    + 3 * (i + 1)
+                ]
                 poss.append(body_pos + torch.tensor(pos))
                 # quats.append(link.get_quat())
                 quats.append(None)

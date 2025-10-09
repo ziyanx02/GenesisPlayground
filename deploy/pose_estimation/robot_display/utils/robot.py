@@ -1,25 +1,44 @@
 import os
 import time
+from collections.abc import Sequence
+from typing import Any
 
 import cv2
-from scipy.ndimage import label, center_of_mass
+import genesis as gs
 import numpy as np
 import torch
 from gstaichi._lib import core as _ti_core
 from gstaichi.lang import impl
+from robot_display.utils.gs_math import (
+    gs_euler2quat,
+    gs_quat2euler,
+    gs_quat_conjugate,
+    gs_quat_mul,
+    normalize,
+)
+from scipy.ndimage import center_of_mass
 
-import genesis as gs
-from robot_display.utils.gs_math import *
 
-def clean():
+def clean() -> None:
     gs.utils.misc.clean_cache_files()
     _ti_core.clean_offline_cache_files(os.path.abspath(impl.default_cfg().offline_cache_file_path))
     print("Cleaned up all genesis and taichi cache files.")
 
-class Robot:
-    def __init__(self, asset_file, foot_names, links_to_keep=[], scale=1.0, fps=60, substeps=1, vis_options=None, 
-                 init_pos = [0., 0., 0.], init_quat = [1., 0., 0., 0.], init_dof_pos=None):
 
+class Robot:
+    def __init__(
+        self,
+        asset_file,
+        foot_names,
+        links_to_keep=[],
+        scale=1.0,
+        fps=60,
+        substeps=1,
+        vis_options=None,
+        init_pos=[0.0, 0.0, 0.0],
+        init_quat=[1.0, 0.0, 0.0, 0.0],
+        init_dof_pos=None,
+    ) -> None:
         gs.init(backend=gs.cpu)
 
         self.vis_options = vis_options
@@ -58,7 +77,13 @@ class Robot:
 
         # Load entity
         if asset_file.endswith(".urdf"):
-            morph = gs.morphs.URDF(file=asset_file, collision=True, scale=scale, links_to_keep=links_to_keep, merge_fixed_links=self.merge_fixed_links)
+            morph = gs.morphs.URDF(
+                file=asset_file,
+                collision=True,
+                scale=scale,
+                links_to_keep=links_to_keep,
+                merge_fixed_links=self.merge_fixed_links,
+            )
         elif asset_file.endswith(".xml"):
             morph = gs.morphs.MJCF(file=asset_file, collision=True, scale=scale)
         else:
@@ -108,8 +133,7 @@ class Robot:
 
         self.step_target()
 
-    def _init_buffers(self):
-
+    def _init_buffers(self) -> None:
         self.link_name = [link.name for link in self.links]
         self.links_by_joint = {}
         self.joint_name = []
@@ -118,7 +142,7 @@ class Robot:
         self.dof_idx_qpos = []
         self.joint_name_to_dof_order = {}
         order = 0
-        base_dof_offset = 6 # Skip the base dofs
+        base_dof_offset = 6  # Skip the base dofs
         for joint in self.joints:
             self.joint_name_to_dof_order[joint.name] = -1
             if joint.type == gs.JOINT_TYPE.FREE:
@@ -140,7 +164,9 @@ class Robot:
         for _ in range(self.num_links):
             self.link_colors.append(np.random.randint(0, 256, 3))
 
-        self.link_adjacency_map = [[False for _ in range(self.num_links)] for _ in range(self.num_links)]
+        self.link_adjacency_map = [
+            [False for _ in range(self.num_links)] for _ in range(self.num_links)
+        ]
         for link in self.links:
             for idx in link.child_idxs_local:
                 self.link_adjacency_map[link.idx_local][idx] = self.links[idx].joints[0].name
@@ -156,7 +182,7 @@ class Robot:
                 joint_pos.append(joint.get_anchor_pos())
             # calculate longest distance between joints and store it as self.diameter
 
-        _, self.diameter = self.get_center_diameter()
+        _, self.diameter = self.center_diameter
 
         print("--------- Link Names ----------")
         print(self.link_name)
@@ -164,7 +190,7 @@ class Robot:
         print(self.dof_name)
         print("-------------------------------")
 
-        self.init_body_pos = torch.tensor(self.cfg_init_body_pos, dtype=torch.float32)  
+        self.init_body_pos = torch.tensor(self.cfg_init_body_pos, dtype=torch.float32)
         self.init_body_quat = torch.tensor(self.cfg_init_body_quat, dtype=torch.float32)
         self.init_dof_pos = torch.zeros(self.num_dofs, dtype=torch.float32)
         if self.cfg_init_dof_pos is not None:
@@ -179,8 +205,7 @@ class Robot:
         self.target_foot_pos = []
         self.target_foot_quat = []
 
-    def update_skeleton(self):
-
+    def update_skeleton(self) -> None:
         # for geom in self.body_link.geoms:
         #     vertices = geom.get_verts()
         #     print(vertices)
@@ -194,7 +219,7 @@ class Robot:
         body_joint_name = []
         for idx in self.body_link.child_idxs_local:
             body_joint_name.append(self.links[idx].joints[0].name)
-        if self.body_link.idx_local != 0: # If the base link is not the root link
+        if self.body_link.idx_local != 0:  # If the base link is not the root link
             body_joint_name.append(self.body_link.joint.name)
 
         # vertices to visualize body
@@ -219,12 +244,13 @@ class Robot:
         for link in self.foot_links:
             foot_idx = link.idx_local
             body_idx = self.body_link.idx_local
-            if foot_idx == body_idx: continue
+            if foot_idx == body_idx:
+                continue
             path = []
             visited = [False for _ in range(self.num_links)]
             dfs(foot_idx, body_idx, visited, path)
             paths.append(path)
-        
+
         # distill the path
         # remove the links that are used by other paths
         links_used_counter = [0 for _ in range(self.num_links)]
@@ -254,7 +280,9 @@ class Robot:
 
         max_dist = 0
         for path in paths:
-            dist_list = [0,]
+            dist_list = [
+                0,
+            ]
             dist = 0
             for i in range(len(path) - 1):
                 dist += torch.norm(joint_pos[path[i]] - joint_pos[path[i + 1]]).item()
@@ -276,22 +304,22 @@ class Robot:
                     if (path[i + 1], path[i]) not in self.leg:
                         self.leg.append((path[i + 1], path[i]))
 
-        _, self.diameter = self.get_center_diameter()
+        _, self.diameter = self.center_diameter
 
-    def reset(self):
+    def reset(self) -> None:
         self.target_body_pos = self.init_body_pos.clone()
         self.target_body_quat = self.init_body_quat.clone()
         self.target_dof_pos = self.init_dof_pos.clone()
         self.step_target()
 
-    def step(self):
+    def step(self) -> None:
         if self.dt - (time.time() - self.last_step_time) > 0.01:
             time.sleep(self.dt - (time.time() - self.last_step_time))
         self.last_step_time = time.time()
         self.entity.control_dofs_position(self.target_dof_pos, self.dof_idx)
         self.scene.step()
 
-    def step_vis(self):
+    def step_vis(self) -> None:
         if self.dt - (time.time() - self.last_step_time) > 0.01:
             time.sleep(self.dt - (time.time() - self.last_step_time))
         self.last_step_time = time.time()
@@ -308,9 +336,11 @@ class Robot:
             if self.visualize_robot_frame:
                 self._visualize_robot_frame()
 
-    def step_target(self):
+    def step_target(self) -> None:
         # Set the joint positions
-        self.target_dof_pos = torch.max(torch.min(self.target_dof_pos, self.dof_limit[1]), self.dof_limit[0])
+        self.target_dof_pos = torch.max(
+            torch.min(self.target_dof_pos, self.dof_limit[1]), self.dof_limit[0]
+        )
         self.entity.set_dofs_position(self.target_dof_pos, self.dof_idx, zero_velocity=True)
 
         # Set base rotation
@@ -321,75 +351,104 @@ class Robot:
         delta_pos = self.target_body_pos - self.body_pos
         self.entity.set_pos(delta_pos + self.entity.get_pos())
 
-    def clear_debug_objects(self):
+    def clear_debug_objects(self) -> None:
         self.scene.clear_debug_objects()
 
-    def _visualize_target_foot_pos(self):
-
-        self.scene.draw_debug_spheres(poss=self.target_foot_pos, radius=self.diameter / 20, color=(1, 0, 0, 0.5))
+    def _visualize_target_foot_pos(self) -> None:
+        self.scene.draw_debug_spheres(
+            poss=self.target_foot_pos, radius=self.diameter / 20, color=(1, 0, 0, 0.5)
+        )
         for link in self.foot_links:
-            self.scene.draw_debug_sphere(pos=link.get_pos(), radius=self.diameter / 20, color=(0, 1, 0, 0.5))
+            self.scene.draw_debug_sphere(
+                pos=link.get_pos(), radius=self.diameter / 20, color=(0, 1, 0, 0.5)
+            )
 
-    def visualize_frame(self, center):
-
+    def visualize_frame(self, center) -> None:
         length_frac = 0.3
         width_frac = 100
 
         vector = torch.tensor([1.0, 0.0, 0.0]) * self.diameter * length_frac
-        self.scene.draw_debug_arrow(center, vector, radius=self.diameter / width_frac, color=(1.0, 0.0, 0.0, 1.0))
+        self.scene.draw_debug_arrow(
+            center, vector, radius=self.diameter / width_frac, color=(1.0, 0.0, 0.0, 1.0)
+        )
         vector = torch.tensor([0.0, 1.0, 0.0]) * self.diameter * length_frac
-        self.scene.draw_debug_arrow(center, vector, radius=self.diameter / width_frac, color=(0.0, 1.0, 0.0, 1.0))
+        self.scene.draw_debug_arrow(
+            center, vector, radius=self.diameter / width_frac, color=(0.0, 1.0, 0.0, 1.0)
+        )
         vector = torch.tensor([0.0, 0.0, 1.0]) * self.diameter * length_frac
-        self.scene.draw_debug_arrow(center, vector, radius=self.diameter / width_frac, color=(0.0, 0.0, 1.0, 1.0))
+        self.scene.draw_debug_arrow(
+            center, vector, radius=self.diameter / width_frac, color=(0.0, 0.0, 1.0, 1.0)
+        )
 
         if self.visualize_skeleton:
             center = center - 2 * self.diameter
             vector = torch.tensor([1.0, 0.0, 0.0]) * self.diameter * length_frac
-            self.scene.draw_debug_arrow(center, vector, radius=self.diameter / width_frac, color=(1.0, 0.0, 0.0, 1.0))
+            self.scene.draw_debug_arrow(
+                center, vector, radius=self.diameter / width_frac, color=(1.0, 0.0, 0.0, 1.0)
+            )
             vector = torch.tensor([0.0, 1.0, 0.0]) * self.diameter * length_frac
-            self.scene.draw_debug_arrow(center, vector, radius=self.diameter / width_frac, color=(0.0, 1.0, 0.0, 1.0))
+            self.scene.draw_debug_arrow(
+                center, vector, radius=self.diameter / width_frac, color=(0.0, 1.0, 0.0, 1.0)
+            )
             vector = torch.tensor([0.0, 0.0, 1.0]) * self.diameter * length_frac
-            self.scene.draw_debug_arrow(center, vector, radius=self.diameter / width_frac, color=(0.0, 0.0, 1.0, 1.0))
+            self.scene.draw_debug_arrow(
+                center, vector, radius=self.diameter / width_frac, color=(0.0, 0.0, 1.0, 1.0)
+            )
 
-    def _visualize_robot_frame(self):
-
+    def _visualize_robot_frame(self) -> None:
         length_frac = 0.6
         width_frac = 70
 
         center = self.body_pos
         vector = torch.tensor([1.0, 0.0, 0.0]) * self.diameter * length_frac
-        self.scene.draw_debug_arrow(center, vector, radius=self.diameter / width_frac, color=(1.0, 0.0, 0.0, 1.0))
+        self.scene.draw_debug_arrow(
+            center, vector, radius=self.diameter / width_frac, color=(1.0, 0.0, 0.0, 1.0)
+        )
         vector = torch.tensor([0.0, 1.0, 0.0]) * self.diameter * length_frac
-        self.scene.draw_debug_arrow(center, vector, radius=self.diameter / width_frac, color=(0.0, 1.0, 0.0, 1.0))
+        self.scene.draw_debug_arrow(
+            center, vector, radius=self.diameter / width_frac, color=(0.0, 1.0, 0.0, 1.0)
+        )
         vector = torch.tensor([0.0, 0.0, 1.0]) * self.diameter * length_frac
-        self.scene.draw_debug_arrow(center, vector, radius=self.diameter / width_frac, color=(0.0, 0.0, 1.0, 1.0))
+        self.scene.draw_debug_arrow(
+            center, vector, radius=self.diameter / width_frac, color=(0.0, 0.0, 1.0, 1.0)
+        )
 
         if self.visualize_skeleton:
             center = self.body_pos - 2 * self.diameter
             vector = torch.tensor([1.0, 0.0, 0.0]) * self.diameter * length_frac
-            self.scene.draw_debug_arrow(center, vector, radius=self.diameter / width_frac, color=(1.0, 0.0, 0.0, 1.0))
+            self.scene.draw_debug_arrow(
+                center, vector, radius=self.diameter / width_frac, color=(1.0, 0.0, 0.0, 1.0)
+            )
             vector = torch.tensor([0.0, 1.0, 0.0]) * self.diameter * length_frac
-            self.scene.draw_debug_arrow(center, vector, radius=self.diameter / width_frac, color=(0.0, 1.0, 0.0, 1.0))
+            self.scene.draw_debug_arrow(
+                center, vector, radius=self.diameter / width_frac, color=(0.0, 1.0, 0.0, 1.0)
+            )
             vector = torch.tensor([0.0, 0.0, 1.0]) * self.diameter * length_frac
-            self.scene.draw_debug_arrow(center, vector, radius=self.diameter / width_frac, color=(0.0, 0.0, 1.0, 1.0))
+            self.scene.draw_debug_arrow(
+                center, vector, radius=self.diameter / width_frac, color=(0.0, 0.0, 1.0, 1.0)
+            )
 
-    def visualize_link_frame(self, center, x=True, y=True, z=True):
-
+    def visualize_link_frame(self, center, x=True, y=True, z=True) -> None:
         length_frac = 0.8
         width_frac = 70
 
         if x:
             vector = torch.tensor([1.0, 0.0, 0.0]) * self.diameter * length_frac
-            self.scene.draw_debug_arrow(center, vector, radius=self.diameter / width_frac, color=(1.0, 0.0, 0.0, 1.0))
+            self.scene.draw_debug_arrow(
+                center, vector, radius=self.diameter / width_frac, color=(1.0, 0.0, 0.0, 1.0)
+            )
         if y:
             vector = torch.tensor([0.0, 1.0, 0.0]) * self.diameter * length_frac
-            self.scene.draw_debug_arrow(center, vector, radius=self.diameter / width_frac, color=(0.0, 1.0, 0.0, 1.0))
+            self.scene.draw_debug_arrow(
+                center, vector, radius=self.diameter / width_frac, color=(0.0, 1.0, 0.0, 1.0)
+            )
         if z:
             vector = torch.tensor([0.0, 0.0, 1.0]) * self.diameter * length_frac
-            self.scene.draw_debug_arrow(center, vector, radius=self.diameter / width_frac, color=(0.0, 0.0, 1.0, 1.0))
+            self.scene.draw_debug_arrow(
+                center, vector, radius=self.diameter / width_frac, color=(0.0, 0.0, 1.0, 1.0)
+            )
 
-    def _visualize_skeleton(self):
-
+    def _visualize_skeleton(self) -> None:
         if time.time() - self.last_visualize_time < self.visualize_interval:
             return
         else:
@@ -402,10 +461,10 @@ class Robot:
             joint_pos[joint.name] = joint.get_pos()
             joint_pos[joint.name] -= 2 * self.diameter
 
-        body_color = (1.0, 0.5, 0., 1)
+        body_color = (1.0, 0.5, 0.0, 1)
         leg_color = (0, 0.8, 0.8, 1)
 
-        thickness = self.diameter / 50 
+        thickness = self.diameter / 50
 
         lines = []
         for name1 in self.joint_name:
@@ -444,6 +503,7 @@ class Robot:
     def get_dofs_between_links(self, link_id1, link_id2):
         path = []
         visited = [False for _ in range(self.num_links)]
+
         def dfs(curr, target):
             visited[curr] = True
             if curr == target:
@@ -454,6 +514,7 @@ class Robot:
                         path.append(self.link_adjacency_map[curr][i])
                         return True
             return False
+
         dfs(link_id1, link_id2)
         dofs = []
         for joint_name in path:
@@ -531,7 +592,7 @@ class Robot:
         roll, pitch, yaw = roll / 180 * np.pi, pitch / 180 * np.pi, yaw / 180 * np.pi
         xyz = torch.tensor([roll, pitch, yaw])
         R = gs_euler2quat(xyz)
-        # Compute the rotation quaternion 
+        # Compute the rotation quaternion
         self.target_body_quat = gs_quat_mul(R, self.init_body_quat)
 
     def set_dofs_position(self, positions, dof_idx_local=None):
@@ -554,7 +615,9 @@ class Robot:
                 quats=quats,
                 return_error=True,
             )
-            self.set_dofs_position(qpos[self.dof_idx_qpos][self.leg_joint_idx[i]], self.leg_joint_idx[i])
+            self.set_dofs_position(
+                qpos[self.dof_idx_qpos][self.leg_joint_idx[i]], self.leg_joint_idx[i]
+            )
 
     def set_link_pose(self, link_id, pos, quat=None):
         links = [self.body_link, self.links[link_id]]
@@ -662,11 +725,15 @@ class Robot:
             self.camera_distance = distance
         if lookat is not None:
             self.camera_lookat = torch.tensor(lookat)
-        pos = self.camera_lookat + self.camera_distance * torch.tensor([
-            np.cos(self.camera_azimuth / 180 * np.pi) * np.cos(self.camera_elevation / 180 * np.pi),
-            np.sin(self.camera_azimuth / 180 * np.pi) * np.cos(self.camera_elevation / 180 * np.pi),
-            np.sin(self.camera_elevation / 180 * np.pi),
-        ])
+        pos = self.camera_lookat + self.camera_distance * torch.tensor(
+            [
+                np.cos(self.camera_azimuth / 180 * np.pi)
+                * np.cos(self.camera_elevation / 180 * np.pi),
+                np.sin(self.camera_azimuth / 180 * np.pi)
+                * np.cos(self.camera_elevation / 180 * np.pi),
+                np.sin(self.camera_elevation / 180 * np.pi),
+            ]
+        )
         self.camera.set_pose(
             pos=pos,
             lookat=self.camera_lookat,
@@ -679,7 +746,7 @@ class Robot:
 
     def render(self, link_ids=None):
         rgb_arr, depth_arr, seg_arr, normal_arr = self.camera.render(rgb=True, segmentation=True)
-    
+
         alpha = 0.5
 
         # Create a color map for each segment ID
@@ -697,10 +764,10 @@ class Robot:
         highlighted_image = np.zeros_like(rgb_arr, dtype=np.float32)
         for label_id in unique_labels:
             if label_id == -1:
-                mask = (seg_arr == label_id)
+                mask = seg_arr == label_id
                 highlighted_image[mask] = rgb_arr[mask]
                 continue
-            mask = (seg_arr == label_id)
+            mask = seg_arr == label_id
             highlight_color = color_map[label_id]
             # Blend the highlight color with the original image
             highlighted_image[mask] = alpha * highlight_color + (1 - alpha) * rgb_arr[mask]
@@ -723,7 +790,7 @@ class Robot:
         for label_id in unique_labels:
             if label_id == -1:
                 continue  # Skip background
-            mask = (seg_arr == label_id)
+            mask = seg_arr == label_id
             if np.any(mask):
                 # Calculate the centroid of the segment
                 centroid = center_of_mass(mask)
@@ -732,7 +799,9 @@ class Robot:
                 # Ensure the centroid lies within the segment
                 if not mask[y, x]:
                     # Find the closest pixel in the segment to the centroid
-                    y, x = np.argwhere(mask)[np.linalg.norm(np.argwhere(mask) - centroid, axis=1).argmin()]
+                    y, x = np.argwhere(mask)[
+                        np.linalg.norm(np.argwhere(mask) - centroid, axis=1).argmin()
+                    ]
 
                 # Add a black square under the number for better visibility
                 text = str(label_id)
@@ -747,76 +816,89 @@ class Robot:
                 square_bottom_right = (x + text_w // 2 + 2, y + text_h // 2 + 2)
 
                 # Draw the black square
-                cv2.rectangle(labelled_image, square_top_left, square_bottom_right, (0, 0, 0), -1)  # -1 fills the rectangle
+                cv2.rectangle(
+                    labelled_image, square_top_left, square_bottom_right, (0, 0, 0), -1
+                )  # -1 fills the rectangle
 
                 # Put the segment ID as text on the image
-                cv2.putText(labelled_image, text, (x - text_w // 2, y + text_h // 2), font, font_scale, (255, 255, 255), thickness)
+                cv2.putText(
+                    labelled_image,
+                    text,
+                    (x - text_w // 2, y + text_h // 2),
+                    font,
+                    font_scale,
+                    (255, 255, 255),
+                    thickness,
+                )
 
         return rgb_arr, seg_arr, labelled_image, unique_labels[unique_labels != -1]
 
-    def get_center(self):
+    @property
+    def center(self) -> torch.Tensor:
         AABB = self.entity.get_AABB()
         return (AABB[1] + AABB[0]) / 2
 
-    def get_diameter(self):
+    @property
+    def diameter(self) -> torch.Tensor:
         AABB = self.entity.get_AABB()
         return torch.norm(AABB[1] - AABB[0])
 
-    def get_center_diameter(self):
-        return self.get_center(), self.get_diameter()
+    @property
+    def center_diameter(self) -> tuple[torch.Tensor, torch.Tensor]:
+        return self.center, self.diameter
 
     @property
-    def links(self):
+    def links(self) -> Sequence[Any]:
         return self.entity.links
 
     @property
-    def links_pos(self):
+    def links_pos(self) -> torch.Tensor:
         return self.entity.get_links_pos()
 
     @property
-    def links_quat(self):
+    def links_quat(self) -> torch.Tensor:
         return self.entity.get_links_quat()
 
     @property
-    def body_pos(self):
+    def body_pos(self) -> torch.Tensor:
         return self.links_pos[self.body_link.idx_local]
 
     @property
-    def body_quat(self):
+    def body_quat(self) -> torch.Tensor:
         return self.links_quat[self.body_link.idx_local]
 
     @property
-    def body_pose(self):
+    def body_pose(self) -> torch.Tensor:
         return gs_quat2euler(self.body_quat)
 
     @property
-    def base_pos(self):
+    def base_pos(self) -> torch.Tensor:
         return self.entity.get_pos()
 
     @property
-    def base_quat(self):
+    def base_quat(self) -> torch.Tensor:
         return self.entity.get_quat()
 
     @property
-    def joints(self):
+    def joints(self) -> Sequence[Any]:
         return self.entity.joints
 
     @property
-    def dof_pos(self):
+    def dof_pos(self) -> torch.Tensor:
         return self.entity.get_dofs_position(dofs_idx_local=self.dof_idx)
 
-    @ property
-    def dof_limit(self):
+    @property
+    def dof_limit(self) -> tuple[torch.Tensor, torch.Tensor]:
         return self.entity.get_dofs_limit(self.dof_idx)
 
     @property
-    def foot_pos(self):
+    def foot_pos(self) -> torch.Tensor:
         return self.links_pos[[link.idx_local for link in self.foot_links],]
 
     @property
-    def foot_quat(self):
+    def foot_quat(self) -> torch.Tensor:
         return self.links_quat[[link.idx_local for link in self.foot_links],]
-    
+
     @property
-    def mass(self):
+    def mass(self) -> float:
         return self.entity.get_mass()

@@ -4,38 +4,38 @@ robot:
   scale: 1.0
   body_name: pelvis
   foot_names:
-  - left_ankle_roll_link
-  - right_ankle_roll_link
+    - left_ankle_roll_link
+    - right_ankle_roll_link
   links_to_keep:
-  - left_ankle_roll_link
-  - right_ankle_roll_link
+    - left_ankle_roll_link
+    - right_ankle_roll_link
   link_names:
-  - pelvis
-  - left_hip_yaw_link
-  - right_hip_yaw_link
-  - left_hip_pitch_link
-  - right_hip_pitch_link
-  - left_hip_roll_link
-  - right_hip_roll_link
-  - left_knee_link
-  - right_knee_link
-  - left_ankle_pitch_link
-  - right_ankle_pitch_link
-  - left_ankle_roll_link
-  - right_ankle_roll_link
+    - pelvis
+    - left_hip_yaw_link
+    - right_hip_yaw_link
+    - left_hip_pitch_link
+    - right_hip_pitch_link
+    - left_hip_roll_link
+    - right_hip_roll_link
+    - left_knee_link
+    - right_knee_link
+    - left_ankle_pitch_link
+    - right_ankle_pitch_link
+    - left_ankle_roll_link
+    - right_ankle_roll_link
   dof_names:
-  - left_hip_yaw_joint
-  - right_hip_yaw_joint
-  - left_hip_pitch_joint
-  - right_hip_pitch_joint
-  - left_hip_roll_joint
-  - right_hip_roll_joint
-  - left_knee_joint
-  - right_knee_joint
-  - left_ankle_pitch_joint
-  - right_ankle_pitch_joint
-  - left_ankle_roll_joint
-  - right_ankle_roll_joint
+    - left_hip_yaw_joint
+    - right_hip_yaw_joint
+    - left_hip_pitch_joint
+    - right_hip_pitch_joint
+    - left_hip_roll_joint
+    - right_hip_roll_joint
+    - left_knee_joint
+    - right_knee_joint
+    - left_ankle_pitch_joint
+    - right_ankle_pitch_joint
+    - left_ankle_roll_joint
+    - right_ankle_roll_joint
   diameter: 1.3356688022613525
   mass: 66.98400000000002
 control:
@@ -50,25 +50,25 @@ learning:
   num_logpoints: 10
   command:
     lin_vel_x_range:
-    - -0.5
-    - 1.0
+      - -0.5
+      - 1.0
     lin_vel_y_range:
-    - -0.5
-    - 0.5
+      - -0.5
+      - 0.5
     ang_vel_range:
-    - -1.0
-    - 1.0
+      - -1.0
+      - 1.0
   note: walk with 2 legs
 pose:
   base_reset_pos:
-  - 0.0
-  - 0.0
-  - 1.1
+    - 0.0
+    - 0.0
+    - 1.1
   base_reset_quat:
-  - 1.0
-  - 0.0
-  - 0.0
-  - 0.0
+    - 1.0
+    - 0.0
+    - 0.0
+    - 0.0
   reset_joint_angles:
     left_ankle_pitch_joint: -0.2
     left_ankle_roll_joint: 0.0
@@ -83,23 +83,23 @@ pose:
     right_hip_yaw_joint: 0.0
     right_knee_joint: 0.4
   base_init_pos:
-  - 0.0
-  - 0.0
-  - 0.8208392262458801
+    - 0.0
+    - 0.0
+    - 0.8208392262458801
   base_init_quat:
-  - 1.0
-  - 0.0
-  - 0.0
-  - 0.0
+    - 1.0
+    - 0.0
+    - 0.0
+    - 0.0
   body_init_pos:
-  - 0.0
-  - 0.0
-  - 0.8208392262458801
+    - 0.0
+    - 0.0
+    - 0.8208392262458801
   body_init_quat:
-  - 1.0
-  - 0.0
-  - 0.0
-  - 0.0
+    - 1.0
+    - 0.0
+    - 0.0
+    - 0.0
   default_joint_angles:
     left_ankle_pitch_joint: -0.4722197651863098
     left_ankle_roll_joint: -0.005618227180093527
@@ -116,16 +116,16 @@ pose:
   gait:
     base_height_target: 0.7731738090515137
     duration:
-    - 0.5
-    - 0.5
+      - 0.5
+      - 0.5
     frequency:
-    - 3.0
-    - 3.0
+      - 3.0
+      - 3.0
     offset:
-    - 0.0
-    - 0.5
+      - 0.0
+      - 0.5
     stationary_position:
-    - - 0.1412840038537979
-      - 0.16643953323364258
-    - - 0.09683762490749359
-      - -0.17333441972732544
+      - - 0.1412840038537979
+        - 0.16643953323364258
+      - - 0.09683762490749359
+        - -0.17333441972732544

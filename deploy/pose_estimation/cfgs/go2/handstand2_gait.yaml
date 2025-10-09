@@ -1,22 +1,22 @@
 base_init_pos:
-- 0.0
-- 0.0
-- 0.29599761962890625
+  - 0.0
+  - 0.0
+  - 0.29599761962890625
 base_init_quat:
-- 0.9238795042037964
-- 0.0
-- 0.3826834559440613
-- 0.0
+  - 0.9238795042037964
+  - 0.0
+  - 0.3826834559440613
+  - 0.0
 base_link_name: base
 body_init_pos:
-- 0.0
-- 0.0
-- 0.29599761962890625
+  - 0.0
+  - 0.0
+  - 0.29599761962890625
 body_init_quat:
-- 0.9238795638084412
-- 0.0
-- 0.3826834559440613
-- 2.7533756608022486e-08
+  - 0.9238795638084412
+  - 0.0
+  - 0.3826834559440613
+  - 2.7533756608022486e-08
 default_joint_angles:
   FL_calf_joint: -2.357285261154175
   FL_hip_joint: -0.22468268871307373
@@ -32,72 +32,72 @@ default_joint_angles:
   RR_thigh_joint: 0.1453653872013092
 diameter: 0.8356513977050781
 dof_names:
-- FL_hip_joint
-- FR_hip_joint
-- RL_hip_joint
-- RR_hip_joint
-- FL_thigh_joint
-- FR_thigh_joint
-- RL_thigh_joint
-- RR_thigh_joint
-- FL_calf_joint
-- FR_calf_joint
-- RL_calf_joint
-- RR_calf_joint
+  - FL_hip_joint
+  - FR_hip_joint
+  - RL_hip_joint
+  - RR_hip_joint
+  - FL_thigh_joint
+  - FR_thigh_joint
+  - RL_thigh_joint
+  - RR_thigh_joint
+  - FL_calf_joint
+  - FR_calf_joint
+  - RL_calf_joint
+  - RR_calf_joint
 extremity ids:
-- 24
-- 18
-- 20
-- 22
+  - 24
+  - 18
+  - 20
+  - 22
 feet_link_names:
-- FL_foot
-- FR_foot
+  - FL_foot
+  - FR_foot
 gait:
   base_height_target: 0.24911320209503174
   duration:
-  - 0.5
-  - 0.5
+    - 0.5
+    - 0.5
   frequency:
-  - 3.0
-  - 3.0
+    - 3.0
+    - 3.0
   offset:
-  - 0.0
-  - 0.5
+    - 0.0
+    - 0.5
   stationary_position:
-  - - -0.004204608500003815
-    - 0.1036187931895256
-  - - 0.0006957650184631348
-    - -0.09765554219484329
+    - - -0.004204608500003815
+      - 0.1036187931895256
+    - - 0.0006957650184631348
+      - -0.09765554219484329
 link_names:
-- base
-- Head_upper
-- FL_hip
-- FR_hip
-- RL_hip
-- RR_hip
-- imu
-- radar
-- Head_lower
-- FL_thigh
-- FR_thigh
-- RL_thigh
-- RR_thigh
-- FL_calf
-- FR_calf
-- RL_calf
-- RR_calf
-- FL_calflower
-- FL_foot
-- FR_calflower
-- FR_foot
-- RL_calflower
-- RL_foot
-- RR_calflower
-- RR_foot
-- FL_calflower1
-- FR_calflower1
-- RL_calflower1
-- RR_calflower1
+  - base
+  - Head_upper
+  - FL_hip
+  - FR_hip
+  - RL_hip
+  - RR_hip
+  - imu
+  - radar
+  - Head_lower
+  - FL_thigh
+  - FR_thigh
+  - RL_thigh
+  - RR_thigh
+  - FL_calf
+  - FR_calf
+  - RL_calf
+  - RR_calf
+  - FL_calflower
+  - FL_foot
+  - FR_calflower
+  - FR_foot
+  - RL_calflower
+  - RL_foot
+  - RR_calflower
+  - RR_foot
+  - FL_calflower1
+  - FR_calflower1
+  - RL_calflower1
+  - RR_calflower1
 mass: 15.056638385645922
 robot:
   asset_path: urdf/go2/urdf/go2.urdf

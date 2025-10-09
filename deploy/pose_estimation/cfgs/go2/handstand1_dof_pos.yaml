@@ -1,14 +1,14 @@
 base_init_quat:
-- 0.9238795042037964
-- 0.0
-- 0.3826834559440613
-- 0.0
+  - 0.9238795042037964
+  - 0.0
+  - 0.3826834559440613
+  - 0.0
 base_link_name: base
 body_init_quat:
-- 0.9238795638084412
-- 0.0
-- 0.3826834559440613
-- 2.7533756608022486e-08
+  - 0.9238795638084412
+  - 0.0
+  - 0.3826834559440613
+  - 2.7533756608022486e-08
 default_joint_angles:
   FL_calf_joint: -2.1414408683776855
   FL_hip_joint: 0.04119688272476196
@@ -24,23 +24,23 @@ default_joint_angles:
   RR_thigh_joint: -0.09687797725200653
 diameter: 0.9753064513206482
 dof_names:
-- FL_hip_joint
-- FR_hip_joint
-- RL_hip_joint
-- RR_hip_joint
-- FL_thigh_joint
-- FR_thigh_joint
-- RL_thigh_joint
-- RR_thigh_joint
-- FL_calf_joint
-- FR_calf_joint
-- RL_calf_joint
-- RR_calf_joint
+  - FL_hip_joint
+  - FR_hip_joint
+  - RL_hip_joint
+  - RR_hip_joint
+  - FL_thigh_joint
+  - FR_thigh_joint
+  - RL_thigh_joint
+  - RR_thigh_joint
+  - FL_calf_joint
+  - FR_calf_joint
+  - RL_calf_joint
+  - RR_calf_joint
 extremity ids:
-- 24
-- 18
-- 20
-- 22
+  - 24
+  - 18
+  - 20
+  - 22
 mass: 15.056638385645922
 robot:
   asset_path: urdf/go2/urdf/go2.urdf

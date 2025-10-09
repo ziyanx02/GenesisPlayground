@@ -1,14 +1,14 @@
 base_init_quat:
-- 1.0
-- 0.0
-- 0.0
-- 0.0
+  - 1.0
+  - 0.0
+  - 0.0
+  - 0.0
 base_link_name: pelvis
 body_init_quat:
-- 1.0
-- 0.0
-- 0.0
-- 0.0
+  - 1.0
+  - 0.0
+  - 0.0
+  - 0.0
 default_joint_angles:
   left_ankle_pitch_joint: -0.5451169013977051
   left_ankle_roll_joint: 0.01958938129246235
@@ -24,21 +24,21 @@ default_joint_angles:
   right_knee_joint: 1.265243649482727
 diameter: 1.2342292070388794
 dof_names:
-- left_hip_yaw_joint
-- right_hip_yaw_joint
-- left_hip_pitch_joint
-- right_hip_pitch_joint
-- left_hip_roll_joint
-- right_hip_roll_joint
-- left_knee_joint
-- right_knee_joint
-- left_ankle_pitch_joint
-- right_ankle_pitch_joint
-- left_ankle_roll_joint
-- right_ankle_roll_joint
+  - left_hip_yaw_joint
+  - right_hip_yaw_joint
+  - left_hip_pitch_joint
+  - right_hip_pitch_joint
+  - left_hip_roll_joint
+  - right_hip_roll_joint
+  - left_knee_joint
+  - right_knee_joint
+  - left_ankle_pitch_joint
+  - right_ankle_pitch_joint
+  - left_ankle_roll_joint
+  - right_ankle_roll_joint
 extremity ids:
-- 11
-- 12
+  - 11
+  - 12
 mass: 66.98400000000002
 robot:
   asset_path: urdf/h1_2/h1_2_simp.urdf

@@ -1,14 +1,14 @@
 base_init_quat:
-- 1.0
-- 0.0
-- 0.0
-- 0.0
+  - 1.0
+  - 0.0
+  - 0.0
+  - 0.0
 base_link_name: pelvis
 body_init_quat:
-- 1.0
-- 0.0
-- 0.0
-- 0.0
+  - 1.0
+  - 0.0
+  - 0.0
+  - 0.0
 default_joint_angles:
   left_ankle_pitch_joint: -0.7510133981704712
   left_ankle_roll_joint: 0.045490045100450516
@@ -24,21 +24,21 @@ default_joint_angles:
   right_knee_joint: 1.193790316581726
 diameter: 1.3010731935501099
 dof_names:
-- left_hip_pitch_joint
-- right_hip_pitch_joint
-- left_hip_roll_joint
-- right_hip_roll_joint
-- left_hip_yaw_joint
-- right_hip_yaw_joint
-- left_knee_joint
-- right_knee_joint
-- left_ankle_pitch_joint
-- right_ankle_pitch_joint
-- left_ankle_roll_joint
-- right_ankle_roll_joint
+  - left_hip_pitch_joint
+  - right_hip_pitch_joint
+  - left_hip_roll_joint
+  - right_hip_roll_joint
+  - left_hip_yaw_joint
+  - right_hip_yaw_joint
+  - left_knee_joint
+  - right_knee_joint
+  - left_ankle_pitch_joint
+  - right_ankle_pitch_joint
+  - left_ankle_roll_joint
+  - right_ankle_roll_joint
 extremity ids:
-- 11
-- 12
+  - 11
+  - 12
 mass: 34.13385727999999
 robot:
   asset_path: urdf/g1/g1_12dof.urdf
@@ -46,5 +46,4 @@ robot:
   name: g1
   numeric_adjustment: true
   scale: 1.0
-task: Hopping on only its left leg. Left foot on the ground and right foot in the
-  air.
+task: Hopping on only its left leg. Left foot on the ground and right foot in the air.

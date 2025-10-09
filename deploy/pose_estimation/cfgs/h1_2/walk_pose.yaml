@@ -1,14 +1,14 @@
 base_init_quat:
-- 1.0
-- 0.0
-- 0.0
-- 0.0
+  - 1.0
+  - 0.0
+  - 0.0
+  - 0.0
 base_link_name: pelvis
 body_init_quat:
-- 1.0
-- 0.0
-- 0.0
-- 0.0
+  - 1.0
+  - 0.0
+  - 0.0
+  - 0.0
 robot:
   asset_path: urdf/h1_2/h1_2_simplified.urdf
   merge_fixed_links: true

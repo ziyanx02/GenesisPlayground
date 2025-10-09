@@ -14,24 +14,24 @@ learning:
   num_logpoints: 10
   command:
     lin_vel_x_range:
-    - -0.5
-    - 1.0
+      - -0.5
+      - 1.0
     lin_vel_y_range:
-    - -0.5
-    - 0.5
+      - -0.5
+      - 0.5
     ang_vel_range:
-    - -1.0
-    - 1.0
+      - -1.0
+      - 1.0
 pose:
   base_reset_pos:
-  - 0.0
-  - 0.0
-  - 0.35
+    - 0.0
+    - 0.0
+    - 0.35
   base_reset_quat:
-  - 1.0
-  - 0.0
-  - 0.0
-  - 0.0
+    - 1.0
+    - 0.0
+    - 0.0
+    - 0.0
   reset_joint_angles:
     FL_calf_joint: -1.5
     FL_hip_joint: 0.0

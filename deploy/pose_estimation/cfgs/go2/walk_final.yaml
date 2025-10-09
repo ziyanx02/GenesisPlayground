@@ -4,58 +4,58 @@ robot:
   scale: 1.0
   body_name: base
   foot_names:
-  - FR_foot
-  - FL_foot
-  - RR_foot
-  - RL_foot
+    - FR_foot
+    - FL_foot
+    - RR_foot
+    - RL_foot
   links_to_keep:
-  - FR_foot
-  - FL_foot
-  - RR_foot
-  - RL_foot
+    - FR_foot
+    - FL_foot
+    - RR_foot
+    - RL_foot
   link_names:
-  - base
-  - Head_upper
-  - FL_hip
-  - FR_hip
-  - RL_hip
-  - RR_hip
-  - imu
-  - radar
-  - Head_lower
-  - FL_thigh
-  - FR_thigh
-  - RL_thigh
-  - RR_thigh
-  - FL_calf
-  - FR_calf
-  - RL_calf
-  - RR_calf
-  - FL_calflower
-  - FL_foot
-  - FR_calflower
-  - FR_foot
-  - RL_calflower
-  - RL_foot
-  - RR_calflower
-  - RR_foot
-  - FL_calflower1
-  - FR_calflower1
-  - RL_calflower1
-  - RR_calflower1
+    - base
+    - Head_upper
+    - FL_hip
+    - FR_hip
+    - RL_hip
+    - RR_hip
+    - imu
+    - radar
+    - Head_lower
+    - FL_thigh
+    - FR_thigh
+    - RL_thigh
+    - RR_thigh
+    - FL_calf
+    - FR_calf
+    - RL_calf
+    - RR_calf
+    - FL_calflower
+    - FL_foot
+    - FR_calflower
+    - FR_foot
+    - RL_calflower
+    - RL_foot
+    - RR_calflower
+    - RR_foot
+    - FL_calflower1
+    - FR_calflower1
+    - RL_calflower1
+    - RR_calflower1
   dof_names:
-  - FL_hip_joint
-  - FR_hip_joint
-  - RL_hip_joint
-  - RR_hip_joint
-  - FL_thigh_joint
-  - FR_thigh_joint
-  - RL_thigh_joint
-  - RR_thigh_joint
-  - FL_calf_joint
-  - FR_calf_joint
-  - RL_calf_joint
-  - RR_calf_joint
+    - FL_hip_joint
+    - FR_hip_joint
+    - RL_hip_joint
+    - RR_hip_joint
+    - FL_thigh_joint
+    - FR_thigh_joint
+    - RL_thigh_joint
+    - RR_thigh_joint
+    - FL_calf_joint
+    - FR_calf_joint
+    - RL_calf_joint
+    - RR_calf_joint
   diameter: 0.8356513977050781
   mass: 15.056638385645922
 control:
@@ -70,34 +70,34 @@ learning:
   num_logpoints: 10
   command:
     lin_vel_x_range:
-    - -1.0
-    - 1.0
+      - -1.0
+      - 1.0
     lin_vel_y_range:
-    - -1.0
-    - 1.0
+      - -1.0
+      - 1.0
     ang_vel_range:
-    - -1.0
-    - 1.0
+      - -1.0
+      - 1.0
   note: walk with four legs
 pose:
   base_init_pos:
-  - 0.0
-  - 0.0
-  - 0.35357487201690674
+    - 0.0
+    - 0.0
+    - 0.35357487201690674
   base_init_quat:
-  - 1.0
-  - 0.0
-  - 0.0
-  - 0.0
+    - 1.0
+    - 0.0
+    - 0.0
+    - 0.0
   body_init_pos:
-  - 0.0
-  - 0.0
-  - 0.35357487201690674
+    - 0.0
+    - 0.0
+    - 0.35357487201690674
   body_init_quat:
-  - 1.0
-  - 0.0
-  - 0.0
-  - 0.0
+    - 1.0
+    - 0.0
+    - 0.0
+    - 0.0
   default_joint_angles:
     FL_calf_joint: -1.4434962272644043
     FL_hip_joint: -0.19204583764076233
@@ -114,26 +114,26 @@ pose:
   gait:
     base_height_target: 0.3295976221561432
     duration:
-    - 0.5
-    - 0.5
-    - 0.5
-    - 0.5
+      - 0.5
+      - 0.5
+      - 0.5
+      - 0.5
     frequency:
-    - 1.0
-    - 1.0
-    - 1.0
-    - 1.0
+      - 1.0
+      - 1.0
+      - 1.0
+      - 1.0
     offset:
-    - 0.0
-    - 0.5
-    - 0.5
-    - 0.0
+      - 0.0
+      - 0.5
+      - 0.5
+      - 0.0
     stationary_position:
-    - - 0.14925041794776917
-      - -0.08012691140174866
-    - - 0.15073110163211823
-      - 0.07975491136312485
-    - - -0.1495133638381958
-      - -0.07980997860431671
-    - - -0.14948192238807678
-      - 0.08036674559116364
+      - - 0.14925041794776917
+        - -0.08012691140174866
+      - - 0.15073110163211823
+        - 0.07975491136312485
+      - - -0.1495133638381958
+        - -0.07980997860431671
+      - - -0.14948192238807678
+        - 0.08036674559116364
