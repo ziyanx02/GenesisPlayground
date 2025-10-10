@@ -253,15 +253,15 @@ def evaluate_policy(
             action_np = action[0].cpu().numpy()
             # Track action changes for first 500 steps
             if step_count < 500 and step_count > 0:
-                dof_pos_diff = wrapped_env.env.dof_pos[0] - wrapped_env.env.robot.default_dof_pos
-                scaled_dof_pos = dof_pos_diff.cpu().numpy() / env_args.robot_args.action_scale
-                action_diff = np.abs(action_np - scaled_dof_pos)
+                dof_pos = wrapped_env.env.dof_pos[0] - wrapped_env.env.robot.default_dof_pos
+                scaled_dof_pos = dof_pos.cpu().numpy() / env_args.robot_args.action_scale
+                action_diff = np.abs(action_np - scaled_dof_pos) * env_args.robot_args.action_scale
                 upper_body_action_diffs_mean.append(np.mean(action_diff[:12]))
                 upper_body_action_diffs_max.append(np.max(action_diff[:12]))
                 lower_body_action_diffs_mean.append(np.mean(action_diff[12:]))
                 lower_body_action_diffs_max.append(np.max(action_diff[12:]))
 
-                action_rate = np.abs(action_np - last_action)
+                action_rate = np.abs(action_np - last_action) * env_args.robot_args.action_scale
                 upper_body_action_rates_mean.append(np.mean(action_rate[:12]))
                 upper_body_action_rates_max.append(np.max(action_rate[:12]))
                 lower_body_action_rates_mean.append(np.mean(action_rate[12:]))
@@ -462,16 +462,16 @@ def main(
     exp_name: str | None = None,
     num_ckpt: int | None = None,
     use_wandb: bool = True,
-    env_name: str = "walk_default",
+    env_name: str = "g1_walk",
     **cfg_overrides: Any,
 ) -> None:
     """Entry point.
 
-    You can override environment configs via dot-notation, e.g.:
-    --cfgs.env.reward_args.LinVelXYReward=20.0
+    You can override configs via dot-notation, e.g.:
     --env.reward_args.AngVelZReward=5
     --reward_args.G1BaseHeightPenalty=50
-    --action_latency=2
+    --algo.lr=1e-4
+    --runner.total_iterations=2000
     """
     # Bucket overrides into env / algo / runner
     env_overrides: dict[str, Any] = {}

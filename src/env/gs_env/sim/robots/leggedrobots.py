@@ -68,12 +68,10 @@ class LeggedRobotBase(BaseGymRobot):
         self._dof_idx = torch.arange(self._dof_dim, device=self._device)
 
         #
-        self._body_link = self._robot.get_link(self._args.body_link_name)
-        self._body_link_idx = self._body_link.idx_local
-        self.left_foot_link = self._robot.get_link(self._args.left_foot_link_name)
-        self.left_foot_link_idx = self.left_foot_link.idx_local
-        self.right_foot_link = self._robot.get_link(self._args.right_foot_link_name)
-        self.right_foot_link_idx = self.right_foot_link.idx_local
+        self.body_link = self._robot.get_link(self._args.body_link_name)
+        self.body_link_idx = self.body_link.idx_local
+        self.foot_links = [self._robot.get_link(name) for name in self._args.foot_link_names]
+        self.foot_links_idx = [link.idx_local for link in self.foot_links]
 
         #
         self._dofs_idx_local = [
@@ -153,11 +151,11 @@ class LeggedRobotBase(BaseGymRobot):
         # mass
         min_mass, max_mass = self._args.dr_args.mass_range
         added_mass = torch.rand(len(envs_idx), 1) * (max_mass - min_mass) + min_mass
-        self._robot.set_mass_shift(added_mass, [self._body_link_idx,], envs_idx)
+        self._robot.set_mass_shift(added_mass, [self.body_link_idx,], envs_idx)
         # com displacement
         min_com, max_com = self._args.dr_args.com_displacement_range
         displacement = (torch.rand(len(envs_idx), 1, 3) - 0.5) * (max_com - min_com) + min_com
-        self._robot.set_COM_shift(displacement, [self._body_link_idx,], envs_idx)
+        self._robot.set_COM_shift(displacement, [self.body_link_idx,], envs_idx)
 
     def _randomize_controls(self, envs_idx: torch.IntTensor) -> None:
         # kp

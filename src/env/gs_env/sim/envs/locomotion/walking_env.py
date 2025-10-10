@@ -139,22 +139,22 @@ class WalkingEnv(BaseEnv):
         self.link_velocities = torch.zeros(
             (self.num_envs, self._robot.n_links, 3), device=self.device, dtype=torch.float32
         )
-        self.feet_height = torch.zeros((self.num_envs, 2), device=self.device, dtype=torch.float32)
+        self.feet_height = torch.zeros((self.num_envs, len(self._robot.foot_links_idx)), device=self.device, dtype=torch.float32)
         self.feet_z_velocity = torch.zeros(
-            (self.num_envs, 2), device=self.device, dtype=torch.float32
+            (self.num_envs, len(self._robot.foot_links_idx)), device=self.device, dtype=torch.float32
         )
         self.feet_orientation = torch.zeros(
-            (self.num_envs, 2, 3), device=self.device, dtype=torch.float32
+            (self.num_envs, len(self._robot.foot_links_idx), 3), device=self.device, dtype=torch.float32
         )
-        self.feet_contact = torch.zeros((self.num_envs, 2), device=self.device, dtype=torch.float32)
+        self.feet_contact = torch.zeros((self.num_envs, len(self._robot.foot_links_idx)), device=self.device, dtype=torch.float32)
         self.feet_contact_force = torch.zeros(
-            (self.num_envs, 2), device=self.device, dtype=torch.float32
+            (self.num_envs, len(self._robot.foot_links_idx)), device=self.device, dtype=torch.float32
         )
         self.feet_first_contact = torch.zeros(
-            (self.num_envs, 2), device=self.device, dtype=torch.float32
+            (self.num_envs, len(self._robot.foot_links_idx)), device=self.device, dtype=torch.float32
         )
         self.feet_air_time = torch.zeros(
-            (self.num_envs, 2), device=self.device, dtype=torch.float32
+            (self.num_envs, len(self._robot.foot_links_idx)), device=self.device, dtype=torch.float32
         )
 
         #
@@ -323,24 +323,24 @@ class WalkingEnv(BaseEnv):
 
         self.link_contact_forces[:] = self._robot.link_contact_forces
         self.feet_contact_force[:] = self.link_contact_forces[
-            :, [self._robot.left_foot_link_idx, self._robot.right_foot_link_idx], 2
+            :, self._robot.foot_links_idx, 2
         ]
         self.feet_contact[:] = self.feet_contact_force > 1.0
         self.link_positions[:] = self._robot.link_positions
         self.link_quaternions[:] = self._robot.link_quaternions
         self.feet_height[:] = self.link_positions[
-            :, [self._robot.left_foot_link_idx, self._robot.right_foot_link_idx], 2
+            :, self._robot.foot_links_idx, 2
         ]
         self.link_velocities[:] = self._robot.link_velocities
         self.feet_z_velocity[:] = self.link_velocities[
-            :, [self._robot.left_foot_link_idx, self._robot.right_foot_link_idx], 2
+            :, self._robot.foot_links_idx, 2
         ]
         feet_quaternions = self.link_quaternions[
-            :, [self._robot.left_foot_link_idx, self._robot.right_foot_link_idx]
+            :, self._robot.foot_links_idx
         ].reshape(-1, 4)
         self.feet_orientation[:] = quat_apply(
             quat_inv(feet_quaternions), self.global_gravity.repeat(2, 1)
-        ).reshape(self.num_envs, 2, 3)
+        ).reshape(self.num_envs, len(self._robot.foot_links_idx), 3)
 
     def get_reward(self) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
         reward_total = torch.zeros(self.num_envs, device=self._device)
@@ -475,6 +475,10 @@ class WalkingEnv(BaseEnv):
     def action_dim(self) -> int:
         act_dim = get_space_dim(self.action_space)
         return act_dim
+
+    @property
+    def action_scale(self) -> float:
+        return self._args.robot_args.action_scale
 
     @property
     def actor_obs_dim(self) -> int:

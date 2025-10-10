@@ -50,7 +50,7 @@ def plot_metric_on_axis(
     # Set ticks and formatter for log scale
     if yscale == "log":
         # Define all possible tick locations
-        all_yticks = [0.01, 0.03, 0.1, 0.3, 1, 3, 10, 30, 100]
+        all_yticks = [0.001, 0.003,0.01, 0.03, 0.1, 0.3, 1, 3, 10, 30, 100]
 
         # Filter ticks based on data range
         all_data = np.concatenate([np.array(d) for d in data_lists])

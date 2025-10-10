@@ -59,10 +59,82 @@ EnvArgsRegistry["pick_cube_default"] = EnvArgs(
 )
 
 
-EnvArgsRegistry["walk_default"] = LeggedRobotEnvArgs(
+EnvArgsRegistry["g1_walk"] = LeggedRobotEnvArgs(
     gs_init_args=GenesisInitArgsRegistry["default"],
     scene_args=SceneArgsRegistry["flat_scene_legged"],
     robot_args=RobotArgsRegistry["g1_no_waist"],
+    objects_args=[],
+    sensors_args=[],
+    reward_term="g1_no_waist",
+    reward_args={
+        ### Velocity Tracking ###
+        "LinVelXYReward": 10.0,
+        "AngVelZReward": 10.0,
+        "LinVelZPenalty": 20.0,
+        "AngVelXYPenalty": 5.0,
+        ### Pose Tracking ###
+        "OrientationPenalty": 100.0,
+        ### Regularization ###
+        "TorquePenalty": 0.00001,
+        "ActionRatePenalty": 0.3,
+        "DofPosLimitPenalty": 10.0,
+        # "G1BaseHeightPenalty": 30.0,
+        "ActionLimitPenalty": 0.1,
+        ### Motion Constraints ###
+        "AnkleTorquePenalty": 0.001,
+        "HipYawPenalty": 10.0,
+        "HipRollPenalty": 100.0,
+        # "UpperBodyDofPenalty": 3.0,
+        "UpperBodyActionPenalty": 0.5,
+        # "FeetAirTimeReward": 200.0,
+        "FeetAirTimePenalty": 500.0,
+        "G1FeetHeightPenalty": 100.0,
+        "G1FeetContactForcePenalty": 30.0,
+        "FeetZVelocityPenalty": 30.0,
+        "FeetOrientationPenalty": 30.0,
+        "StandStillFeetContactPenalty": 3e-4,
+        "G1FeetContactForceLimitPenalty": 3e-5,
+    },
+    img_resolution=(480, 270),
+    action_latency=1,
+    obs_history_len=1,
+    obs_scales={
+        "dof_vel": 0.1,
+        "base_ang_vel": 0.5,
+        "feet_contact_force": 0.001,
+    },
+    obs_noises={
+        "dof_pos": 0.01,
+        "dof_vel": 0.2,
+        "projected_gravity": 0.05,
+        "base_ang_vel": 0.2,
+    },
+    actor_obs_terms=[
+        "last_action",
+        "dof_pos",
+        "dof_vel",
+        "projected_gravity",
+        "base_ang_vel",
+        "commands",
+    ],
+    critic_obs_terms=[
+        "last_action",
+        "dof_pos",
+        "dof_vel",
+        "projected_gravity",
+        "base_lin_vel",
+        "base_ang_vel",
+        "commands",
+        "feet_height",
+        "feet_contact_force",
+    ],
+)
+
+
+EnvArgsRegistry["g1_fixed"] = LeggedRobotEnvArgs(
+    gs_init_args=GenesisInitArgsRegistry["default"],
+    scene_args=SceneArgsRegistry["flat_scene_legged"],
+    robot_args=RobotArgsRegistry["g1_fixed"],
     objects_args=[],
     sensors_args=[],
     reward_term="g1_no_waist",

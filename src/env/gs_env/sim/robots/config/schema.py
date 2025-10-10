@@ -106,6 +106,7 @@ class LeggedRobotArgs(BaseModel):
     vis_mode: str
     ctrl_type: CtrlType
     body_link_name: str
+    foot_link_names: list[str]
     show_target: bool
     dof_names: list[str]
     default_dof: dict[str, float]
@@ -120,9 +121,7 @@ class LeggedRobotArgs(BaseModel):
 class QuadrupedRobotArgs(LeggedRobotArgs): ...
 
 
-class HumanoidRobotArgs(LeggedRobotArgs):
-    left_foot_link_name: str
-    right_foot_link_name: str
+class HumanoidRobotArgs(LeggedRobotArgs): ...
 
 
 class JointPosAction(BaseModel):
