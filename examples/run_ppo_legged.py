@@ -328,7 +328,7 @@ def evaluate_policy(
                     ckpt_filename = ckpt_path.stem
                     ckpt_num = ckpt_filename.split("_")[-1] if "_" in ckpt_filename else "latest"
 
-                plot_path = plot_dir / f"action_diff_{ckpt_num}.png"
+                plot_path = plot_dir / f"{ckpt_num}_action_log.png"
                 plt.tight_layout()
                 plt.savefig(plot_path, dpi=150)
                 plt.close(fig)

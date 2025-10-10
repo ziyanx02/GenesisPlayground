@@ -187,7 +187,7 @@ class FeetAirTimePenalty(RewardTerm):
     def _compute(
         self, feet_first_contact: torch.Tensor, feet_air_time: torch.Tensor, commands: torch.Tensor
     ) -> torch.Tensor:  # type: ignore
-        pen_air_time = torch.sum(torch.square(feet_air_time - self.target_feet_air_time) * feet_first_contact, dim=1)
+        pen_air_time = torch.sum(torch.abs(feet_air_time - self.target_feet_air_time) * feet_first_contact, dim=1)
         pen_air_time *= torch.norm(commands, dim=1) > 0.1
         return -pen_air_time
 
