@@ -9,6 +9,11 @@ from pathlib import Path
 from typing import Any
 
 import fire
+import matplotlib
+
+matplotlib.use("Agg")  # Use non-interactive backend to prevent windows from showing
+import matplotlib.pyplot as plt
+import numpy as np
 import torch
 from gs_agent.algos.config.registry import PPO_WALKING_MLP
 from gs_agent.algos.ppo import PPO
@@ -19,7 +24,7 @@ from gs_agent.utils.policy_loader import load_latest_model
 from gs_agent.wrappers.gs_env_wrapper import GenesisEnvWrapper
 from gs_env.sim.envs.config.registry import EnvArgsRegistry
 from gs_env.sim.envs.locomotion.walking_env import WalkingEnv
-from utils import apply_overrides_generic
+from utils import apply_overrides_generic, plot_metric_on_axis
 
 
 def create_gs_env(
@@ -184,6 +189,17 @@ def evaluate_policy(
         step_count = 0
         total_reward = 0.0
 
+        # For tracking action changes
+        upper_body_action_diffs_mean = []
+        upper_body_action_diffs_max = []
+        lower_body_action_diffs_mean = []
+        lower_body_action_diffs_max = []
+        upper_body_action_rates_mean = []
+        upper_body_action_rates_max = []
+        lower_body_action_rates_mean = []
+        lower_body_action_rates_max = []
+        last_action = None
+
         # Reset environment
         obs, _ = wrapped_env.get_observations()
 
@@ -200,6 +216,91 @@ def evaluate_policy(
             # Get action from policy
             with torch.no_grad():
                 action, _log_prob = inference_policy(obs, deterministic=True)
+
+            action_np = action[0].cpu().numpy()
+            # Track action changes for first 500 steps
+            if step_count < 500 and step_count > 0:
+                dof_pos_diff = wrapped_env.env.dof_pos[0] - wrapped_env.env.robot.default_dof_pos
+                scaled_dof_pos = dof_pos_diff.cpu().numpy() / env_args.robot_args.action_scale
+                action_diff = np.abs(action_np - scaled_dof_pos)
+                upper_body_action_diffs_mean.append(np.mean(action_diff[:12]))
+                upper_body_action_diffs_max.append(np.max(action_diff[:12]))
+                lower_body_action_diffs_mean.append(np.mean(action_diff[12:]))
+                lower_body_action_diffs_max.append(np.max(action_diff[12:]))
+
+                action_rate = np.abs(action_np - last_action)
+                upper_body_action_rates_mean.append(np.mean(action_rate[:12]))
+                upper_body_action_rates_max.append(np.max(action_rate[:12]))
+                lower_body_action_rates_mean.append(np.mean(action_rate[12:]))
+                lower_body_action_rates_max.append(np.max(action_rate[12:]))
+            elif step_count == 500:
+                print("\nPlotting action differences...")
+                steps = np.arange(1, len(upper_body_action_rates_mean) + 1)
+
+                # Create figure with 4 subplots in one column
+                fig, axes = plt.subplots(4, 1, figsize=(12, 12))
+
+                # Upper body action rate
+                plot_metric_on_axis(
+                    axes[0],
+                    steps,
+                    [upper_body_action_rates_mean, upper_body_action_rates_max],
+                    ["Mean", "Max"],
+                    "Action Rate (log)",
+                    "Upper Body Action Rate",
+                    yscale="log",
+                )
+
+                # Lower body action rate
+                plot_metric_on_axis(
+                    axes[1],
+                    steps,
+                    [lower_body_action_rates_mean, lower_body_action_rates_max],
+                    ["Mean", "Max"],
+                    "Action Rate (log)",
+                    "Lower Body Action Rate",
+                    yscale="log",
+                )
+
+                # Upper body action diff
+                plot_metric_on_axis(
+                    axes[2],
+                    steps,
+                    [upper_body_action_diffs_mean, upper_body_action_diffs_max],
+                    ["Mean", "Max"],
+                    "Action Diff (log)",
+                    "Upper Body Action Diff",
+                    yscale="log",
+                )
+
+                # Lower body action diff
+                plot_metric_on_axis(
+                    axes[3],
+                    steps,
+                    [lower_body_action_diffs_mean, lower_body_action_diffs_max],
+                    ["Mean", "Max"],
+                    "Action Diff (log)",
+                    "Lower Body Action Diff",
+                    yscale="log",
+                    xlabel="Step",
+                )
+
+                # Save plot
+                plot_dir = Path("./gif") / exp_name if exp_name else Path("./gif") / "latest"
+                plot_dir.mkdir(parents=True, exist_ok=True)
+
+                if num_ckpt is not None:
+                    ckpt_num = num_ckpt
+                else:
+                    ckpt_filename = ckpt_path.stem
+                    ckpt_num = ckpt_filename.split("_")[-1] if "_" in ckpt_filename else "latest"
+
+                plot_path = plot_dir / f"action_diff_{ckpt_num}.png"
+                plt.tight_layout()
+                plt.savefig(plot_path, dpi=150)
+                plt.close(fig)
+                print(f"Action difference plot saved to: {plot_path}")
+            last_action = action_np.copy()
 
             # Step environment
             obs, reward, terminated, truncated, _ = wrapped_env.step(action)

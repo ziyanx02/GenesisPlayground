@@ -1,5 +1,86 @@
 from typing import Any
 
+import matplotlib.ticker as ticker
+import numpy as np
+
+
+def plot_metric_on_axis(
+    ax: Any,
+    steps: Any,
+    data_lists: list[list[float]],
+    labels: list[str],
+    ylabel: str,
+    title: str,
+    yscale: str = "log",
+    xlabel: str | None = None,
+    show_mean: bool = True,
+) -> None:
+    """Plot multiple data series on a single axis with optional log scale.
+
+    Args:
+        ax: Matplotlib axis to plot on
+        steps: X-axis values (step numbers)
+        data_lists: List of data arrays to plot (e.g., [mean_data, max_data])
+        labels: List of labels for each data series
+        ylabel: Label for y-axis
+        title: Title for the subplot
+        yscale: Scale for y-axis ('log' or 'linear')
+        xlabel: Label for x-axis (optional)
+        show_mean: Whether to display mean values as text (default: True)
+    """
+    # Plot each data series and their means
+    for data, label in zip(data_lists, labels, strict=False):
+        line = ax.plot(steps, data, label=label, linewidth=1.5, alpha=0.8)[0]
+
+        # Add horizontal dotted line for mean if requested
+        if show_mean:
+            data_mean = np.mean(data)
+            ax.axhline(
+                y=data_mean,
+                color=line.get_color(),
+                linestyle="--",
+                linewidth=1.2,
+                alpha=0.6,
+                label=f"mean: {data_mean:.4f}",
+            )
+
+    # Set scale
+    ax.set_yscale(yscale)
+
+    # Set ticks and formatter for log scale
+    if yscale == "log":
+        # Define all possible tick locations
+        all_yticks = [0.01, 0.03, 0.1, 0.3, 1, 3, 10, 30, 100]
+
+        # Filter ticks based on data range
+        all_data = np.concatenate([np.array(d) for d in data_lists])
+        all_data = all_data[all_data > 0]  # Filter out zeros
+        if len(all_data) > 0:
+            data_min = np.min(all_data)
+            data_max = np.max(all_data)
+            # Only include ticks within data range
+            filtered_ticks = [tick for tick in all_yticks if data_min <= tick <= data_max]
+            if not filtered_ticks:
+                # If no ticks in range, expand slightly
+                filtered_ticks = [
+                    tick for tick in all_yticks if tick >= data_min * 0.5 and tick <= data_max * 2
+                ][:5]
+            ax.set_yticks(filtered_ticks)
+
+        # Use decimal formatter
+        formatter = ticker.FuncFormatter(lambda y, _: f"{y:.10g}")
+        ax.yaxis.set_major_formatter(formatter)
+
+    # Set labels and title
+    ax.set_ylabel(ylabel, fontsize=11)
+    if xlabel:
+        ax.set_xlabel(xlabel, fontsize=11)
+    ax.set_title(title, fontsize=12, fontweight="bold")
+
+    # Add legend and grid
+    ax.legend(fontsize=9, loc="upper right")
+    ax.grid(True, alpha=0.3, which="both")
+
 
 def parse_scalar(value: Any) -> Any:
     """Best-effort parse of CLI string into bool/int/float, else return as-is."""
