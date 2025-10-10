@@ -452,6 +452,9 @@ class WalkingEnv(BaseEnv):
             new_vel[:, :2] = new_vel[:, :2] + delta_xy
             self._robot.set_dofs_velocity(new_vel, envs_idx=envs_idx, dofs_idx_local=[0, 1, 2])
 
+    def stop_random_push(self) -> None:
+        self._random_push_time = float("inf")
+
     @property
     def scene(self) -> FlatScene:
         return self._scene
