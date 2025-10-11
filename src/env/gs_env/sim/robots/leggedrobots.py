@@ -54,7 +54,7 @@ class LeggedRobotBase(BaseGymRobot):
         )
 
         # == action space ==
-        n_dof = len(args.default_dof.keys())
+        n_dof = len(args.dof_names)
         self._action_space = spaces.Box(shape=(n_dof,), low=-np.inf, high=np.inf)
         assert self._action_space is not None, "Action space cannot be None"
 
@@ -62,7 +62,7 @@ class LeggedRobotBase(BaseGymRobot):
         self._init()
 
     def _init(self) -> None:
-        self._dof_dim = len(self._args.default_dof.keys())  # total number of joints
+        self._dof_dim = len(self._args.dof_names)  # total number of joints
 
         #
         self._dof_idx = torch.arange(self._dof_dim, device=self._device)
