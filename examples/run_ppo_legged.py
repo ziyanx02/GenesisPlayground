@@ -32,6 +32,7 @@ def create_gs_env(
     num_envs: int = 4096,
     device: str = "cuda",
     args: Any = None,
+    eval_mode: bool = False,
 ) -> WalkingEnv:
     """Create gym environment wrapper with optional config overrides."""
     if torch.cuda.is_available() and device == "cuda":
@@ -45,6 +46,7 @@ def create_gs_env(
         num_envs=num_envs,
         show_viewer=show_viewer,
         device=device_tensor,  # type: ignore
+        eval_mode=eval_mode,
     )
 
 
@@ -170,10 +172,8 @@ def evaluate_policy(
         num_envs=1,
         device=device,
         args=env_args,
+        eval_mode=True,
     )
-
-    # Disable random push during evaluation
-    env.stop_random_push()
 
     wrapped_env = GenesisEnvWrapper(env, device=env.device)
 
@@ -205,7 +205,6 @@ def evaluate_policy(
         device=wrapped_env.device,
     )
     ppo.load(ckpt_path, load_optimizer=False)
-    ppo.eval_mode()
 
     # Get inference policy
     inference_policy = ppo.get_inference_policy()

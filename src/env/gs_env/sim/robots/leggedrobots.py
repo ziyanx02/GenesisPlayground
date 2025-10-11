@@ -75,10 +75,10 @@ class LeggedRobotBase(BaseGymRobot):
 
         #
         self._dofs_idx_local = [
-            self._robot.get_joint(name).dofs_idx_local[0] for name in self._args.dof_names
+            self._robot.get_joint(name).dofs_idx_local[0] for name in self.dof_names
         ]
         dof_kp, dof_kd = [], []
-        for dof_name in self._args.dof_names:
+        for dof_name in self.dof_names:
             for key in self._args.dof_kp.keys():
                 if key in dof_name:
                     dof_kp.append(self._args.dof_kp[key])
@@ -103,7 +103,7 @@ class LeggedRobotBase(BaseGymRobot):
             self._args.morph_args.euler, dtype=torch.float32, device=self._device
         )
         self._default_quat = quat_from_euler(self._default_euler)
-        default_joint_angles = [self._args.default_dof[name] for name in self._args.dof_names]
+        default_joint_angles = [self._args.default_dof[name] for name in self.dof_names]
         self._default_dof_pos = torch.tensor(
             default_joint_angles, dtype=torch.float32, device=self._device
         )
@@ -121,8 +121,9 @@ class LeggedRobotBase(BaseGymRobot):
             CtrlType.DR_JOINT_POSITION.value: self._apply_dr_joint_pos,
         }
 
-    def post_build_init(self) -> None:
-        self._init_domain_randomization()
+    def post_build_init(self, eval_mode: bool = False) -> None:
+        if not eval_mode:
+            self._init_domain_randomization()
 
         # limits
         self._dof_pos_limits = torch.stack(self._robot.get_dofs_limit(self._dofs_idx_local), dim=1)
@@ -151,24 +152,36 @@ class LeggedRobotBase(BaseGymRobot):
         # mass
         min_mass, max_mass = self._args.dr_args.mass_range
         added_mass = torch.rand(len(envs_idx), 1) * (max_mass - min_mass) + min_mass
-        self._robot.set_mass_shift(added_mass, [self.body_link_idx,], envs_idx)
+        self._robot.set_mass_shift(
+            added_mass,
+            [
+                self.body_link_idx,
+            ],
+            envs_idx,
+        )
         # com displacement
         min_com, max_com = self._args.dr_args.com_displacement_range
         displacement = (torch.rand(len(envs_idx), 1, 3) - 0.5) * (max_com - min_com) + min_com
-        self._robot.set_COM_shift(displacement, [self.body_link_idx,], envs_idx)
+        self._robot.set_COM_shift(
+            displacement,
+            [
+                self.body_link_idx,
+            ],
+            envs_idx,
+        )
 
     def _randomize_controls(self, envs_idx: torch.IntTensor) -> None:
         # kp
         min_kp, max_kp = self._args.dr_args.kp_range
         ratios = torch.rand(len(envs_idx), self._dof_dim) * (max_kp - min_kp) + min_kp
-        self._batched_dof_kp[envs_idx] = ratios * self._dof_kp[None, 0]
+        self._batched_dof_kp[envs_idx] = ratios * self._dof_kp[None, :]
         # self._robot.set_dofs_kp(
         #     self._batched_dof_kp[envs_idx], dofs_idx_local=self._dofs_idx_local, envs_idx=envs_idx
         # )
         # kd
         min_kd, max_kd = self._args.dr_args.kd_range
         ratios = torch.rand(len(envs_idx), self._dof_dim) * (max_kd - min_kd) + min_kd
-        self._batched_dof_kd[envs_idx] = ratios * self._dof_kd[None, 0]
+        self._batched_dof_kd[envs_idx] = ratios * self._dof_kd[None, :]
         # self._robot.set_dofs_kv(
         #     self._batched_dof_kd[envs_idx], dofs_idx_local=self._dofs_idx_local, envs_idx=envs_idx
         # )
@@ -314,6 +327,10 @@ class LeggedRobotBase(BaseGymRobot):
     @property
     def dof_dim(self) -> int:
         return self._dof_dim
+
+    @property
+    def dof_names(self) -> list[str]:
+        return self._args.dof_names
 
     @property
     def default_pos(self) -> torch.Tensor:

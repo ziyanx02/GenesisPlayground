@@ -37,6 +37,7 @@ class WalkingEnv(BaseEnv):
         num_envs: int,
         show_viewer: bool = False,
         device: torch.device = _DEFAULT_DEVICE,
+        eval_mode: bool = False,
     ) -> None:
         super().__init__(device=device)
         self._num_envs = num_envs
@@ -44,6 +45,7 @@ class WalkingEnv(BaseEnv):
         self._show_viewer = show_viewer
         self._refresh_visualizer = False if platform.system() == "Darwin" else True
         self._args = args
+        self._eval_mode = eval_mode
 
         if not gs._initialized:  # noqa: SLF001
             gs.init(performance_mode=True, backend=getattr(gs.constants.backend, device.type))
@@ -96,7 +98,7 @@ class WalkingEnv(BaseEnv):
 
     def _init(self) -> None:
         # domain randomization
-        self._robot.post_build_init()
+        self._robot.post_build_init(eval_mode=self._eval_mode)
 
         # initialize buffers
         self._action_buf = torch.zeros(
@@ -139,22 +141,40 @@ class WalkingEnv(BaseEnv):
         self.link_velocities = torch.zeros(
             (self.num_envs, self._robot.n_links, 3), device=self.device, dtype=torch.float32
         )
-        self.feet_height = torch.zeros((self.num_envs, len(self._robot.foot_links_idx)), device=self.device, dtype=torch.float32)
+        self.feet_height = torch.zeros(
+            (self.num_envs, len(self._robot.foot_links_idx)),
+            device=self.device,
+            dtype=torch.float32,
+        )
         self.feet_z_velocity = torch.zeros(
-            (self.num_envs, len(self._robot.foot_links_idx)), device=self.device, dtype=torch.float32
+            (self.num_envs, len(self._robot.foot_links_idx)),
+            device=self.device,
+            dtype=torch.float32,
         )
         self.feet_orientation = torch.zeros(
-            (self.num_envs, len(self._robot.foot_links_idx), 3), device=self.device, dtype=torch.float32
+            (self.num_envs, len(self._robot.foot_links_idx), 3),
+            device=self.device,
+            dtype=torch.float32,
         )
-        self.feet_contact = torch.zeros((self.num_envs, len(self._robot.foot_links_idx)), device=self.device, dtype=torch.float32)
+        self.feet_contact = torch.zeros(
+            (self.num_envs, len(self._robot.foot_links_idx)),
+            device=self.device,
+            dtype=torch.float32,
+        )
         self.feet_contact_force = torch.zeros(
-            (self.num_envs, len(self._robot.foot_links_idx)), device=self.device, dtype=torch.float32
+            (self.num_envs, len(self._robot.foot_links_idx)),
+            device=self.device,
+            dtype=torch.float32,
         )
         self.feet_first_contact = torch.zeros(
-            (self.num_envs, len(self._robot.foot_links_idx)), device=self.device, dtype=torch.float32
+            (self.num_envs, len(self._robot.foot_links_idx)),
+            device=self.device,
+            dtype=torch.float32,
         )
         self.feet_air_time = torch.zeros(
-            (self.num_envs, len(self._robot.foot_links_idx)), device=self.device, dtype=torch.float32
+            (self.num_envs, len(self._robot.foot_links_idx)),
+            device=self.device,
+            dtype=torch.float32,
         )
 
         #
@@ -208,12 +228,14 @@ class WalkingEnv(BaseEnv):
         random_euler = torch.zeros((len(envs_idx), 3), device=self._device)
         random_euler[:, :2] = (torch.rand(len(envs_idx), 2, device=self._device) - 0.5) * 0.3
         random_euler[:, 2] = torch.rand(len(envs_idx), device=self._device) * 2 * np.pi - np.pi
+        random_dof_pos = torch.rand(len(envs_idx), self._robot.dof_dim, device=self._device) - 0.5
+        random_dof_pos *= 0.3
+        if self._eval_mode:
+            random_euler *= 0
+            random_dof_pos *= 0
         quat = quat_from_euler(random_euler)
         quat = quat_mul(quat, default_quat)
-        dof_pos = (
-            default_dof_pos
-            + (torch.rand(len(envs_idx), self._robot.dof_dim, device=self._device) - 0.5) * 0.3
-        )
+        dof_pos = default_dof_pos + random_dof_pos
         self.time_since_reset[envs_idx] = 0.0
         self.feet_air_time[envs_idx] = 0.0
         self._robot.set_state(pos=default_pos, quat=quat, dof_pos=dof_pos, envs_idx=envs_idx)
@@ -238,6 +260,8 @@ class WalkingEnv(BaseEnv):
         return reset_buf
 
     def get_truncated(self) -> torch.Tensor:
+        if self._eval_mode:
+            self._max_sim_time = float("inf")
         time_out_buf = self.time_since_reset > self._max_sim_time
         self.time_out_buf[:] = time_out_buf
         return time_out_buf
@@ -248,6 +272,8 @@ class WalkingEnv(BaseEnv):
         for key in self._args.actor_obs_terms:
             obs_gt = getattr(self, key) * self._args.obs_scales.get(key, 1.0)
             obs_noise = torch.randn_like(obs_gt) * self._args.obs_noises.get(key, 0.0)
+            if self._eval_mode:
+                obs_noise *= 0
             obs_components.append(obs_gt + obs_noise)
         actor_obs = torch.cat(obs_components, dim=-1)
         obs_components = []
@@ -295,7 +321,8 @@ class WalkingEnv(BaseEnv):
         push_env_ids = torch.nonzero(
             self.time_since_random_push >= self._random_push_time, as_tuple=False
         ).squeeze(-1)
-        self._random_push(envs_idx=push_env_ids)
+        if not self._eval_mode:
+            self._random_push(envs_idx=push_env_ids)
         self.time_since_random_push[push_env_ids] = 0.0
 
     def get_extra_infos(self) -> dict[str, Any]:
@@ -322,22 +349,14 @@ class WalkingEnv(BaseEnv):
         self.base_ang_vel[:] = quat_apply(quat_inv(base_quat_rel), self._robot.get_ang())
 
         self.link_contact_forces[:] = self._robot.link_contact_forces
-        self.feet_contact_force[:] = self.link_contact_forces[
-            :, self._robot.foot_links_idx, 2
-        ]
+        self.feet_contact_force[:] = self.link_contact_forces[:, self._robot.foot_links_idx, 2]
         self.feet_contact[:] = self.feet_contact_force > 1.0
         self.link_positions[:] = self._robot.link_positions
         self.link_quaternions[:] = self._robot.link_quaternions
-        self.feet_height[:] = self.link_positions[
-            :, self._robot.foot_links_idx, 2
-        ]
+        self.feet_height[:] = self.link_positions[:, self._robot.foot_links_idx, 2]
         self.link_velocities[:] = self._robot.link_velocities
-        self.feet_z_velocity[:] = self.link_velocities[
-            :, self._robot.foot_links_idx, 2
-        ]
-        feet_quaternions = self.link_quaternions[
-            :, self._robot.foot_links_idx
-        ].reshape(-1, 4)
+        self.feet_z_velocity[:] = self.link_velocities[:, self._robot.foot_links_idx, 2]
+        feet_quaternions = self.link_quaternions[:, self._robot.foot_links_idx].reshape(-1, 4)
         self.feet_orientation[:] = quat_apply(
             quat_inv(feet_quaternions), self.global_gravity.repeat(2, 1)
         ).reshape(self.num_envs, len(self._robot.foot_links_idx), 3)
@@ -452,8 +471,8 @@ class WalkingEnv(BaseEnv):
             new_vel[:, :2] = new_vel[:, :2] + delta_xy
             self._robot.set_dofs_velocity(new_vel, envs_idx=envs_idx, dofs_idx_local=[0, 1, 2])
 
-    def stop_random_push(self) -> None:
-        self._random_push_time = float("inf")
+    def eval(self) -> None:
+        self._eval_mode = True
 
     @property
     def scene(self) -> FlatScene:

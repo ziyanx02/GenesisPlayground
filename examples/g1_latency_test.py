@@ -1,12 +1,9 @@
 #!/usr/bin/env python3
 """Example: Train PPO on Genesis Walking environment using Genesis RL."""
 
-import glob
-import os
 import platform
-from datetime import datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 import fire
 import matplotlib
@@ -15,17 +12,10 @@ matplotlib.use("Agg")  # Use non-interactive backend to prevent windows from sho
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-from gs_agent.algos.config.registry import PPO_WALKING_MLP
-from gs_agent.algos.ppo import PPO
-from gs_agent.runners.config.registry import RUNNER_WALKING_MLP
-from gs_agent.runners.onpolicy_runner import OnPolicyRunner
-from gs_agent.utils.logger import configure as logger_configure
-from gs_agent.utils.policy_loader import load_latest_model
 from gs_agent.wrappers.gs_env_wrapper import GenesisEnvWrapper
 from gs_env.sim.envs.config.registry import EnvArgsRegistry
-from gs_env.sim.robots.config.registry import DRArgsRegistry
 from gs_env.sim.envs.locomotion.walking_env import WalkingEnv
-from utils import apply_overrides_generic, plot_metric_on_axis
+from utils import plot_metric_on_axis
 
 
 def create_gs_env(
@@ -33,6 +23,7 @@ def create_gs_env(
     num_envs: int = 4096,
     device: str = "cuda",
     args: Any = None,
+    eval_mode: bool = False,
 ) -> WalkingEnv:
     """Create gym environment wrapper with optional config overrides."""
     if torch.cuda.is_available() and device == "cuda":
@@ -46,10 +37,11 @@ def create_gs_env(
         num_envs=num_envs,
         show_viewer=show_viewer,
         device=device_tensor,  # type: ignore
+        eval_mode=eval_mode,
     )
 
 
-def run_dof_diagnosis(
+def run_single_dof_wave_diagnosis(
     env: GenesisEnvWrapper,
     dof_idx: int = 0,
     num_dofs: int = 29,
@@ -58,33 +50,45 @@ def run_dof_diagnosis(
     amplitude: float = 1.0,
     offset: float = 0.0,
 ) -> tuple[list[float], list[float]]:
-    """Run DOF diagnosis."""
-    print(f"Running DOF diagnosis for {wave_type}")
+    """Run single DoF diagnosis."""
+    print(f"Running DoF diagnosis for {wave_type}")
     NUM_TOTAL_PERIODS = 5
-    linear_phase = lambda x: x / period * 2 * np.pi
-    quadratic_phase = lambda x: (x / period) ** 2 * 2 * np.pi / NUM_TOTAL_PERIODS * 3
-    linear_amp = lambda x: amplitude * x / (NUM_TOTAL_PERIODS * period)
+
+    def linear_phase(x: int) -> float:
+        return x / period * 2 * np.pi
+
+    def quadratic_phase(x: int) -> float:
+        return (x / period) ** 2 * 2 * np.pi / NUM_TOTAL_PERIODS * 3
+
+    def linear_amp(x: int) -> float:
+        return (10 * (x - 1) / period) // NUM_TOTAL_PERIODS * amplitude / 10
+
     if wave_type == "SIN":
-        wave_func = lambda x: np.sin(linear_phase(x)) * amplitude
+
+        def wave_func(x: int) -> float:
+            return np.sin(linear_phase(x)) * amplitude
+    elif wave_type == "FM-SIN":
+
+        def wave_func(x: int) -> float:
+            return np.sin(quadratic_phase(x)) * amplitude
     elif wave_type == "SQ":
-        wave_func = lambda x: np.sign(np.sin(linear_phase(x))) * amplitude
-    elif wave_type == "AFM-SIN":
-        wave_func = lambda x: np.sin(quadratic_phase(x))  * linear_amp(x)
-    elif wave_type == "AFM-SQ":
-        wave_func = lambda x: np.sign(np.sin(quadratic_phase(x))) * linear_amp(x)
+
+        def wave_func(x: int) -> float:
+            return np.sign(np.sin(linear_phase(x))) * linear_amp(x)
     else:
         raise ValueError(f"Invalid wave type: {wave_type}")
-    
-    action = torch.zeros((env.num_envs, num_dofs), device=env.device)
-    action[:, dof_idx] = offset
 
-    for _ in range(50): 
+    env.reset()
+    action = torch.zeros((env.num_envs, num_dofs), device=env.device)
+    action[:, dof_idx] = offset / env.env.action_scale
+
+    for _ in range(10):
         env.step(action)
 
     target_dof_pos_list = []
     dof_pos_list = []
 
-    for i in range(period * NUM_TOTAL_PERIODS): 
+    for i in range(period * NUM_TOTAL_PERIODS):
         target_dof_pos = wave_func(i) + offset
         action[:, dof_idx] = target_dof_pos / env.env.action_scale
         dof_pos = (env.env.dof_pos[0] - env.env.robot.default_dof_pos)[dof_idx].cpu().item()
@@ -92,48 +96,31 @@ def run_dof_diagnosis(
         dof_pos_list.append(dof_pos)
         env.step(action)
 
-        if i % 10 == 0:
+        if i % period == 0:
             print(f"Step {i} of {period * NUM_TOTAL_PERIODS}")
 
     return target_dof_pos_list, dof_pos_list
 
 
-def main(
-    show_viewer: bool = False,
-    device: str = "cuda",
-    env_name: str = "g1_fixed",
+def run_single_dof_diagnosis(
+    env: GenesisEnvWrapper,
+    dof_idx: int = 0,
+    dof_name: str = "DoF",
+    num_dofs: int = 29,
+    period: int = 100,
+    amplitude: float = 1.0,
+    offset: float = 0.0,
 ) -> None:
-
-    env_args = EnvArgsRegistry[env_name]
-    env_args = env_args.model_copy(
-        update={
-            "obs_noises": {},  # Disable observation noise
-        }
-    )
-    robot_args = env_args.robot_args.model_copy(
-        update={
-            "dr_args": DRArgsRegistry["no_randomization"],
-        }
-    )
-    env_args = env_args.model_copy(update={"robot_args": robot_args})
-
-    # Create environment for evaluation
-    env = create_gs_env(
-        show_viewer=show_viewer,
-        num_envs=1,
-        device=device,
-        args=env_args,
-    )
-    env.stop_random_push()
-
-    wrapped_env = GenesisEnvWrapper(env, device=env.device)
-
-    # Create figure with 4 subplots in one column
     fig, axes = plt.subplots(4, 1, figsize=(12, 12))
-
-    for i, wave_type in enumerate(["SIN", "SQ", "AFM-SIN", "AFM-SQ"]):
-        target_dof_pos_list, dof_pos_list = run_dof_diagnosis(
-            wrapped_env, dof_idx=0, wave_type=wave_type, period=100, amplitude=1.0, offset=0.0
+    for i, wave_type in enumerate(["SIN", "FM-SIN", "SQ"]):
+        target_dof_pos_list, dof_pos_list = run_single_dof_wave_diagnosis(
+            env,
+            dof_idx=dof_idx,
+            num_dofs=num_dofs,
+            wave_type=wave_type,
+            period=period,
+            amplitude=amplitude,
+            offset=offset,
         )
         plot_metric_on_axis(
             axes[i],
@@ -145,15 +132,100 @@ def main(
             yscale="linear",
         )
 
+        if wave_type == "SQ":
+            truncated_dof_pos_list = dof_pos_list[-period : -period + 10]
+            truncated_target_dof_pos_list = target_dof_pos_list[-period : -period + 10]
+            plot_metric_on_axis(
+                axes[3],
+                np.arange(len(truncated_target_dof_pos_list)),
+                [truncated_target_dof_pos_list, truncated_dof_pos_list],
+                ["Target", "Dof Pos"],
+                "Dof Pos",
+                "Truncated",
+                yscale="linear",
+                show_mean=False,
+            )
+
     # Save plot
-    plot_dir = Path("./gif") / "latest"
+    plot_dir = Path("./logs") / "pd_test"
     plot_dir.mkdir(parents=True, exist_ok=True)
 
-    plot_path = plot_dir / f"action_log.png"
+    plot_path = plot_dir / f"{dof_name}.png"
     plt.tight_layout()
     plt.savefig(plot_path, dpi=150)
     plt.close(fig)
-    print(f"Action difference plot saved to: {plot_path}")
+
+    print(f"Plot saved to: {plot_path}")
+
+
+def main(
+    show_viewer: bool = False,
+    device: str = "cuda",
+    env_name: str = "g1_fixed",
+) -> None:
+    # Create environment for evaluation
+    env_args = EnvArgsRegistry[env_name]
+    env = create_gs_env(
+        show_viewer=show_viewer,
+        num_envs=1,
+        device=device,
+        args=env_args,
+        eval_mode=True,
+    )
+
+    wrapped_env = GenesisEnvWrapper(env, device=env.device)
+
+    # DoF names, lower bound, upper bound
+    test_dofs = {
+        # "hip_roll": [0.0, 1.0],
+        # "hip_pitch": [-0.5, 0.5],
+        # "hip_yaw": [-0.5, 0.5],
+        # "knee": [0.0, 1.0],
+        "ankle_roll": [-0.2, 0.2],
+        "ankle_pitch": [-0.5, 0.5],
+        # "waist_yaw": [-1.0, 1.0],
+        # "waist_roll": [-0.4, 0.4],
+        # "waist_pitch": [-0.4, 0.4],
+        # "shoulder_roll": [0.0, 1.0],
+        # "shoulder_pitch": [-0.5, 0.5],
+        # "shoulder_yaw": [0.0, 1.0],
+        # "elbow": [0.0, 1.0],
+        # "wrist_roll": [-1.0, 1.0],
+        # "wrist_pitch": [-1.0, 1.0],
+        # "wrist_yaw": [-1.0, 1.0],
+    }
+
+    def run_dof_diagnosis_fixed() -> None:
+        nonlocal wrapped_env
+        dof_names = wrapped_env.env.robot.dof_names
+
+        for dof_name, (lower_bound, upper_bound) in test_dofs.items():
+            for i, name in enumerate(dof_names):
+                if dof_name in name:
+                    dof_idx = i
+                    break
+            amplitude = (upper_bound - lower_bound) / 2
+            offset = (upper_bound + lower_bound) / 2
+            run_single_dof_diagnosis(
+                wrapped_env,
+                dof_idx=dof_idx,
+                dof_name=dof_name,
+                num_dofs=29,
+                period=100,
+                amplitude=amplitude,
+                offset=offset,
+            )
+
+    try:
+        if platform.system() == "Darwin" and show_viewer:
+            import threading
+
+            threading.Thread(target=run_dof_diagnosis_fixed).start()
+            env.scene.scene.viewer.run()  # type: ignore
+        else:
+            run_dof_diagnosis_fixed()
+    except KeyboardInterrupt:
+        pass
 
 
 if __name__ == "__main__":
