@@ -24,7 +24,7 @@ from gs_agent.utils.policy_loader import load_latest_model
 from gs_agent.wrappers.gs_env_wrapper import GenesisEnvWrapper
 from gs_env.sim.envs.config.registry import EnvArgsRegistry
 from gs_env.sim.envs.locomotion.walking_env import WalkingEnv
-from utils import apply_overrides_generic, config_to_xml, plot_metric_on_axis
+from utils import apply_overrides_generic, config_to_yaml, plot_metric_on_axis
 
 
 def create_gs_env(
@@ -424,13 +424,13 @@ def train_policy(
         mode="online" if use_wandb and (not show_viewer) else "disabled",
     )
 
-    # Save configuration files to XML
-    print("Saving configuration files to XML...")
+    # Save configuration files to YAML
+    print("Saving configuration files to YAML...")
     config_dir = logger_folder / "configs"
     config_dir.mkdir(parents=True, exist_ok=True)
-    config_to_xml(env_args, config_dir / "env_args.xml")
-    config_to_xml(algo_cfg, config_dir / "algo_cfg.xml")
-    config_to_xml(runner_args, config_dir / "runner_args.xml")
+    config_to_yaml(env_args, config_dir / "env_args.yaml")
+    config_to_yaml(algo_cfg, config_dir / "algo_cfg.yaml")
+    config_to_yaml(runner_args, config_dir / "runner_args.yaml")
 
     # Train using Runner
     print("Starting training...")

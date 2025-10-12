@@ -1,9 +1,9 @@
 from typing import Any
-import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import matplotlib.ticker as ticker
 import numpy as np
+import yaml
 
 
 def plot_metric_on_axis(
@@ -239,108 +239,59 @@ def apply_overrides_generic(
     return updated
 
 
-def _dict_to_xml_element(data: dict[str, Any], root_name: str = "config") -> ET.Element:
-    """Convert a dictionary to an XML Element recursively.
+def _convert_to_serializable(obj: Any) -> Any:
+    """Convert objects to YAML-serializable format.
     
     Args:
-        data: Dictionary to convert
-        root_name: Name for the root element
+        obj: Object to convert
         
     Returns:
-        XML Element representation of the dictionary
+        YAML-serializable representation
     """
-    root = ET.Element(root_name)
-    
-    def add_to_element(parent: ET.Element, key: str, value: Any) -> None:
-        """Recursively add data to XML element."""
-        if value is None:
-            child = ET.SubElement(parent, key, type="None")
-        elif isinstance(value, bool):
-            child = ET.SubElement(parent, key, type="bool")
-            child.text = str(value)
-        elif isinstance(value, int):
-            child = ET.SubElement(parent, key, type="int")
-            child.text = str(value)
-        elif isinstance(value, float):
-            child = ET.SubElement(parent, key, type="float")
-            child.text = str(value)
-        elif isinstance(value, str):
-            child = ET.SubElement(parent, key, type="str")
-            child.text = value
-        elif isinstance(value, list | tuple):
-            child = ET.SubElement(parent, key, type="list" if isinstance(value, list) else "tuple")
-            for i, item in enumerate(value):
-                add_to_element(child, f"item_{i}", item)
-        elif isinstance(value, dict):
-            child = ET.SubElement(parent, key, type="dict")
-            for sub_key, sub_value in value.items():
-                add_to_element(child, sub_key, sub_value)
-        else:
-            # For other types (e.g., objects), try to convert to string
-            child = ET.SubElement(parent, key, type="object")
-            child.text = str(value)
-    
-    for key, value in data.items():
-        add_to_element(root, key, value)
-    
-    return root
+    if obj is None or isinstance(obj, bool | int | float | str):
+        return obj
+    elif isinstance(obj, dict):
+        return {k: _convert_to_serializable(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [_convert_to_serializable(item) for item in obj]
+    elif isinstance(obj, tuple):
+        # Convert tuple to list but mark it with a special tag
+        return {"__tuple__": [_convert_to_serializable(item) for item in obj]}
+    else:
+        # For other types, convert to string
+        return str(obj)
 
 
-def _xml_element_to_dict(element: ET.Element) -> dict[str, Any]:
-    """Convert an XML Element back to a dictionary recursively.
+def _restore_tuples(obj: Any) -> Any:
+    """Restore tuples from YAML data.
     
     Args:
-        element: XML Element to convert
+        obj: Object loaded from YAML
         
     Returns:
-        Dictionary representation of the XML element
+        Object with tuples restored
     """
-    result: dict[str, Any] = {}
-    
-    def parse_element(elem: ET.Element) -> Any:
-        """Recursively parse XML element to Python value."""
-        elem_type = elem.get("type", "str")
-        
-        if elem_type == "None":
-            return None
-        elif elem_type == "bool":
-            return elem.text == "True"
-        elif elem_type == "int":
-            return int(elem.text) if elem.text else 0
-        elif elem_type == "float":
-            return float(elem.text) if elem.text else 0.0
-        elif elem_type == "str":
-            return elem.text if elem.text else ""
-        elif elem_type in ("list", "tuple"):
-            items = []
-            for child in elem:
-                items.append(parse_element(child))
-            return tuple(items) if elem_type == "tuple" else items
-        elif elem_type == "dict":
-            sub_dict = {}
-            for child in elem:
-                sub_dict[child.tag] = parse_element(child)
-            return sub_dict
-        elif elem_type == "object":
-            return elem.text if elem.text else ""
+    if isinstance(obj, dict):
+        if "__tuple__" in obj and len(obj) == 1:
+            # This is a tuple marker
+            return tuple(_restore_tuples(item) for item in obj["__tuple__"])
         else:
-            return elem.text if elem.text else ""
-    
-    for child in element:
-        result[child.tag] = parse_element(child)
-    
-    return result
+            return {k: _restore_tuples(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [_restore_tuples(item) for item in obj]
+    else:
+        return obj
 
 
-def config_to_xml(config: Any, xml_path: str | Path) -> None:
-    """Convert a config/args class (typically Pydantic model) to XML file.
+def config_to_yaml(config: Any, yaml_path: str | Path) -> None:
+    """Convert a config/args class (typically Pydantic model) to YAML file.
     
     Args:
         config: Configuration object (Pydantic model or similar)
-        xml_path: Path where XML file should be saved
+        yaml_path: Path where YAML file should be saved
         
     Example:
-        >>> config_to_xml(env_args, "logs/experiment/env_args.xml")
+        >>> config_to_yaml(env_args, "logs/experiment/env_args.yaml")
     """
     from pydantic import BaseModel as _BM  # type: ignore
     
@@ -352,28 +303,27 @@ def config_to_xml(config: Any, xml_path: str | Path) -> None:
     elif isinstance(config, dict):
         config_dict = config
     else:
-        raise ValueError(f"Cannot convert config of type {type(config)} to XML")
+        raise ValueError(f"Cannot convert config of type {type(config)} to YAML")
     
-    # Convert dictionary to XML
-    root = _dict_to_xml_element(config_dict, root_name="config")
-    
-    # Create XML tree and write to file
-    tree = ET.ElementTree(root)
-    ET.indent(tree, space="  ", level=0)  # Pretty print
+    # Convert to serializable format
+    serializable_dict = _convert_to_serializable(config_dict)
     
     # Ensure parent directory exists
-    xml_path = Path(xml_path)
-    xml_path.parent.mkdir(parents=True, exist_ok=True)
+    yaml_path = Path(yaml_path)
+    yaml_path.parent.mkdir(parents=True, exist_ok=True)
     
-    tree.write(xml_path, encoding="utf-8", xml_declaration=True)
-    print(f"Config saved to XML: {xml_path}")
+    # Write to YAML file
+    with open(yaml_path, "w", encoding="utf-8") as f:
+        yaml.dump(serializable_dict, f, default_flow_style=False, sort_keys=False, indent=2)
+    
+    print(f"Config saved to YAML: {yaml_path}")
 
 
-def xml_to_config(xml_path: str | Path, config_class: type | None = None) -> Any:
-    """Convert XML file back to config/args class.
+def yaml_to_config(yaml_path: str | Path, config_class: type | None = None) -> Any:
+    """Convert YAML file back to config/args class.
     
     Args:
-        xml_path: Path to XML file
+        yaml_path: Path to YAML file
         config_class: Optional class type to instantiate. If provided and it's a 
                      Pydantic model, will return an instance of that class.
                      If None, returns a dictionary.
@@ -383,16 +333,16 @@ def xml_to_config(xml_path: str | Path, config_class: type | None = None) -> Any
         
     Example:
         >>> from gs_env.sim.envs.config.schema import EnvArgs
-        >>> env_args = xml_to_config("logs/experiment/env_args.xml", EnvArgs)
+        >>> env_args = yaml_to_config("logs/experiment/env_args.yaml", EnvArgs)
     """
     from pydantic import BaseModel as _BM  # type: ignore
     
-    # Parse XML file
-    tree = ET.parse(xml_path)
-    root = tree.getroot()
+    # Load YAML file
+    with open(yaml_path, encoding="utf-8") as f:
+        config_dict = yaml.safe_load(f)
     
-    # Convert XML to dictionary
-    config_dict = _xml_element_to_dict(root)
+    # Restore tuples
+    config_dict = _restore_tuples(config_dict)
     
     # If config_class provided and is Pydantic model, instantiate it
     if config_class is not None and issubclass(config_class, _BM):
