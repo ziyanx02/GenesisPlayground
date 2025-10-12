@@ -16,6 +16,7 @@ from .leggedrobot_terms import (
     OrientationPenalty,  # noqa
     TorquePenalty,  # noqa
     StandStillFeetContactPenalty,  # noqa
+    StandStillActionRatePenalty,  # noqa
     FeetContactForceLimitPenalty,
 )
 from .reward_terms import RewardTerm
