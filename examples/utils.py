@@ -339,7 +339,7 @@ def yaml_to_config(yaml_path: str | Path, config_class: type | None = None) -> A
     
     # Load YAML file
     with open(yaml_path, encoding="utf-8") as f:
-        config_dict = yaml.safe_load(f)
+        config_dict = yaml.load(f, Loader=yaml.UnsafeLoader)
     
     # Restore tuples
     config_dict = _restore_tuples(config_dict)

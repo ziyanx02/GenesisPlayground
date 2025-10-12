@@ -302,6 +302,8 @@ class WalkingEnv(BaseEnv):
             self._scene.scene.step(refresh_visualizer=self._refresh_visualizer)
             self.torque = torch.max(self.torque, torch.abs(self._robot.torque))
 
+        self._update_buffers()
+
         # Render if rendering is enabled
         self._render_headless()
         self.feet_first_contact[:] = (self.feet_air_time > 0.0) * self.feet_contact
