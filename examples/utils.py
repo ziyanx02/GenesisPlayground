@@ -1,4 +1,6 @@
 from typing import Any
+import xml.etree.ElementTree as ET
+from pathlib import Path
 
 import matplotlib.ticker as ticker
 import numpy as np
@@ -235,3 +237,169 @@ def apply_overrides_generic(
         tokens = tokenize_path(raw_key, prefixes)
         updated = deep_apply(updated, tokens, raw_val)
     return updated
+
+
+def _dict_to_xml_element(data: dict[str, Any], root_name: str = "config") -> ET.Element:
+    """Convert a dictionary to an XML Element recursively.
+    
+    Args:
+        data: Dictionary to convert
+        root_name: Name for the root element
+        
+    Returns:
+        XML Element representation of the dictionary
+    """
+    root = ET.Element(root_name)
+    
+    def add_to_element(parent: ET.Element, key: str, value: Any) -> None:
+        """Recursively add data to XML element."""
+        if value is None:
+            child = ET.SubElement(parent, key, type="None")
+        elif isinstance(value, bool):
+            child = ET.SubElement(parent, key, type="bool")
+            child.text = str(value)
+        elif isinstance(value, int):
+            child = ET.SubElement(parent, key, type="int")
+            child.text = str(value)
+        elif isinstance(value, float):
+            child = ET.SubElement(parent, key, type="float")
+            child.text = str(value)
+        elif isinstance(value, str):
+            child = ET.SubElement(parent, key, type="str")
+            child.text = value
+        elif isinstance(value, list | tuple):
+            child = ET.SubElement(parent, key, type="list" if isinstance(value, list) else "tuple")
+            for i, item in enumerate(value):
+                add_to_element(child, f"item_{i}", item)
+        elif isinstance(value, dict):
+            child = ET.SubElement(parent, key, type="dict")
+            for sub_key, sub_value in value.items():
+                add_to_element(child, sub_key, sub_value)
+        else:
+            # For other types (e.g., objects), try to convert to string
+            child = ET.SubElement(parent, key, type="object")
+            child.text = str(value)
+    
+    for key, value in data.items():
+        add_to_element(root, key, value)
+    
+    return root
+
+
+def _xml_element_to_dict(element: ET.Element) -> dict[str, Any]:
+    """Convert an XML Element back to a dictionary recursively.
+    
+    Args:
+        element: XML Element to convert
+        
+    Returns:
+        Dictionary representation of the XML element
+    """
+    result: dict[str, Any] = {}
+    
+    def parse_element(elem: ET.Element) -> Any:
+        """Recursively parse XML element to Python value."""
+        elem_type = elem.get("type", "str")
+        
+        if elem_type == "None":
+            return None
+        elif elem_type == "bool":
+            return elem.text == "True"
+        elif elem_type == "int":
+            return int(elem.text) if elem.text else 0
+        elif elem_type == "float":
+            return float(elem.text) if elem.text else 0.0
+        elif elem_type == "str":
+            return elem.text if elem.text else ""
+        elif elem_type in ("list", "tuple"):
+            items = []
+            for child in elem:
+                items.append(parse_element(child))
+            return tuple(items) if elem_type == "tuple" else items
+        elif elem_type == "dict":
+            sub_dict = {}
+            for child in elem:
+                sub_dict[child.tag] = parse_element(child)
+            return sub_dict
+        elif elem_type == "object":
+            return elem.text if elem.text else ""
+        else:
+            return elem.text if elem.text else ""
+    
+    for child in element:
+        result[child.tag] = parse_element(child)
+    
+    return result
+
+
+def config_to_xml(config: Any, xml_path: str | Path) -> None:
+    """Convert a config/args class (typically Pydantic model) to XML file.
+    
+    Args:
+        config: Configuration object (Pydantic model or similar)
+        xml_path: Path where XML file should be saved
+        
+    Example:
+        >>> config_to_xml(env_args, "logs/experiment/env_args.xml")
+    """
+    from pydantic import BaseModel as _BM  # type: ignore
+    
+    # Convert to dictionary
+    if isinstance(config, _BM):
+        config_dict = config.model_dump()
+    elif hasattr(config, "__dict__"):
+        config_dict = config.__dict__
+    elif isinstance(config, dict):
+        config_dict = config
+    else:
+        raise ValueError(f"Cannot convert config of type {type(config)} to XML")
+    
+    # Convert dictionary to XML
+    root = _dict_to_xml_element(config_dict, root_name="config")
+    
+    # Create XML tree and write to file
+    tree = ET.ElementTree(root)
+    ET.indent(tree, space="  ", level=0)  # Pretty print
+    
+    # Ensure parent directory exists
+    xml_path = Path(xml_path)
+    xml_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    tree.write(xml_path, encoding="utf-8", xml_declaration=True)
+    print(f"Config saved to XML: {xml_path}")
+
+
+def xml_to_config(xml_path: str | Path, config_class: type | None = None) -> Any:
+    """Convert XML file back to config/args class.
+    
+    Args:
+        xml_path: Path to XML file
+        config_class: Optional class type to instantiate. If provided and it's a 
+                     Pydantic model, will return an instance of that class.
+                     If None, returns a dictionary.
+        
+    Returns:
+        Config object (Pydantic model instance) or dictionary
+        
+    Example:
+        >>> from gs_env.sim.envs.config.schema import EnvArgs
+        >>> env_args = xml_to_config("logs/experiment/env_args.xml", EnvArgs)
+    """
+    from pydantic import BaseModel as _BM  # type: ignore
+    
+    # Parse XML file
+    tree = ET.parse(xml_path)
+    root = tree.getroot()
+    
+    # Convert XML to dictionary
+    config_dict = _xml_element_to_dict(root)
+    
+    # If config_class provided and is Pydantic model, instantiate it
+    if config_class is not None and issubclass(config_class, _BM):
+        return config_class(**config_dict)
+    elif config_class is not None:
+        # Try to instantiate with the dictionary
+        return config_class(**config_dict)
+    else:
+        # Return as dictionary
+        return config_dict

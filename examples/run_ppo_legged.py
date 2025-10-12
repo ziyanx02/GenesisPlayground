@@ -24,7 +24,7 @@ from gs_agent.utils.policy_loader import load_latest_model
 from gs_agent.wrappers.gs_env_wrapper import GenesisEnvWrapper
 from gs_env.sim.envs.config.registry import EnvArgsRegistry
 from gs_env.sim.envs.locomotion.walking_env import WalkingEnv
-from utils import apply_overrides_generic, plot_metric_on_axis
+from utils import apply_overrides_generic, config_to_xml, plot_metric_on_axis
 
 
 def create_gs_env(
@@ -415,14 +415,23 @@ def train_policy(
         save_path = Path(f"./logs/{exp_name}")
     else:
         save_path = RUNNER_WALKING_MLP.save_path
+    logger_folder = save_path / datetime.now().strftime("%Y%m%d_%H%M%S")
     logger = logger_configure(
-        folder=str(save_path / datetime.now().strftime("%Y%m%d_%H%M%S")),
+        folder=str(logger_folder),
         format_strings=["stdout", "csv", "wandb"],
         entity=None,
         project=None,
         exp_name=exp_name,
         mode="online" if use_wandb and (not show_viewer) else "disabled",
     )
+
+    # Save configuration files to XML
+    print("Saving configuration files to XML...")
+    config_dir = logger_folder / "configs"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    config_to_xml(env_args, config_dir / "env_args.xml")
+    config_to_xml(algo_cfg, config_dir / "algo_cfg.xml")
+    config_to_xml(runner_args, config_dir / "runner_args.xml")
 
     # Train using Runner
     print("Starting training...")
@@ -502,6 +511,7 @@ def main(
             exp_name=exp_name,
             show_viewer=show_viewer,
             num_ckpt=num_ckpt,
+            device=device,
             env_args=env_args,
             algo_cfg=algo_cfg,
         )
