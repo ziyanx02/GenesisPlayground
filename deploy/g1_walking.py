@@ -7,12 +7,14 @@ import numpy as np
 import torch
 import sys
 
+from gs_env.sim.envs.config.schema import LeggedRobotEnvArgs
+
 # Add examples to path to import utils
 sys.path.insert(0, str(Path(__file__).parent.parent / "examples"))
 from utils import yaml_to_config  # type: ignore
 
 
-def load_checkpoint_and_env_args(exp_name: str, num_ckpt: int | None = None):
+def load_checkpoint_and_env_args(exp_name: str, num_ckpt: int | None = None, device: str = "cuda") -> tuple[torch.jit.ScriptModule, LeggedRobotEnvArgs]:
     """Load JIT checkpoint and env_args from deploy/logs directory.
     
     Args:
@@ -22,7 +24,6 @@ def load_checkpoint_and_env_args(exp_name: str, num_ckpt: int | None = None):
     Returns:
         Tuple of (checkpoint_path, env_args)
     """
-    from gs_env.sim.envs.config.schema import LeggedRobotEnvArgs
     
     deploy_dir = Path(__file__).parent / "logs" / exp_name
     if not deploy_dir.exists():
@@ -49,48 +50,19 @@ def load_checkpoint_and_env_args(exp_name: str, num_ckpt: int | None = None):
         ckpt_path = max(ckpts, key=lambda p: int(p.stem.split("_")[-1]))
     
     print(f"Loading checkpoint from: {ckpt_path}")
-    return ckpt_path, env_args
+    # Load policy
+    policy = torch.jit.load(str(ckpt_path))
+    policy.to(device)
+    policy.eval()
+    
+    return policy, env_args
 
 
-def to_numpy(data):
+def to_numpy(data: torch.Tensor | np.ndarray) -> np.ndarray:
     """Convert torch tensor or numpy array to numpy array."""
     if isinstance(data, torch.Tensor):
         return data.cpu().numpy()
     return np.array(data)
-
-
-def env_args_to_handler_cfg(env_args):
-    """Convert env_args (LeggedRobotEnvArgs) to handler cfg format.
-    
-    Args:
-        env_args: LeggedRobotEnvArgs object
-        
-    Returns:
-        Dictionary in the format expected by the handler
-    """
-    # Extract robot name from robot_args
-    robot_name = env_args.robot_args.robot_name
-    dof_names = env_args.robot_args.dof_names
-    
-    # Get default DOF positions
-    default_dof_pos = {}
-    for i, name in enumerate(dof_names):
-        default_dof_pos[name] = float(env_args.robot_args.default_dof_pos[i])
-    
-    # Create cfg dict in the format expected by handler
-    cfg = {
-        "robot": {
-            "name": robot_name,
-        },
-        "control": {
-            "dof_names": dof_names,
-            "kp": env_args.robot_args.kp,  # Assume this exists in robot_args
-            "kd": env_args.robot_args.kd,  # Assume this exists in robot_args
-            "default_dof_pos": default_dof_pos,
-        }
-    }
-    
-    return cfg
 
 
 def main(
@@ -114,29 +86,25 @@ def main(
     device = "cpu" if not torch.cuda.is_available() else device
     
     # Load checkpoint and env_args
-    ckpt_path, env_args = load_checkpoint_and_env_args(exp_name, num_ckpt)
-    
-    # Load policy
-    policy = torch.jit.load(str(ckpt_path))
-    policy.to(device)
-    policy.eval()
+    policy, env_args = load_checkpoint_and_env_args(exp_name, num_ckpt, device)
     
     # Create environment or handler
     env_idx = 0  # Initialize for both modes
     
     if sim:
         print("Running in SIMULATION mode")
-        import gs_env.sim.envs as gs_envs
+        import gs_env.sim.envs as envs
         
-        envclass = getattr(gs_envs, env_args.env_name)
-        env = envclass(
+        envclass = getattr(envs, env_args.env_name)
+        env : envs.WalkingEnv = envclass(
             args=env_args,
             num_envs=num_envs,
             show_viewer=show_viewer,
             device=torch.device(device),
             eval_mode=True,
         )
-        
+        env.eval()
+
         # Get default dof positions from robot
         default_dof_pos = to_numpy(env.robot.default_dof_pos)
         
@@ -148,9 +116,8 @@ def main(
         from gs_env.real import UnitreeLowStateCmdHandler
         
         # Convert env_args to handler cfg format
-        handler_cfg = env_args_to_handler_cfg(env_args)
         
-        env = UnitreeLowStateCmdHandler(handler_cfg)
+        env = UnitreeLowStateCmdHandler()
         env.init()
         env.start()
         
@@ -171,7 +138,6 @@ def main(
     print("=" * 80)
     print("Starting policy execution")
     print(f"Mode: {'SIMULATION' if sim else 'REAL ROBOT'}")
-    print(f"Policy: {ckpt_path}")
     print(f"Device: {device}")
     print("=" * 80)
     
@@ -226,13 +192,11 @@ def main(
             # Get action from policy
             obs_t = torch.as_tensor(obs, dtype=torch.float32, device=device).unsqueeze(0)
             with torch.no_grad():
-                action = policy(obs_t).squeeze(0).detach().cpu().numpy().astype(np.float32)
+                action_t = policy(obs_t)
 
             # Apply action
             if sim:
-                # For sim, convert action to torch and apply
-                action_tensor = torch.from_numpy(action).to(torch.device(device)).unsqueeze(0)
-                env.apply_action(action_tensor)
+                env.apply_action(action_t)
             else:
                 # For real robot, apply with gradual interpolation for safety
                 target_pos = reset_dof_pos + 0.3 * (
