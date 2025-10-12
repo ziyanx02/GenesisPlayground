@@ -25,6 +25,7 @@ class GenesisInitArgs(BaseModel):
 class EnvArgs(BaseModel):
     model_config = genesis_pydantic_config(frozen=True, arbitrary_types_allowed=True)
 
+    env_name: str
     gs_init_args: GenesisInitArgs
     scene_args: SceneArgs
     robot_args: ManipulatorRobotArgs | QuadrupedRobotArgs | HumanoidRobotArgs

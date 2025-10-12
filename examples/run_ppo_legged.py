@@ -23,7 +23,7 @@ from gs_agent.utils.logger import configure as logger_configure
 from gs_agent.utils.policy_loader import load_latest_model
 from gs_agent.wrappers.gs_env_wrapper import GenesisEnvWrapper
 from gs_env.sim.envs.config.registry import EnvArgsRegistry
-from gs_env.sim.envs.locomotion.walking_env import WalkingEnv
+import gs_env.sim.envs as gs_envs
 from utils import apply_overrides_generic, config_to_yaml, plot_metric_on_axis
 
 
@@ -33,7 +33,7 @@ def create_gs_env(
     device: str = "cuda",
     args: Any = None,
     eval_mode: bool = False,
-) -> WalkingEnv:
+) -> gs_envs.WalkingEnv:
     """Create gym environment wrapper with optional config overrides."""
     if torch.cuda.is_available() and device == "cuda":
         device_tensor = torch.device("cuda")
@@ -41,7 +41,9 @@ def create_gs_env(
         device_tensor = torch.device("cpu")
     print(f"Using device: {device_tensor}")
 
-    return WalkingEnv(
+    env_class = getattr(gs_envs, args.env_name)
+
+    return env_class(
         args=args,
         num_envs=num_envs,
         show_viewer=show_viewer,
@@ -61,7 +63,7 @@ def _apply_runner_overrides(runner_args: Any, overrides: dict[str, Any] | None) 
 
 
 def create_ppo_runner_from_registry(
-    env: WalkingEnv,
+    env: gs_envs.WalkingEnv,
     exp_name: str | None = None,
     algo_cfg: Any = None,
     runner_args: Any = None,
