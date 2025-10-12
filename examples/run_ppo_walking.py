@@ -94,7 +94,7 @@ def create_ppo_runner_from_registry(
 
 
 def evaluate_policy(
-    exp_name: str | None = None,
+    exp_name: str,
     show_viewer: bool = False,
     num_ckpt: int | None = None,
     device: str = "cuda",
@@ -132,27 +132,12 @@ def evaluate_policy(
     env_args = env_args.model_copy(update={"robot_args": robot_args})
 
     # Find the experiment directory without creating a new runner
-    if exp_name is not None:
-        # Use specific experiment name
-        log_pattern = f"logs/{exp_name}/*"
-        log_dirs = glob.glob(log_pattern)
-        if not log_dirs:
-            raise FileNotFoundError(
-                f"No experiment directories found matching pattern: {log_pattern}"
-            )
-    else:
-        # Find latest experiment - try walking first, then goal_reaching
-        log_patterns = ["logs/ppo_gs_walking/*"]
-        log_dirs = []
-        for pattern in log_patterns:
-            log_dirs.extend(glob.glob(pattern))
-            if log_dirs:  # If we found any, use this pattern
-                break
-
-        if not log_dirs:
-            raise FileNotFoundError(
-                f"No experiment directories found. Tried patterns: {log_patterns}"
-            )
+    log_pattern = f"logs/{exp_name}/*"
+    log_dirs = glob.glob(log_pattern)
+    if not log_dirs:
+        raise FileNotFoundError(
+            f"No experiment directories found matching pattern: {log_pattern}"
+        )
 
     log_dirs.sort(key=lambda x: os.path.getmtime(x), reverse=True)
     exp_dir = log_dirs[0]
@@ -165,6 +150,7 @@ def evaluate_policy(
             raise FileNotFoundError(f"Checkpoint {ckpt_path} not found")
     else:
         ckpt_path = load_latest_model(Path(exp_dir))
+        num_ckpt = int(ckpt_path.stem.split("_")[-1])
 
     print(f"Loading checkpoint: {ckpt_path}")
 
@@ -183,18 +169,10 @@ def evaluate_policy(
     gif_path = None
     if not show_viewer:
         # Create gif directory structure
-        gif_dir = Path("./gif") / exp_name if exp_name else Path("./gif") / "latest"
+        gif_dir = Path("./gif") / exp_name
         gif_dir.mkdir(parents=True, exist_ok=True)
 
-        # Determine checkpoint number for filename
-        if num_ckpt is not None:
-            ckpt_num = num_ckpt
-        else:
-            # Extract checkpoint number from checkpoint path
-            ckpt_filename = ckpt_path.stem  # e.g., "checkpoint_0000"
-            ckpt_num = ckpt_filename.split("_")[-1] if "_" in ckpt_filename else "latest"
-
-        gif_path = gif_dir / f"{ckpt_num}.gif"
+        gif_path = gif_dir / f"{num_ckpt}.gif"
         print(f"Will save GIF to: {gif_path}")
 
         # Start rendering
@@ -214,7 +192,7 @@ def evaluate_policy(
     print("Starting evaluation...")
 
     def evaluate() -> None:
-        nonlocal wrapped_env, inference_policy, gif_path, show_viewer
+        nonlocal wrapped_env, inference_policy, gif_path, show_viewer, num_ckpt, exp_name, env_args
         if show_viewer:
             print("Running endlessly (press Ctrl+C to stop)")
         else:
@@ -237,19 +215,50 @@ def evaluate_policy(
         # Reset environment
         obs, _ = wrapped_env.get_observations()
 
+        # Create a wrapper that always uses deterministic=True
+        class DeterministicWrapper(torch.nn.Module):
+            def __init__(self, policy):
+                super().__init__()
+                self.policy = policy
+            
+            def forward(self, obs):
+                action, _ = self.policy(obs, deterministic=True)
+                return action
+    
+        # Wrap and trace the policy with deterministic=True baked in
+        wrapped_policy = DeterministicWrapper(inference_policy)
+        inference_policy = torch.jit.trace(wrapped_policy, obs)
+
+        # Save the JIT-traced policy and env_args to deploy folder
+        print("Saving JIT-traced policy and env_args for deployment...")
+
+        # Create deploy directory structure
+        deploy_dir = Path("./deploy/logs") / exp_name
+        deploy_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Save JIT-traced policy
+        jit_policy_path = deploy_dir / f"checkpoint_{num_ckpt}.pt"
+        torch.jit.save(inference_policy, str(jit_policy_path))
+        print(f"JIT-traced policy saved to: {jit_policy_path}")
+
+        # Save env_args as YAML
+        env_args_path = deploy_dir / "env_args.yaml"
+        config_to_yaml(env_args, env_args_path)
+        print(f"Environment args saved to: {env_args_path}")
+
         while True:
             if step_count < 100:
-                wrapped_env.env.commands[:] = 0.0  # Forward velocity command
+                wrapped_env.env.commands[:] = 0.0
             elif step_count < 200:
-                wrapped_env.env.commands[:, 0] = 0.0  # Stop command
-                wrapped_env.env.commands[:, 2] = 1.0  # Stop command
+                wrapped_env.env.commands[:, 0] = 0.0
+                wrapped_env.env.commands[:, 2] = 1.0
             else:
-                wrapped_env.env.commands[:, 0] = 1.0  # Backward velocity command
-                wrapped_env.env.commands[:, 2] = 0.0  # Stop command
+                wrapped_env.env.commands[:, 0] = 1.0
+                wrapped_env.env.commands[:, 2] = 0.0
 
             # Get action from policy
             with torch.no_grad():
-                action, _log_prob = inference_policy(obs, deterministic=True)
+                action = inference_policy(obs)  # type: ignore[misc]
 
             action_np = action[0].cpu().numpy()
             # Track action changes for first 500 steps
