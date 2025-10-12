@@ -1,7 +1,9 @@
 from typing import Any
+from pathlib import Path
 
 import matplotlib.ticker as ticker
 import numpy as np
+import yaml
 
 
 def plot_metric_on_axis(
@@ -235,3 +237,119 @@ def apply_overrides_generic(
         tokens = tokenize_path(raw_key, prefixes)
         updated = deep_apply(updated, tokens, raw_val)
     return updated
+
+
+def _convert_to_serializable(obj: Any) -> Any:
+    """Convert objects to YAML-serializable format.
+    
+    Args:
+        obj: Object to convert
+        
+    Returns:
+        YAML-serializable representation
+    """
+    if obj is None or isinstance(obj, bool | int | float | str):
+        return obj
+    elif isinstance(obj, dict):
+        return {k: _convert_to_serializable(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [_convert_to_serializable(item) for item in obj]
+    elif isinstance(obj, tuple):
+        # Convert tuple to list but mark it with a special tag
+        return {"__tuple__": [_convert_to_serializable(item) for item in obj]}
+    else:
+        # For other types, convert to string
+        return str(obj)
+
+
+def _restore_tuples(obj: Any) -> Any:
+    """Restore tuples from YAML data.
+    
+    Args:
+        obj: Object loaded from YAML
+        
+    Returns:
+        Object with tuples restored
+    """
+    if isinstance(obj, dict):
+        if "__tuple__" in obj and len(obj) == 1:
+            # This is a tuple marker
+            return tuple(_restore_tuples(item) for item in obj["__tuple__"])
+        else:
+            return {k: _restore_tuples(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [_restore_tuples(item) for item in obj]
+    else:
+        return obj
+
+
+def config_to_yaml(config: Any, yaml_path: str | Path) -> None:
+    """Convert a config/args class (typically Pydantic model) to YAML file.
+    
+    Args:
+        config: Configuration object (Pydantic model or similar)
+        yaml_path: Path where YAML file should be saved
+        
+    Example:
+        >>> config_to_yaml(env_args, "logs/experiment/env_args.yaml")
+    """
+    from pydantic import BaseModel as _BM  # type: ignore
+    
+    # Convert to dictionary
+    if isinstance(config, _BM):
+        config_dict = config.model_dump()
+    elif hasattr(config, "__dict__"):
+        config_dict = config.__dict__
+    elif isinstance(config, dict):
+        config_dict = config
+    else:
+        raise ValueError(f"Cannot convert config of type {type(config)} to YAML")
+    
+    # Convert to serializable format
+    serializable_dict = _convert_to_serializable(config_dict)
+    
+    # Ensure parent directory exists
+    yaml_path = Path(yaml_path)
+    yaml_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    # Write to YAML file
+    with open(yaml_path, "w", encoding="utf-8") as f:
+        yaml.dump(serializable_dict, f, default_flow_style=False, sort_keys=False, indent=2)
+    
+    print(f"Config saved to YAML: {yaml_path}")
+
+
+def yaml_to_config(yaml_path: str | Path, config_class: type | None = None) -> Any:
+    """Convert YAML file back to config/args class.
+    
+    Args:
+        yaml_path: Path to YAML file
+        config_class: Optional class type to instantiate. If provided and it's a 
+                     Pydantic model, will return an instance of that class.
+                     If None, returns a dictionary.
+        
+    Returns:
+        Config object (Pydantic model instance) or dictionary
+        
+    Example:
+        >>> from gs_env.sim.envs.config.schema import EnvArgs
+        >>> env_args = yaml_to_config("logs/experiment/env_args.yaml", EnvArgs)
+    """
+    from pydantic import BaseModel as _BM  # type: ignore
+    
+    # Load YAML file
+    with open(yaml_path, encoding="utf-8") as f:
+        config_dict = yaml.safe_load(f)
+    
+    # Restore tuples
+    config_dict = _restore_tuples(config_dict)
+    
+    # If config_class provided and is Pydantic model, instantiate it
+    if config_class is not None and issubclass(config_class, _BM):
+        return config_class(**config_dict)
+    elif config_class is not None:
+        # Try to instantiate with the dictionary
+        return config_class(**config_dict)
+    else:
+        # Return as dictionary
+        return config_dict

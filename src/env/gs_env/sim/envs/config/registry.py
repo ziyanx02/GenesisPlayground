@@ -28,6 +28,7 @@ GenesisInitArgsRegistry["default"] = GenesisInitArgs(
 EnvArgsRegistry: dict[str, EnvArgs] = {}
 
 EnvArgsRegistry["goal_reach_default"] = EnvArgs(
+    env_name="GoalReachingEnv",
     gs_init_args=GenesisInitArgsRegistry["default"],
     scene_args=SceneArgsRegistry["flat_scene_default"],
     robot_args=RobotArgsRegistry["franka_default"],
@@ -49,6 +50,7 @@ EnvArgsRegistry["goal_reach_default"] = EnvArgs(
 
 
 EnvArgsRegistry["pick_cube_default"] = EnvArgs(
+    env_name="GoalReachingEnv",
     gs_init_args=GenesisInitArgsRegistry["default"],
     scene_args=SceneArgsRegistry["flat_scene_default"],
     robot_args=RobotArgsRegistry["franka_teleop"],
@@ -60,6 +62,7 @@ EnvArgsRegistry["pick_cube_default"] = EnvArgs(
 
 
 EnvArgsRegistry["g1_walk"] = LeggedRobotEnvArgs(
+    env_name="WalkingEnv",
     gs_init_args=GenesisInitArgsRegistry["default"],
     scene_args=SceneArgsRegistry["flat_scene_legged"],
     robot_args=RobotArgsRegistry["g1_no_waist"],
@@ -133,6 +136,7 @@ EnvArgsRegistry["g1_walk"] = LeggedRobotEnvArgs(
 
 
 EnvArgsRegistry["g1_fixed"] = LeggedRobotEnvArgs(
+    env_name="WalkingEnv",
     gs_init_args=GenesisInitArgsRegistry["default"],
     scene_args=SceneArgsRegistry["flat_scene_legged"],
     robot_args=RobotArgsRegistry["g1_fixed"],
