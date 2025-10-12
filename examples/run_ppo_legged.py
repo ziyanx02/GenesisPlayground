@@ -266,7 +266,7 @@ def evaluate_policy(
                 lower_body_action_rates_mean.append(np.mean(action_rate[12:]))
                 lower_body_action_rates_max.append(np.max(action_rate[12:]))
             elif step_count == 500:
-                print("\nPlotting action differences...")
+                print("Plotting action differences...")
                 steps = np.arange(1, len(upper_body_action_rates_mean) + 1)
 
                 # Create figure with 4 subplots in one column
@@ -348,7 +348,7 @@ def evaluate_policy(
 
             # Check if all environments are done (for non-viewer mode)
             if not show_viewer:
-                if terminated.item() or truncated.item():
+                if terminated.item() or truncated.item() or step_count > 500:
                     print(f"Episode ended at step {step_count}, Total reward: {total_reward:.2f}")
                     break
             else:
