@@ -110,8 +110,8 @@ def main(
         pass
     
     # Initialize tracking variables
-    last_action_t = torch.zeros(len(env_args.robot_args.dof_names), device=device)
-    commands_t = torch.zeros(3, device=device)
+    last_action_t = torch.zeros(1, len(env_args.robot_args.dof_names), device=device)
+    commands_t = torch.zeros(1, 3, device=device)
     
     print("=" * 80)
     print("Starting policy execution")
@@ -120,6 +120,7 @@ def main(
     print("=" * 80)
     
     last_update_time = time.time()
+    total_inference_time = 0
     step_id = 0
     
     try:
@@ -136,29 +137,37 @@ def main(
             last_update_time = time.time()
             
             # Update commands (can be modified for different behaviors)
-            commands_t[0] = 1.0  # forward velocity (m/s)
-            commands_t[1] = 0.0  # lateral velocity (m/s)
-            commands_t[2] = 0.0  # angular velocity (rad/s)
+            commands_t[0, 0] = 1.0  # forward velocity (m/s)
+            commands_t[0, 1] = 0.0  # lateral velocity (m/s)
+            commands_t[0, 2] = 0.0  # angular velocity (rad/s)
 
             # Construct observation (matching training observation structure)
-            print(env.dof_pos.shape, env.dof_vel.shape, env.projected_gravity.shape, env.base_ang_vel.shape, commands_t.shape)
-            obs_t = torch.cat([
-                last_action_t,
-                env.dof_pos[0],
-                env.dof_vel[0],
-                env.projected_gravity[0],
-                env.base_ang_vel[0],
-                commands_t,
-            ], dim=-1)
+            obs_components = []
+            for key in env_args.actor_obs_terms:
+                if key == "last_action":
+                    obs_gt = last_action_t
+                elif key == "commands":
+                    obs_gt = commands_t
+                else:
+                    obs_gt = getattr(env, key) * env_args.obs_scales.get(key, 1.0)
+                obs_components.append(obs_gt)
+            obs_t = torch.cat(obs_components, dim=-1)
 
             # Get action from policy
             with torch.no_grad():
+                start_time = time.time()
                 action_t = policy(obs_t)
+                end_time = time.time()
+                total_inference_time += end_time - start_time
 
             env.apply_action(action_t)
 
-            last_action_t = action_t[0].clone()
+            last_action_t = action_t.clone()
             step_id += 1
+
+            if step_id % 100 == 0:
+                print(f"Step {step_id}: Average inference time: {total_inference_time / 100:.4f}s")
+                total_inference_time = 0
 
     except KeyboardInterrupt:
         print("\nKeyboardInterrupt received, stopping...")
