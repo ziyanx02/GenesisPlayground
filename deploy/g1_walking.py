@@ -104,36 +104,14 @@ def main(
             eval_mode=True,
         )
         env.eval()
+        env.reset()
 
-        # Get default dof positions from robot
-        default_dof_pos = to_numpy(env.robot.default_dof_pos)
-        
-        # For sim, reset_pos is the same as default
-        reset_dof_pos = default_dof_pos.copy()
-        
     else:
-        print("Running in REAL ROBOT mode")
-        from gs_env.real import UnitreeLowStateCmdHandler
-        
-        # Convert env_args to handler cfg format
-        
-        env = UnitreeLowStateCmdHandler()
-        env.init()
-        env.start()
-        
-        # Wait for handler to be ready
-        print("Waiting for robot to be ready...")
-        while not env.Start:
-            time.sleep(0.1)
-        
-        default_dof_pos = env.default_pos
-        # Note: Assuming handler will have reset_pos property for safety ramping
-        # If not available, use default_pos
-        reset_dof_pos = getattr(env, 'reset_pos', env.default_pos).copy()
+        pass
     
     # Initialize tracking variables
-    last_action = np.zeros(len(env_args.robot_args.dof_names))
-    commands = np.array([0.0, 0.0, 0.0])
+    last_action_t = torch.zeros(len(env_args.robot_args.dof_names), device=device)
+    commands_t = torch.zeros(3, device=device)
     
     print("=" * 80)
     print("Starting policy execution")
@@ -158,58 +136,30 @@ def main(
             last_update_time = time.time()
             
             # Update commands (can be modified for different behaviors)
-            commands[0] = 1.0  # forward velocity (m/s)
-            commands[1] = 0.0  # lateral velocity (m/s)
-            commands[2] = 0.0  # angular velocity (rad/s)
-            
-            # Get observations from environment (unified interface)
-            # Note: Handler should provide dof_pos, dof_vel, base_ang_vel properties
-            # that match the sim environment interface
-            if sim:
-                # For sim, extract from the specific environment index
-                dof_pos = to_numpy(env.dof_pos[env_idx])
-                dof_vel = to_numpy(env.dof_vel[env_idx])
-                projected_gravity = to_numpy(env.projected_gravity[env_idx])
-                base_ang_vel = to_numpy(env.base_ang_vel[env_idx])
-            else:
-                # For real robot, assuming handler provides compatible interface
-                # Handler should have properties: dof_pos, dof_vel, projected_gravity, base_ang_vel
-                dof_pos = to_numpy(env.dof_pos)
-                dof_vel = to_numpy(env.dof_vel)
-                projected_gravity = to_numpy(env.projected_gravity)
-                base_ang_vel = to_numpy(env.base_ang_vel)
+            commands_t[0] = 1.0  # forward velocity (m/s)
+            commands_t[1] = 0.0  # lateral velocity (m/s)
+            commands_t[2] = 0.0  # angular velocity (rad/s)
 
             # Construct observation (matching training observation structure)
-            obs = np.concatenate([
-                last_action,
-                (dof_pos - default_dof_pos) * 1.0,  # dof_pos offset
-                dof_vel * env_args.obs_scales["dof_vel"],
-                projected_gravity,
-                base_ang_vel * env_args.obs_scales["base_ang_vel"],
-                commands[:3],
-            ])
+            print(env.dof_pos.shape, env.dof_vel.shape, env.projected_gravity.shape, env.base_ang_vel.shape, commands_t.shape)
+            obs_t = torch.cat([
+                last_action_t,
+                env.dof_pos[0],
+                env.dof_vel[0],
+                env.projected_gravity[0],
+                env.base_ang_vel[0],
+                commands_t,
+            ], dim=-1)
 
             # Get action from policy
-            obs_t = torch.as_tensor(obs, dtype=torch.float32, device=device).unsqueeze(0)
             with torch.no_grad():
                 action_t = policy(obs_t)
 
-            # Apply action
-            if sim:
-                env.apply_action(action_t)
-            else:
-                # For real robot, apply with gradual interpolation for safety
-                target_pos = reset_dof_pos + 0.3 * (
-                    default_dof_pos + action * env_args.robot_args.action_scale - reset_dof_pos
-                )
-                if hasattr(env, 'target_pos'):
-                    env.target_pos = target_pos  # type: ignore
-                else:
-                    print("Warning: Handler does not have target_pos attribute")
-            
-            last_action = action
+            env.apply_action(action_t)
+
+            last_action_t = action_t[0].clone()
             step_id += 1
-            
+
     except KeyboardInterrupt:
         print("\nKeyboardInterrupt received, stopping...")
     finally:
