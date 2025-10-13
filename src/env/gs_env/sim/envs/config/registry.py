@@ -131,6 +131,24 @@ EnvArgsRegistry["walk_default"] = LeggedRobotEnvArgs(
 )
 
 
+EnvArgsRegistry["real2sim_default"] = LeggedRobotEnvArgs(
+    gs_init_args=GenesisInitArgsRegistry["default"],
+    scene_args=SceneArgsRegistry["flat_scene_default"],
+    robot_args=RobotArgsRegistry["g1_real2sim_default"],
+    objects_args=[],
+    sensors_args=[],
+    reward_term="",
+    reward_args={},
+    img_resolution=(0, 0),
+    action_latency=1,
+    obs_history_len=1,
+    obs_scales={},
+    obs_noises={},
+    actor_obs_terms=[],
+    critic_obs_terms=[],
+)
+
+
 # EnvArgsRegistry["custom_desk"] = LeggedRobotEnvArgs(
 #     gs_init_args=GenesisInitArgsRegistry["default"],
 #     scene_args=SceneArgsRegistry["custom_scene_desk"],
