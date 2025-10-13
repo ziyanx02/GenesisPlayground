@@ -132,7 +132,7 @@ def main(
 
         while True:
             # Check termination condition (only for real robot)
-            if not sim and hasattr(env, "emergency_stop") and env.emergency_stop:  # type: ignore
+            if not sim and hasattr(env, "is_emergency_stop") and env.is_emergency_stop:  # type: ignore
                 print("Emergency stop triggered!")
                 break
 

@@ -32,12 +32,16 @@ class UnitreeLeggedEnv(BaseGymRobot):
         pass
 
     def apply_action(self, action: torch.Tensor) -> None:
-        action_np = action.cpu().numpy()
+        action_np = action[0].cpu().numpy()
         target_pos = self.controller.default_pos + action_np * self._action_scale
         self.controller.target_pos = target_pos
 
     def emergency_stop(self) -> None:
         self.controller.emergency_stop()
+
+    @property
+    def is_emergency_stop(self) -> bool:
+        return self.controller.is_emergency_stop
 
     @property
     def controller(self) -> LowStateCmdHandler:
@@ -48,21 +52,25 @@ class UnitreeLeggedEnv(BaseGymRobot):
         return self._low_state_controller.num_dof
 
     @property
-    @property
-    def dof_pos(self) -> torch.Tensor:
-        return torch.tensor(self.controller.joint_pos, device=self._device)
-
-
     def action_space(self) -> spaces.Box:
         return self._action_space
 
     @property
+    def action_scale(self) -> float:
+        return self._action_scale
+
+    @property
+    def dof_names(self) -> list[str]:
+        return self.controller.dof_names
+
+    @property
     def dof_pos(self) -> torch.Tensor:
-        return torch.tensor(self.controller.joint_pos, device=self._device)
+        dof_pos = self.controller.joint_pos - self.controller.default_pos
+        return torch.tensor(dof_pos, device=self._device)[None, :]
 
     @property
     def dof_vel(self) -> torch.Tensor:
-        return torch.tensor(self.controller.joint_vel, device=self._device)
+        return torch.tensor(self.controller.joint_vel, device=self._device)[None, :]
 
     @property
     def projected_gravity(self) -> torch.Tensor:
@@ -70,8 +78,12 @@ class UnitreeLeggedEnv(BaseGymRobot):
             v=np.array([0, 0, -1]),
             q=quaternions.qinverse(self.controller.quat),
         )
-        return torch.tensor(projected_gravity, device=self._device)
+        return torch.tensor(projected_gravity, device=self._device)[None, :]
 
     @property
     def base_ang_vel(self) -> torch.Tensor:
-        return torch.tensor(self.controller.ang_vel, device=self._device)
+        return torch.tensor(self.controller.ang_vel, device=self._device)[None, :]
+
+    @property
+    def device(self) -> torch.device:
+        return self._device

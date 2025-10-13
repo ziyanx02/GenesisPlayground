@@ -138,6 +138,7 @@ class LowStateCmdHandler(LowStateMsgHandler):
                 40,
                 40,
                 40,
+                40,
                 # Right Arm
                 40,
                 40,
@@ -260,6 +261,10 @@ class LowStateCmdHandler(LowStateMsgHandler):
         for g in sorted(groups, key=len, reverse=True):
             if joint_name.endswith(g + "_joint") or joint_name.endswith(g):
                 return g
+
+    @property
+    def is_emergency_stop(self) -> bool:
+        return self._emergency_stop
 
 
 if __name__ == "__main__":
