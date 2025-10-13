@@ -1,12 +1,11 @@
+import platform
+import sys
 import time
 from pathlib import Path
-from typing import Union
 
 import fire
 import numpy as np
 import torch
-import sys
-
 from gs_env.sim.envs.config.schema import LeggedRobotEnvArgs
 
 # Add examples to path to import utils
@@ -14,29 +13,31 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "examples"))
 from utils import yaml_to_config  # type: ignore
 
 
-def load_checkpoint_and_env_args(exp_name: str, num_ckpt: int | None = None, device: str = "cuda") -> tuple[torch.jit.ScriptModule, LeggedRobotEnvArgs]:
+def load_checkpoint_and_env_args(
+    exp_name: str, num_ckpt: int | None = None, device: str = "cuda"
+) -> tuple[torch.jit.ScriptModule, LeggedRobotEnvArgs]:
     """Load JIT checkpoint and env_args from deploy/logs directory.
-    
+
     Args:
         exp_name: Experiment name
         num_ckpt: Checkpoint number. If None, loads the latest checkpoint.
-        
+
     Returns:
         Tuple of (checkpoint_path, env_args)
     """
-    
+
     deploy_dir = Path(__file__).parent / "logs" / exp_name
     if not deploy_dir.exists():
         raise FileNotFoundError(f"Deploy directory not found: {deploy_dir}")
-    
+
     # Load env_args from YAML
     env_args_path = deploy_dir / "env_args.yaml"
     if not env_args_path.exists():
         raise FileNotFoundError(f"env_args.yaml not found: {env_args_path}")
-    
+
     print(f"Loading env_args from: {env_args_path}")
     env_args = yaml_to_config(env_args_path, LeggedRobotEnvArgs)
-    
+
     # Load checkpoint
     if num_ckpt is not None:
         ckpt_path = deploy_dir / f"checkpoint_{num_ckpt:04d}.pt"
@@ -48,13 +49,13 @@ def load_checkpoint_and_env_args(exp_name: str, num_ckpt: int | None = None, dev
         if not ckpts:
             raise FileNotFoundError(f"No checkpoints found in {deploy_dir}")
         ckpt_path = max(ckpts, key=lambda p: int(p.stem.split("_")[-1]))
-    
+
     print(f"Loading checkpoint from: {ckpt_path}")
     # Load policy
     policy = torch.jit.load(str(ckpt_path))
     policy.to(device)
     policy.eval()
-    
+
     return policy, env_args
 
 
@@ -75,7 +76,7 @@ def main(
     action_scale: float = 0.0, # only for real robot
 ):
     """Run policy on either simulation or real robot.
-    
+
     Args:
         exp_name: Experiment name (subdirectory in deploy/logs)
         num_ckpt: Checkpoint number. If None, loads latest.
@@ -85,14 +86,17 @@ def main(
         num_envs: Number of environments (only for sim mode)
     """
     device = "cpu" if not torch.cuda.is_available() else device
-    
+
     # Load checkpoint and env_args
     policy, env_args = load_checkpoint_and_env_args(exp_name, num_ckpt, device)
-
+    
+    # Create environment or handler
+    env_idx = 0  # Initialize for both modes
+    
     if sim:
         print("Running in SIMULATION mode")
         import gs_env.sim.envs as envs
-        
+
         envclass = getattr(envs, env_args.env_name)
         env = envclass(
             args=env_args,
@@ -127,15 +131,20 @@ def main(
     print(f"Mode: {'SIMULATION' if sim else 'REAL ROBOT'}")
     print(f"Device: {device}")
     print("=" * 80)
-    
-    last_update_time = time.time()
-    total_inference_time = 0
-    step_id = 0
-    
-    try:
+
+    def deploy_loop() -> None:
+        nonlocal env
+
+        # Initialize tracking variables
+        last_action_t = torch.zeros(1, len(env_args.robot_args.dof_names), device=device)
+        commands_t = torch.zeros(1, 3, device=device)
+        last_update_time = time.time()
+        total_inference_time = 0
+        step_id = 0
+
         while True:
             # Check termination condition (only for real robot)
-            if not sim and hasattr(env, 'emergency_stop') and env.emergency_stop:  # type: ignore
+            if not sim and hasattr(env, "emergency_stop") and env.emergency_stop:  # type: ignore
                 print("Emergency stop triggered!")
                 break
 
@@ -183,6 +192,14 @@ def main(
                 print(f"Step {step_id}: Average inference time: {total_inference_time / 100:.4f}s")
                 total_inference_time = 0
 
+    try:
+        if platform.system() == "Darwin" and sim and show_viewer:
+            import threading
+
+            threading.Thread(target=deploy_loop).start()
+            env.scene.scene.viewer.run()  # type: ignore
+        else:
+            deploy_loop()
     except KeyboardInterrupt:
         print("\nKeyboardInterrupt received, stopping...")
     finally:
@@ -191,7 +208,6 @@ def main(
             # Handler cleanup if needed
         else:
             print("Simulation stopped.")
-        print(f"Total steps: {step_id}")
 
 
 if __name__ == "__main__":
