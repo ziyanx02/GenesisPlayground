@@ -9,29 +9,29 @@
 # * SPDX-License-Identifier: EPL-2.0 OR BSD-3-Clause
 
 """
-    pre-commit-hook version-check
-        ensures package.xml and CMake listed version are in sync
+pre-commit-hook version-check
+    ensures package.xml and CMake listed version are in sync
 """
 
 import re
 import sys
 from xml.etree import ElementTree
-import hashlib
 
-
-cmake_version_regex = re.compile(r"project\s*\(\s*CycloneDDS.*VERSION\s+([0-9]+\.[0-9]+\.[0-9]).*\)", re.IGNORECASE)
+cmake_version_regex = re.compile(
+    r"project\s*\(\s*CycloneDDS.*VERSION\s+([0-9]+\.[0-9]+\.[0-9]).*\)", re.IGNORECASE
+)
 
 
 def main():
-    with open('CMakeLists.txt') as f:
+    with open("CMakeLists.txt") as f:
         m = cmake_version_regex.search(f.read())
         if not m:
             print("Could not locate version information in CMakeLists.txt.", file=sys.stderr)
             sys.exit(1)
         cmake_version = m.group(1)
 
-    tree = ElementTree.parse('package.xml')
-    package_version = tree.getroot().find('version').text
+    tree = ElementTree.parse("package.xml")
+    package_version = tree.getroot().find("version").text
 
     if not cmake_version == package_version:
         print(f"package.xml version:    {package_version}", file=sys.stderr)

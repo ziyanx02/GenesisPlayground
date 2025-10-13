@@ -9,21 +9,16 @@
 # * SPDX-License-Identifier: EPL-2.0 OR BSD-3-Clause
 
 """
-    pre-commit-hook checked-in-together
-        files passed as arguments either must all be checked in or none of them
+pre-commit-hook checked-in-together
+    files passed as arguments either must all be checked in or none of them
 """
 
 import sys
-import hashlib
-from subprocess import Popen, PIPE
+from subprocess import PIPE, Popen
 
 
 def added_files():
-    p = Popen(
-        ['git', 'diff', '--staged', '--name-only'],
-        stdout=PIPE,
-        stderr=PIPE
-    )
+    p = Popen(["git", "diff", "--staged", "--name-only"], stdout=PIPE, stderr=PIPE)
     out, err = p.communicate()
     if p.returncode != 0:
         raise RuntimeError(err.decode())
@@ -32,18 +27,13 @@ def added_files():
 
 
 def last_commited_files():
-    p = Popen(
-        ['git', 'diff', '--name-only', 'HEAD', 'HEAD~1'],
-        stdout=PIPE,
-        stderr=PIPE
-    )
+    p = Popen(["git", "diff", "--name-only", "HEAD", "HEAD~1"], stdout=PIPE, stderr=PIPE)
     out, err = p.communicate()
     if p.returncode != 0:
         # There is not always a HEAD, not considered an error
         return set()
 
     return set(out.decode().splitlines())
-
 
 
 def main():

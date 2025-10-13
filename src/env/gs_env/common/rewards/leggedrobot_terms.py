@@ -187,7 +187,9 @@ class FeetAirTimePenalty(RewardTerm):
     def _compute(
         self, feet_first_contact: torch.Tensor, feet_air_time: torch.Tensor, commands: torch.Tensor
     ) -> torch.Tensor:  # type: ignore
-        pen_air_time = torch.sum(torch.square(feet_air_time - self.target_feet_air_time) * feet_first_contact, dim=1)
+        pen_air_time = torch.sum(
+            torch.square(feet_air_time - self.target_feet_air_time) * feet_first_contact, dim=1
+        )
         pen_air_time *= torch.norm(commands, dim=1) > 0.1
         return -pen_air_time
 
@@ -224,7 +226,7 @@ class FeetZVelocityPenalty(RewardTerm):
     def _compute(self, feet_z_velocity: torch.Tensor) -> torch.Tensor:  # type: ignore
         feet_z_velocity = torch.square(feet_z_velocity).sum(dim=1)
         return -feet_z_velocity
-    
+
 
 class StandStillFeetContactPenalty(RewardTerm):
     """
@@ -241,6 +243,7 @@ class StandStillFeetContactPenalty(RewardTerm):
         contact_force_diff = torch.square(contact_force_diff).sum(dim=1)
         contact_force_diff *= torch.norm(commands, dim=1) < 0.1
         return -contact_force_diff
+
 
 class FeetContactForceLimitPenalty(RewardTerm):
     """

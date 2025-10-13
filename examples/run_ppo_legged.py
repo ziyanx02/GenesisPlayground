@@ -3,12 +3,9 @@
 
 import glob
 import os
-import yaml
-import numpy as np
 from datetime import datetime
 from pathlib import Path
 from typing import Any
-from collections import defaultdict
 
 import fire
 import torch
@@ -204,6 +201,7 @@ def evaluate_policy(
 
     step_count = 0
     total_reward = 0.0
+    last_action = torch.tensor([0.0] * 26, device="cuda")
 
     try:
         while True:
@@ -219,6 +217,9 @@ def evaluate_policy(
             # Get action from policy
             with torch.no_grad():
                 action, _log_prob = inference_policy(obs, deterministic=True)
+
+            print("Action diff:", torch.abs(action - last_action).max().item(), torch.mean(torch.abs(action - last_action)).item())
+            last_action = action.clone()
 
             # Step environment
             obs, reward, terminated, truncated, _ = wrapped_env.step(action)
@@ -320,6 +321,7 @@ def train_policy(
     print(f"Total steps: {train_summary_info['total_steps']}.")
     print(f"Total reward: {train_summary_info['final_reward']:.2f}.")
 
+
 def save_deploy_policy(
     exp_name: str | None = None,
     num_ckpt: int | None = None,
@@ -370,8 +372,11 @@ def save_deploy_policy(
 
     example_obs = torch.zeros(1, wrapped_env.actor_obs_dim, device=wrapped_env.device)
     traced = torch.jit.trace(inference_policy, example_obs)
+    # create folder pt_path
+    pt_path.parent.mkdir(parents=True, exist_ok=True)
     traced.save(pt_path)
     print(f"TorchScript model saved to: {pt_path}")
+
 
 def main(
     num_envs: int = 4096,
@@ -430,7 +435,9 @@ def main(
         # Export to TorchScript mode
         num_envs = 1
         print("Export mode: Exporting trained policy to TorchScript")
-        save_deploy_policy(exp_name=exp_name, num_ckpt=num_ckpt, env_args=env_args, output_file=output_file)
+        save_deploy_policy(
+            exp_name=exp_name, num_ckpt=num_ckpt, env_args=env_args, output_file=output_file
+        )
     else:
         # Training mode
         print("Training mode: Starting policy training")

@@ -451,6 +451,10 @@ class WalkingEnv(BaseEnv):
             self._robot.set_dofs_velocity(new_vel, envs_idx=envs_idx, dofs_idx_local=[0, 1, 2])
 
     @property
+    def robot(self) -> G1Robot:
+        return self._robot
+
+    @property
     def num_envs(self) -> int:
         return self._scene.num_envs
 

@@ -88,10 +88,11 @@ if __name__ == "__main__":
                     commands[:3],
                 ]
             )
-            print(obs)
+            # print(obs)
             obs_t = torch.as_tensor(obs, dtype=torch.float32, device=device).unsqueeze(0)
             with torch.no_grad():
                 action = policy(obs_t)[0].squeeze(0).detach().cpu().numpy().astype(np.float32)
+            print(np.abs(action-last_action).max(), np.mean(np.abs(action-last_action)))
             last_action = action
             # action[[5, 11]] = 0
 
@@ -100,8 +101,7 @@ if __name__ == "__main__":
             # action[dof_id] = np.sin(cnt / 100 * 3.14) * 4.0
             # print(action[dof_id])
             #### START FROM SMALL VALUES ####
-            print(action)
-            handler.target_pos = reset_dof_pos + 0.3 * (
+            handler.target_pos = reset_dof_pos +  1.0 * (
                 default_dof_pos + action * cfg.robot_args.action_scale - reset_dof_pos
             )
             step_id += 1
@@ -110,4 +110,4 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         pass
 
-    handler.recover()
+    # handler.recover()

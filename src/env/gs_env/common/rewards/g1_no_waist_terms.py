@@ -9,14 +9,14 @@ from .leggedrobot_terms import (
     DofPosLimitPenalty,  # noqa
     FeetAirTimePenalty,  # noqa
     FeetAirTimeReward,  # noqa
+    FeetContactForceLimitPenalty,
     FeetHeightPenalty,
     FeetZVelocityPenalty,  # noqa
     LinVelXYReward,  # noqa
     LinVelZPenalty,  # noqa
     OrientationPenalty,  # noqa
-    TorquePenalty,  # noqa
     StandStillFeetContactPenalty,  # noqa
-    FeetContactForceLimitPenalty,
+    TorquePenalty,  # noqa
 )
 from .reward_terms import RewardTerm
 
@@ -131,6 +131,7 @@ class FeetOrientationPenalty(RewardTerm):
     def _compute(self, feet_orientation: torch.Tensor) -> torch.Tensor:  # type: ignore
         feet_orientation_deviation = feet_orientation[:, :, :2].square().sum(dim=-1)
         return -feet_orientation_deviation.sum(dim=-1)
+
 
 class G1FeetContactForceLimitPenalty(FeetContactForceLimitPenalty):
     contact_force_limit = 300.0

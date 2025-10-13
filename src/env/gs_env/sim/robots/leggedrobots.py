@@ -169,14 +169,14 @@ class LeggedRobotBase(BaseGymRobot):
         # kp
         min_kp, max_kp = self._args.dr_args.kp_range
         ratios = torch.rand(len(envs_idx), self._dof_dim) * (max_kp - min_kp) + min_kp
-        self._batched_dof_kp[envs_idx] = ratios * self._dof_kp[None, 0]
+        self._batched_dof_kp[envs_idx] = ratios * self._dof_kp[None, :]
         # self._robot.set_dofs_kp(
         #     self._batched_dof_kp[envs_idx], dofs_idx_local=self._dofs_idx_local, envs_idx=envs_idx
         # )
         # kd
         min_kd, max_kd = self._args.dr_args.kd_range
         ratios = torch.rand(len(envs_idx), self._dof_dim) * (max_kd - min_kd) + min_kd
-        self._batched_dof_kd[envs_idx] = ratios * self._dof_kd[None, 0]
+        self._batched_dof_kd[envs_idx] = ratios * self._dof_kd[None, :]
         # self._robot.set_dofs_kv(
         #     self._batched_dof_kd[envs_idx], dofs_idx_local=self._dofs_idx_local, envs_idx=envs_idx
         # )
