@@ -38,6 +38,9 @@ class UnitreeLeggedEnv(BaseGymRobot):
         target_pos = self.controller.default_pos + action_np * self._action_scale
         self.controller.target_pos = target_pos
 
+    def emergency_stop(self) -> None:
+        self.controller.emergency_stop()
+
     @property
     def controller(self) -> LowStateCmdHandler:
         return self._low_state_controller

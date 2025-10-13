@@ -52,7 +52,7 @@ class LowStateCmdHandler(LowStateMsgHandler):
             self.low_cmd = unitree_go_msg_dds__LowCmd_()
         elif self.robot_name == "g1":
             self.low_cmd = unitree_hg_msg_dds__LowCmd_()
-        self.emergency_stop = False
+        self._emergency_stop = False
 
         # thread handling
         self.lowCmdWriteThreadPtr = None
@@ -173,10 +173,10 @@ class LowStateCmdHandler(LowStateMsgHandler):
 
     def LowCmdWrite(self):
 
-        if self.L2 and self.R2:
-            self.emrgence_stop()
+        if self.L2 and self.R2: # if both L2 and R2 are pressed, emergency stop
+            self.emergency_stop()
 
-        if self.emergency_stop:
+        if self._emergency_stop:
             self.set_stop_cmd()
         elif self.initial_stage < 1.0:
             target_pos = self.full_initial_pos + (self.full_default_pos - self.full_initial_pos) * self.initial_stage
@@ -191,8 +191,8 @@ class LowStateCmdHandler(LowStateMsgHandler):
         self.low_cmd.crc = self.crc.Crc(self.low_cmd)
         self.lowcmd_publisher.Write(self.low_cmd)
 
-    def emrgence_stop(self):
-        self.emergency_stop = True
+    def emergency_stop(self):
+        self._emergency_stop = True
 
     def group_from_name(self, joint_name: str, groups: list[str]) -> str:
         for g in sorted(groups, key=len, reverse=True):

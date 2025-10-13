@@ -201,6 +201,8 @@ def main(
         else:
             deploy_loop()
     except KeyboardInterrupt:
+        if not sim:
+            env.emergency_stop()
         print("\nKeyboardInterrupt received, stopping...")
     finally:
         if not sim:
