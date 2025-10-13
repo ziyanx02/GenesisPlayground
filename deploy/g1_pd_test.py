@@ -1,7 +1,5 @@
-#!/usr/bin/env python3
-"""Example: Train PPO on Genesis Walking environment using Genesis RL."""
-
 import platform
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -9,13 +7,16 @@ import fire
 import matplotlib
 
 matplotlib.use("Agg")  # Use non-interactive backend to prevent windows from showing
+import gs_env.sim.envs as gs_envs
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from gs_agent.wrappers.gs_env_wrapper import GenesisEnvWrapper
 from gs_env.sim.envs.config.registry import EnvArgsRegistry
-import gs_env.sim.envs as gs_envs
-from utils import plot_metric_on_axis
+
+# Add the project root to the Python path
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
 
 
 def create_gs_env(
@@ -113,6 +114,8 @@ def run_single_dof_diagnosis(
     amplitude: float = 1.0,
     offset: float = 0.0,
 ) -> None:
+    from examples.utils import plot_metric_on_axis
+
     fig, axes = plt.subplots(4, 1, figsize=(12, 12))
     for i, wave_type in enumerate(["SIN", "FM-SIN", "SQ"]):
         target_dof_pos_list, dof_pos_list = run_single_dof_wave_diagnosis(
@@ -182,9 +185,9 @@ def main(
         # "hip_roll": [0.0, 1.0],
         # "hip_pitch": [-0.5, 0.5],
         # "hip_yaw": [-0.5, 0.5],
-        # "knee": [0.0, 1.0],
-        "ankle_roll": [-0.2, 0.2],
-        "ankle_pitch": [-0.5, 0.5],
+        "knee": [0.0, 1.0],
+        # "ankle_roll": [-0.2, 0.2],
+        # "ankle_pitch": [-0.5, 0.5],
         # "waist_yaw": [-1.0, 1.0],
         # "waist_roll": [-0.4, 0.4],
         # "waist_pitch": [-0.4, 0.4],
