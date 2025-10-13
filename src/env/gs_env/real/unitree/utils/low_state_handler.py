@@ -1,15 +1,14 @@
-import numpy as np
-import time
-import threading
-import yaml
-import struct
-
 import argparse
+import struct
+import threading
+import time
+from typing import Any
 
+import numpy as np
+import yaml
+from unitree_sdk2py.core.channel import ChannelFactoryInitialize, ChannelSubscriber
 from unitree_sdk2py.idl.unitree_go.msg.dds_ import LowState_ as LowState_go
 from unitree_sdk2py.idl.unitree_hg.msg.dds_ import LowState_ as LowState_hg
-
-from unitree_sdk2py.core.channel import ChannelSubscriber, ChannelFactoryInitialize
 
 from gs_env.sim.robots.config.schema import HumanoidRobotArgs
 
@@ -97,8 +96,9 @@ JointID = {
     },
 }
 
+
 class LowStateMsgHandler:
-    def __init__(self, cfg: HumanoidRobotArgs, freq: int = 1000):
+    def __init__(self, cfg: HumanoidRobotArgs, freq: int = 1000) -> None:
         self.cfg = cfg
         self.update_interval = 1.0 / freq
         if "g1" in cfg.morph_args.file:
@@ -149,11 +149,10 @@ class LowStateMsgHandler:
         # Create a thread for the main loop
         self.main_thread = threading.Thread(target=self.main_loop, daemon=True)
 
-    def init(self):
-
+    def init(self) -> None:
         try:
-            ChannelFactoryInitialize(0, "enx2c16dbaafd43") # MANUAL SET NETWORK INTERFACE
-        except:
+            ChannelFactoryInitialize(0, "enx2c16dbaafd43")  # MANUAL SET NETWORK INTERFACE
+        except Exception:
             pass
 
         if self.robot_name == "go2":
@@ -169,17 +168,17 @@ class LowStateMsgHandler:
 
         self.main_thread.start()
 
-    def LowStateHandler_go(self, msg: LowState_go):
-        self.msg = msg
-        self.msg_received = True
-    
-    def LowStateHandler_hg(self, msg: LowState_hg):
+    def LowStateHandler_go(self, msg: LowState_go) -> None:
         self.msg = msg
         self.msg_received = True
 
-    def main_loop(self):
-        total_publish_cnt = 0
-        start_time = time.time()
+    def LowStateHandler_hg(self, msg: LowState_hg) -> None:
+        self.msg = msg
+        self.msg_received = True
+
+    def main_loop(self) -> None:
+        total_publish_cnt = 0  # noqa: F841
+        start_time = time.time()  # noqa: F841
         while True:
             update_start_time = time.time()
 
@@ -201,11 +200,11 @@ class LowStateMsgHandler:
             #     start_time = end_time
             #     total_publish_cnt = 0
 
-    def parse_imu(self, imu_state):
-        self.quat = np.array(imu_state.quaternion) # w, x, y, z
+    def parse_imu(self, imu_state: Any) -> None:
+        self.quat = np.array(imu_state.quaternion)  # w, x, y, z
         self.ang_vel = np.array(imu_state.gyroscope)
 
-    def parse_motor_state(self, motor_state):
+    def parse_motor_state(self, motor_state: Any) -> None:
         for i in range(self.num_dof):
             self.joint_pos[i] = motor_state[self.dof_index[i]].q
             self.joint_vel[i] = motor_state[self.dof_index[i]].dq
@@ -219,7 +218,7 @@ class LowStateMsgHandler:
         # print(self.joint_pos)
         # print("low_state_big_flag", self.robot_low_state.bit_flag)
 
-    def parse_botton(self, data1, data2):
+    def parse_botton(self, data1: int, data2: int) -> None:
         self.R1 = (data1 >> 0) & 1
         self.L1 = (data1 >> 1) & 1
         self.Start = (data1 >> 2) & 1
@@ -237,19 +236,19 @@ class LowStateMsgHandler:
         self.Down = (data2 >> 6) & 1
         self.Left = (data2 >> 7) & 1
 
-    def parse_key(self, data):
+    def parse_key(self, data: bytes) -> None:
         lx_offset = 4
-        self.Lx = struct.unpack('<f', data[lx_offset:lx_offset + 4])[0]
+        self.Lx = struct.unpack("<f", data[lx_offset : lx_offset + 4])[0]
         rx_offset = 8
-        self.Rx = struct.unpack('<f', data[rx_offset:rx_offset + 4])[0]
+        self.Rx = struct.unpack("<f", data[rx_offset : rx_offset + 4])[0]
         ry_offset = 12
-        self.Ry = struct.unpack('<f', data[ry_offset:ry_offset + 4])[0]
-        L2_offset = 16
-        L2 = struct.unpack('<f', data[L2_offset:L2_offset + 4])[0] # Placeholder，unused
+        self.Ry = struct.unpack("<f", data[ry_offset : ry_offset + 4])[0]
+        # L2_offset = 16
+        # L2 = struct.unpack("<f", data[L2_offset : L2_offset + 4])[0]  # Placeholder，unused
         ly_offset = 20
-        self.Ly = struct.unpack('<f', data[ly_offset:ly_offset + 4])[0]
+        self.Ly = struct.unpack("<f", data[ly_offset : ly_offset + 4])[0]
 
-    def parse_wireless_remote(self, remoteData):
+    def parse_wireless_remote(self, remoteData: bytes) -> None:
         self.parse_key(remoteData)
         self.parse_botton(remoteData[2], remoteData[3])
 
@@ -275,12 +274,12 @@ class LowStateMsgHandler:
         # print("F3:", self.F3)
         # print("Start:", self.Start)
 
-if __name__ == "__main__":
 
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('-r', '--robot', type=str, default='go2')
-    parser.add_argument('-n', '--name', type=str, default='default')
-    parser.add_argument('-c', '--cfg', type=str, default=None)
+    parser.add_argument("-r", "--robot", type=str, default="go2")
+    parser.add_argument("-n", "--name", type=str, default="default")
+    parser.add_argument("-c", "--cfg", type=str, default=None)
     args = parser.parse_args()
 
     cfg = yaml.safe_load(open(f"../{args.robot}.yaml"))

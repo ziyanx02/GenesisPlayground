@@ -1,14 +1,11 @@
-from collections.abc import Callable
-from typing import Any
-
-import torch
 import numpy as np
+import torch
 from gymnasium import spaces
 from transforms3d import quaternions
 
 from gs_env.common.bases.base_robot import BaseGymRobot
-from gs_env.real.unitree.utils.low_state_handler import LowStateMsgHandler  #noqa
 from gs_env.real.unitree.utils.low_state_controller import LowStateCmdHandler
+from gs_env.real.unitree.utils.low_state_handler import LowStateMsgHandler  # noqa
 from gs_env.sim.envs.config.schema import LeggedRobotEnvArgs
 
 _DEFAULT_DEVICE = torch.device("cpu")
@@ -16,10 +13,11 @@ _DEFAULT_DEVICE = torch.device("cpu")
 
 class UnitreeLeggedEnv(BaseGymRobot):
     def __init__(
-        self, args: LeggedRobotEnvArgs,
+        self,
+        args: LeggedRobotEnvArgs,
         action_scale: float = 0.0,
-        device: torch.device = _DEFAULT_DEVICE
-    ):
+        device: torch.device = _DEFAULT_DEVICE,
+    ) -> None:
         super().__init__()
         self._args = args
         self._low_state_controller = LowStateCmdHandler(args.robot_args)
@@ -69,9 +67,9 @@ class UnitreeLeggedEnv(BaseGymRobot):
     @property
     def projected_gravity(self) -> torch.Tensor:
         projected_gravity = quaternions.rotate_vector(
-                v=np.array([0, 0, -1]),
-                q=quaternions.qinverse(self.controller.quat),
-            )
+            v=np.array([0, 0, -1]),
+            q=quaternions.qinverse(self.controller.quat),
+        )
         return torch.tensor(projected_gravity, device=self._device)
 
     @property

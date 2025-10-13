@@ -72,9 +72,8 @@ def main(
     device: str = "cpu",
     show_viewer: bool = False,
     sim: bool = True,
-    num_envs: int = 1,
-    action_scale: float = 0.0, # only for real robot
-):
+    action_scale: float = 0.0,  # only for real robot
+) -> None:
     """Run policy on either simulation or real robot.
 
     Args:
@@ -89,10 +88,7 @@ def main(
 
     # Load checkpoint and env_args
     policy, env_args = load_checkpoint_and_env_args(exp_name, num_ckpt, device)
-    
-    # Create environment or handler
-    env_idx = 0  # Initialize for both modes
-    
+
     if sim:
         print("Running in SIMULATION mode")
         import gs_env.sim.envs as envs
@@ -100,7 +96,7 @@ def main(
         envclass = getattr(envs, env_args.env_name)
         env = envclass(
             args=env_args,
-            num_envs=num_envs,
+            num_envs=1,
             show_viewer=show_viewer,
             device=torch.device(device),
             eval_mode=True,
@@ -112,11 +108,7 @@ def main(
         print("Running in REAL ROBOT mode")
         from gs_env.real import UnitreeLeggedEnv
 
-        env = UnitreeLeggedEnv(
-            env_args,
-            action_scale=action_scale,
-            device=torch.device(device)
-        )
+        env = UnitreeLeggedEnv(env_args, action_scale=action_scale, device=torch.device(device))
 
         print("Press Start button to start the policy")
         while not env.controller.Start:
@@ -149,9 +141,9 @@ def main(
                 time.sleep(0.001)
                 continue
             last_update_time = time.time()
-            
+
             if not sim:
-                commands_t[0, 0] = env.controller.Ly   # forward velocity (m/s)
+                commands_t[0, 0] = env.controller.Ly  # forward velocity (m/s)
                 commands_t[0, 1] = -env.controller.Lx  # lateral velocity (m/s)
                 commands_t[0, 2] = -env.controller.Ry  # angular velocity (rad/s)
             else:

@@ -12,6 +12,7 @@ import fire
 import matplotlib
 
 matplotlib.use("Agg")  # Use non-interactive backend to prevent windows from showing
+import gs_env.sim.envs as gs_envs
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -23,7 +24,6 @@ from gs_agent.utils.logger import configure as logger_configure
 from gs_agent.utils.policy_loader import load_latest_model
 from gs_agent.wrappers.gs_env_wrapper import GenesisEnvWrapper
 from gs_env.sim.envs.config.registry import EnvArgsRegistry
-import gs_env.sim.envs as gs_envs
 from utils import apply_overrides_generic, config_to_yaml, plot_metric_on_axis
 
 
@@ -135,9 +135,7 @@ def evaluate_policy(
     log_pattern = f"logs/{exp_name}/*"
     log_dirs = glob.glob(log_pattern)
     if not log_dirs:
-        raise FileNotFoundError(
-            f"No experiment directories found matching pattern: {log_pattern}"
-        )
+        raise FileNotFoundError(f"No experiment directories found matching pattern: {log_pattern}")
 
     log_dirs.sort(key=lambda x: os.path.getmtime(x), reverse=True)
     exp_dir = log_dirs[0]
@@ -217,14 +215,14 @@ def evaluate_policy(
 
         # Create a wrapper that always uses deterministic=True
         class DeterministicWrapper(torch.nn.Module):
-            def __init__(self, policy):
+            def __init__(self, policy: Any) -> None:
                 super().__init__()
                 self.policy = policy
-            
-            def forward(self, obs):
+
+            def forward(self, obs: torch.Tensor) -> torch.Tensor:
                 action, _ = self.policy(obs, deterministic=True)
                 return action
-    
+
         # Wrap and trace the policy with deterministic=True baked in
         wrapped_policy = DeterministicWrapper(inference_policy)
         inference_policy = torch.jit.trace(wrapped_policy, obs)
@@ -235,7 +233,7 @@ def evaluate_policy(
         # Create deploy directory structure
         deploy_dir = Path("./deploy/logs") / exp_name
         deploy_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Save JIT-traced policy
         jit_policy_path = deploy_dir / f"checkpoint_{num_ckpt}.pt"
         torch.jit.save(inference_policy, str(jit_policy_path))
