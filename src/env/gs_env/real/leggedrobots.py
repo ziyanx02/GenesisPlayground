@@ -25,7 +25,7 @@ class UnitreeLeggedEnv(BaseGymRobot):
         self._low_state_controller = LowStateCmdHandler(args.robot_args)
         self.controller.init()
         self.controller.start()
-        self._action_space = spaces.Box(shape=(self.num_dof,), low=-np.inf, high=np.inf)
+        self._action_space = spaces.Box(shape=(self.action_dim,), low=-np.inf, high=np.inf)
         self._action_scale = args.robot_args.action_scale * action_scale
         self._device = device
 
@@ -46,10 +46,15 @@ class UnitreeLeggedEnv(BaseGymRobot):
         return self._low_state_controller
 
     @property
-    def num_dof(self) -> int:
+    def action_dim(self) -> int:
         return self._low_state_controller.num_dof
 
     @property
+    @property
+    def dof_pos(self) -> torch.Tensor:
+        return torch.tensor(self.controller.joint_pos, device=self._device)
+
+
     def action_space(self) -> spaces.Box:
         return self._action_space
 

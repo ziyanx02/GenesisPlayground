@@ -122,10 +122,6 @@ def main(
         while not env.controller.Start:
             time.sleep(0.1)
 
-    # Initialize tracking variables
-    last_action_t = torch.zeros(1, env.num_dof, device=device)
-    commands_t = torch.zeros(1, 3, device=device)
-    
     print("=" * 80)
     print("Starting policy execution")
     print(f"Mode: {'SIMULATION' if sim else 'REAL ROBOT'}")
@@ -136,7 +132,7 @@ def main(
         nonlocal env
 
         # Initialize tracking variables
-        last_action_t = torch.zeros(1, len(env_args.robot_args.dof_names), device=device)
+        last_action_t = torch.zeros(1, env.action_dim, device=device)
         commands_t = torch.zeros(1, 3, device=device)
         last_update_time = time.time()
         total_inference_time = 0
