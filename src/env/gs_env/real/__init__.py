@@ -1,7 +1,5 @@
-from .unitree import LowStateMsgHandler as UnitreeLowStateMsgHandler
-from .unitree import LowStateCmdHandler as UnitreeLowStateCmdHandler
+from .leggedrobots import UnitreeLeggedEnv
 
 __all__ = [
-    "UnitreeLowStateMsgHandler",
-    "UnitreeLowStateCmdHandler",
+    "UnitreeLeggedEnv",
 ]

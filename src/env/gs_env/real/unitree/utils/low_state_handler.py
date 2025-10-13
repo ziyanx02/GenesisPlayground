@@ -3,13 +3,15 @@ import time
 import threading
 import yaml
 import struct
-from transforms3d import quaternions
+
 import argparse
 
 from unitree_sdk2py.idl.unitree_go.msg.dds_ import LowState_ as LowState_go
 from unitree_sdk2py.idl.unitree_hg.msg.dds_ import LowState_ as LowState_hg
 
 from unitree_sdk2py.core.channel import ChannelSubscriber, ChannelFactoryInitialize
+
+from gs_env.sim.robots.config.schema import HumanoidRobotArgs
 
 JointID = {
     "go2": {
@@ -27,18 +29,36 @@ JointID = {
         "RL_calf_joint": 11,
     },
     "g1": {
+        # Left Lower body 0:6
         "left_hip_pitch_joint": 0,
         "left_hip_roll_joint": 1,
         "left_hip_yaw_joint": 2,
         "left_knee_joint": 3,
         "left_ankle_pitch_joint": 4,
         "left_ankle_roll_joint": 5,
+        # Right Lower body 6:12
         "right_hip_pitch_joint": 6,
         "right_hip_roll_joint": 7,
         "right_hip_yaw_joint": 8,
         "right_knee_joint": 9,
         "right_ankle_pitch_joint": 10,
         "right_ankle_roll_joint": 11,
+        # Left Upper body 12:19
+        "left_shoulder_pitch_joint": 15,
+        "left_shoulder_roll_joint": 16,
+        "left_shoulder_yaw_joint": 17,
+        "left_elbow_joint": 18,
+        "left_wrist_roll_joint": 19,
+        "left_wrist_pitch_joint": 20,
+        "left_wrist_yaw_joint": 21,
+        # Right Upper body 19:26
+        "right_shoulder_pitch_joint": 22,
+        "right_shoulder_roll_joint": 23,
+        "right_shoulder_yaw_joint": 24,
+        "right_elbow_joint": 25,
+        "right_wrist_roll_joint": 26,
+        "right_wrist_pitch_joint": 27,
+        "right_wrist_yaw_joint": 28,
         # "LeftHipPitch": 0,
         # "LeftHipRoll": 1,
         # "LeftHipYaw": 2,
@@ -78,13 +98,18 @@ JointID = {
 }
 
 class LowStateMsgHandler:
-    def __init__(self, cfg, freq=1000):
-
+    def __init__(self, cfg: HumanoidRobotArgs, freq: int = 1000):
         self.cfg = cfg
         self.update_interval = 1.0 / freq
-        self.robot_name = cfg["robot"]["name"]
-        self.num_dof = len(cfg["control"]["dof_names"])
-        self.dof_index = [JointID[self.robot_name][name] for name in cfg["control"]["dof_names"]]
+        if "g1" in cfg.morph_args.file:
+            self.robot_name = "g1"
+        elif "go2" in cfg.morph_args.file:
+            self.robot_name = "go2"
+        else:
+            raise ValueError(f"Not supported robot: {cfg.morph_args.file}")
+        self.dof_names = cfg.dof_names
+        self.num_dof = len(self.dof_names)
+        self.dof_index = [JointID[self.robot_name][name] for name in self.dof_names]
 
         self.msg = None
         self.msg_received = False
@@ -120,14 +145,14 @@ class LowStateMsgHandler:
         self.F1 = 0
         self.F3 = 0
         self.Start = 0
-       
+
         # Create a thread for the main loop
         self.main_thread = threading.Thread(target=self.main_loop, daemon=True)
 
     def init(self):
 
         try:
-            ChannelFactoryInitialize(0)
+            ChannelFactoryInitialize(0, "enx2c16dbaafd43") # MANUAL SET NETWORK INTERFACE
         except:
             pass
 
@@ -249,30 +274,6 @@ class LowStateMsgHandler:
         # print("F1:", self.F1)
         # print("F3:", self.F3)
         # print("Start:", self.Start)
-
-    @property
-    def projected_gravity(self):
-        projected_gravity = quaternions.rotate_vector(
-            v=np.array([0, 0, -1]),
-            q=quaternions.qinverse(self.quat),
-        )
-        return projected_gravity
-    
-    # Unified interface properties for compatibility with sim environment
-    @property
-    def dof_pos(self):
-        """Alias for joint_pos to match sim environment interface."""
-        return self.joint_pos
-    
-    @property
-    def dof_vel(self):
-        """Alias for joint_vel to match sim environment interface."""
-        return self.joint_vel
-    
-    @property
-    def base_ang_vel(self):
-        """Alias for ang_vel to match sim environment interface."""
-        return self.ang_vel
 
 if __name__ == "__main__":
 

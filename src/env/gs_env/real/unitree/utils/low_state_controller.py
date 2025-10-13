@@ -20,25 +20,33 @@ from unitree_sdk2py.comm.motion_switcher.motion_switcher_client import MotionSwi
 from unitree_sdk2py.go2.sport.sport_client import SportClient
 
 from .low_state_handler import LowStateMsgHandler, JointID
+from gs_env.sim.robots.config.schema import HumanoidRobotArgs
 
 class LowStateCmdHandler(LowStateMsgHandler):
-    def __init__(self, cfg, freq=1000):
+    def __init__(self, cfg: HumanoidRobotArgs, freq: int = 1000):
         super().__init__(cfg, freq)
 
-        if type(self.cfg["control"]["kp"]) is not dict:
-            self.kp = [self.cfg["control"]["kp"]] * self.num_dof
-        else:
-            self.kp = [self.cfg["control"]["kp"][name] for name in cfg["control"]["dof_names"]]
-        if type(self.cfg["control"]["kd"]) is not dict:
-            self.kd = [self.cfg["control"]["kd"]] * self.num_dof
-        else:
-            self.kd = [self.cfg["control"]["kd"][name] for name in cfg["control"]["dof_names"]]
+        kp_groups = self.cfg.dof_kp
+        self.kp = [kp_groups[self.group_from_name(name, kp_groups.keys())] for name in self.dof_names]
 
-        self.default_pos = np.array([self.cfg["control"]["default_dof_pos"][name] for name in cfg["control"]["dof_names"]])
-        self.target_pos = self.default_pos.copy()
+        kd_groups = self.cfg.dof_kd
+        self.kd = [kd_groups[self.group_from_name(name, kd_groups.keys())] for name in self.dof_names]
+
+        self.default_pos = np.array([self.cfg.default_dof[name] for name in self.dof_names])
+
+        reset_joint_angles = getattr(self.cfg, "reset_joint_angles", None)
+        if reset_joint_angles is not None:
+            reset_pos = [reset_joint_angles[name] for name in self.dof_names]
+            self.reset_pos = np.array(reset_pos)
+        else:
+            default_pos = [self.cfg.default_dof[name] for name in self.dof_names]
+            self.reset_pos = np.array(default_pos)
+        self.target_pos = self.reset_pos
+
         self.full_default_pos = np.zeros(self.num_full_dof)
         for i in range(self.num_dof):
             self.full_default_pos[self.dof_index[i]] = self.default_pos[i]
+            self.full_joint_pos[self.dof_index[i]] = self.reset_pos[i]
 
         if self.robot_name == "go2":
             self.low_cmd = unitree_go_msg_dds__LowCmd_()
@@ -104,14 +112,14 @@ class LowStateCmdHandler(LowStateMsgHandler):
             Kp = [
                 60, 60, 60, 100, 40, 40,      # legs
                 60, 60, 60, 100, 40, 40,      # legs
-                60, 40, 40,                   # waist
+                120, 120, 120,                   # waist
                 40, 40, 40, 40,  40, 40, 40,  # arms
                 40, 40, 40, 40,  40, 40, 40   # arms
             ]
             Kd = [
                 1, 1, 1, 2, 1, 1,     # legs
                 1, 1, 1, 2, 1, 1,     # legs
-                1, 1, 1,              # waist
+                6, 6, 6,              # waist
                 1, 1, 1, 1, 1, 1, 1,  # arms
                 1, 1, 1, 1, 1, 1, 1   # arms 
             ]
@@ -125,17 +133,17 @@ class LowStateCmdHandler(LowStateMsgHandler):
                 self.low_cmd.motor_cmd[i].kd = Kd[i]
                 self.low_cmd.motor_cmd[i].tau = 0. 
         elif self.robot_name == "go2":
-            self.low_cmd.head[0]=0xFE
-            self.low_cmd.head[1]=0xEF
-            self.low_cmd.level_flag = 0xFF
-            self.low_cmd.gpio = 0
-            # for i in range(20):
-            #     self.low_cmd.motor_cmd[i].mode = 0x01  # (PMSM) mode
-            #     self.low_cmd.motor_cmd[i].q= 2.146e9
-            #     self.low_cmd.motor_cmd[i].kp = 0
-            #     self.low_cmd.motor_cmd[i].dq = 16000.0
-            #     self.low_cmd.motor_cmd[i].kd = 0
-            #     self.low_cmd.motor_cmd[i].tau = 0
+            # self.low_cmd.head[0]=0xFE
+            # self.low_cmd.head[1]=0xEF
+            # self.low_cmd.level_flag = 0xFF
+            # self.low_cmd.gpio = 0
+            for i in range(12):
+                self.low_cmd.motor_cmd[i].mode = 0x01  # (PMSM) mode
+                self.low_cmd.motor_cmd[i].q = self.full_initial_pos[i]
+                self.low_cmd.motor_cmd[i].kp = 30
+                self.low_cmd.motor_cmd[i].dq = 0
+                self.low_cmd.motor_cmd[i].kd = 1.5
+                self.low_cmd.motor_cmd[i].tau = 0. 
 
     def set_stop_cmd(self):
         if self.robot_name == "go2":
@@ -144,7 +152,7 @@ class LowStateCmdHandler(LowStateMsgHandler):
                 self.low_cmd.motor_cmd[i].q= 2.146e9
                 self.low_cmd.motor_cmd[i].kp = 0
                 self.low_cmd.motor_cmd[i].dq = 16000.0
-                self.low_cmd.motor_cmd[i].kd = 0
+                self.low_cmd.motor_cmd[i].kd = 5
                 self.low_cmd.motor_cmd[i].tau = 0
         elif self.robot_name == "g1":
             for i in range(29):
@@ -152,7 +160,7 @@ class LowStateCmdHandler(LowStateMsgHandler):
                 self.low_cmd.motor_cmd[i].q= 0
                 self.low_cmd.motor_cmd[i].kp = 0
                 self.low_cmd.motor_cmd[i].dq = 0
-                self.low_cmd.motor_cmd[i].kd = 0
+                self.low_cmd.motor_cmd[i].kd = 5
                 self.low_cmd.motor_cmd[i].tau = 0
 
     def set_cmd(self):
@@ -160,7 +168,7 @@ class LowStateCmdHandler(LowStateMsgHandler):
             self.low_cmd.motor_cmd[self.dof_index[i]].q = self.target_pos[i]
             self.low_cmd.motor_cmd[self.dof_index[i]].dq = 0
             self.low_cmd.motor_cmd[self.dof_index[i]].kp = self.kp[i]
-            self.low_cmd.motor_cmd[self.dof_index[i]].kd = self.kd[i]
+            self.low_cmd.motor_cmd[self.dof_index[i]].kd = self.kd[i] * 3
             self.low_cmd.motor_cmd[self.dof_index[i]].tau = 0
 
     def LowCmdWrite(self):
@@ -185,15 +193,11 @@ class LowStateCmdHandler(LowStateMsgHandler):
 
     def emrgence_stop(self):
         self.emergency_stop = True
-    
-    @property
-    def reset_pos(self):
-        """Get the reset position (same as default_pos for now).
-        
-        This can be customized to provide a different reset position
-        for safety ramping when starting the robot.
-        """
-        return self.default_pos
+
+    def group_from_name(self, joint_name: str, groups: list[str]) -> str:
+        for g in sorted(groups, key=len, reverse=True):
+            if joint_name.endswith(g + "_joint") or joint_name.endswith(g):
+                return g
 
 if __name__ == "__main__":
 

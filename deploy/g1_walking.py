@@ -72,6 +72,7 @@ def main(
     show_viewer: bool = False,
     sim: bool = True,
     num_envs: int = 1,
+    action_scale: float = 0.0, # only for real robot
 ):
     """Run policy on either simulation or real robot.
     
@@ -87,16 +88,13 @@ def main(
     
     # Load checkpoint and env_args
     policy, env_args = load_checkpoint_and_env_args(exp_name, num_ckpt, device)
-    
-    # Create environment or handler
-    env_idx = 0  # Initialize for both modes
-    
+
     if sim:
         print("Running in SIMULATION mode")
         import gs_env.sim.envs as envs
         
         envclass = getattr(envs, env_args.env_name)
-        env : envs.WalkingEnv = envclass(
+        env = envclass(
             args=env_args,
             num_envs=num_envs,
             show_viewer=show_viewer,
@@ -107,10 +105,21 @@ def main(
         env.reset()
 
     else:
-        pass
-    
+        print("Running in REAL ROBOT mode")
+        from gs_env.real import UnitreeLeggedEnv
+
+        env = UnitreeLeggedEnv(
+            env_args,
+            action_scale=action_scale,
+            device=torch.device(device)
+        )
+
+        print("Press Start button to start the policy")
+        while not env.controller.Start:
+            time.sleep(0.1)
+
     # Initialize tracking variables
-    last_action_t = torch.zeros(1, len(env_args.robot_args.dof_names), device=device)
+    last_action_t = torch.zeros(1, env.num_dof, device=device)
     commands_t = torch.zeros(1, 3, device=device)
     
     print("=" * 80)
@@ -129,17 +138,22 @@ def main(
             if not sim and hasattr(env, 'emergency_stop') and env.emergency_stop:  # type: ignore
                 print("Emergency stop triggered!")
                 break
-            
+
             # Control loop timing (50 Hz)
             if time.time() - last_update_time < 0.02:
                 time.sleep(0.001)
                 continue
             last_update_time = time.time()
             
-            # Update commands (can be modified for different behaviors)
-            commands_t[0, 0] = 1.0  # forward velocity (m/s)
-            commands_t[0, 1] = 0.0  # lateral velocity (m/s)
-            commands_t[0, 2] = 0.0  # angular velocity (rad/s)
+            if not sim:
+                commands_t[0, 0] = env.controller.Ly   # forward velocity (m/s)
+                commands_t[0, 1] = -env.controller.Lx  # lateral velocity (m/s)
+                commands_t[0, 2] = -env.controller.Ry  # angular velocity (rad/s)
+            else:
+                # Update commands (can be modified for different behaviors)
+                commands_t[0, 0] = 1.0  # forward velocity (m/s)
+                commands_t[0, 1] = 0.0  # lateral velocity (m/s)
+                commands_t[0, 2] = 0.0  # angular velocity (rad/s)
 
             # Construct observation (matching training observation structure)
             obs_components = []
