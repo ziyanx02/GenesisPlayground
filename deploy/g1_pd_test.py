@@ -1,8 +1,8 @@
 import platform
 import sys
+import time
 from pathlib import Path
 from typing import Any
-import time
 
 import fire
 import matplotlib
@@ -12,12 +12,12 @@ import gs_env.sim.envs as gs_envs
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-from gs_agent.wrappers.gs_env_wrapper import GenesisEnvWrapper
 from gs_env.sim.envs.config.schema import LeggedRobotEnvArgs
 
 # Add examples to path to import utils
 sys.path.insert(0, str(Path(__file__).parent.parent / "examples"))
-from utils import yaml_to_config, plot_metric_on_axis  # type: ignore
+from utils import plot_metric_on_axis, yaml_to_config  # type: ignore
+
 
 def create_gs_env(
     show_viewer: bool = False,
@@ -192,7 +192,6 @@ def main(
     exp_name: str = "walk",
     sim: bool = True,
 ) -> None:
-
     # Load checkpoint and env_args
     env_args = load_env_args(exp_name)
 
@@ -215,11 +214,7 @@ def main(
         print("Running in REAL ROBOT mode")
         from gs_env.real import UnitreeLeggedEnv
 
-        env = UnitreeLeggedEnv(
-            env_args,
-            action_scale=1.0,
-            device=torch.device(device)
-        )
+        env = UnitreeLeggedEnv(env_args, action_scale=1.0, device=torch.device(device))
 
         print("Press Start button to start the policy")
         while not env.controller.Start:

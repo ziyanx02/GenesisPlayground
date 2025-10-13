@@ -72,8 +72,8 @@ def main(
     device: str = "cpu",
     show_viewer: bool = False,
     sim: bool = True,
-    action_scale: float = 0.0, # only for real robot
-):
+    action_scale: float = 0.0,  # only for real robot
+) -> None:
     """Run policy on either simulation or real robot.
 
     Args:
@@ -108,20 +108,12 @@ def main(
         print("Running in REAL ROBOT mode")
         from gs_env.real import UnitreeLeggedEnv
 
-        env = UnitreeLeggedEnv(
-            env_args,
-            action_scale=action_scale,
-            device=torch.device(device)
-        )
+        env = UnitreeLeggedEnv(env_args, action_scale=action_scale, device=torch.device(device))
 
         print("Press Start button to start the policy")
         while not env.controller.Start:
             time.sleep(0.1)
 
-    # Initialize tracking variables
-    last_action_t = torch.zeros(1, env.num_dof, device=device)
-    commands_t = torch.zeros(1, 3, device=device)
-    
     print("=" * 80)
     print("Starting policy execution")
     print(f"Mode: {'SIMULATION' if sim else 'REAL ROBOT'}")
@@ -149,9 +141,9 @@ def main(
                 time.sleep(0.001)
                 continue
             last_update_time = time.time()
-            
+
             if not sim:
-                commands_t[0, 0] = env.controller.Ly   # forward velocity (m/s)
+                commands_t[0, 0] = env.controller.Ly  # forward velocity (m/s)
                 commands_t[0, 1] = -env.controller.Lx  # lateral velocity (m/s)
                 commands_t[0, 2] = -env.controller.Ry  # angular velocity (rad/s)
             else:
