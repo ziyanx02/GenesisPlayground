@@ -41,6 +41,9 @@ JointID = {
         "right_knee_joint": 9,
         "right_ankle_pitch_joint": 10,
         "right_ankle_roll_joint": 11,
+        "waist_yaw_joint": 12,
+        "waist_roll_joint": 13,        # NOTE: INVALID for g1 23dof/29dof with waist locked
+        "waist_pitch_joint": 14,       # NOTE: INVALID for g1 23dof/29dof with waist locked
         # Left Upper body 12:19
         "left_shoulder_pitch_joint": 15,
         "left_shoulder_roll_joint": 16,
