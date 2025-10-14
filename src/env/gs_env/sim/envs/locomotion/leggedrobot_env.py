@@ -419,6 +419,10 @@ class LeggedRobotEnv(BaseEnv):
     def eval(self) -> None:
         self._eval_mode = True
 
+    def step_visualizer(self) -> None:
+        if self.scene.scene.visualizer is not None:
+            self.scene.scene.visualizer.update()
+
     @property
     def scene(self) -> FlatScene:
         return self._scene
