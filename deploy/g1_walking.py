@@ -124,7 +124,7 @@ def main(
         nonlocal env
 
         # Initialize tracking variables
-        last_action_t = torch.zeros(1, len(env_args.robot_args.dof_names), device=device)
+        last_action_t = torch.zeros(1, env.action_dim, device=device)
         commands_t = torch.zeros(1, 3, device=device)
         last_update_time = time.time()
         total_inference_time = 0
@@ -132,7 +132,7 @@ def main(
 
         while True:
             # Check termination condition (only for real robot)
-            if not sim and hasattr(env, "emergency_stop") and env.emergency_stop:  # type: ignore
+            if not sim and hasattr(env, "is_emergency_stop") and env.is_emergency_stop:  # type: ignore
                 print("Emergency stop triggered!")
                 break
 

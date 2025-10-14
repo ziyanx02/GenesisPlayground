@@ -36,21 +36,21 @@ class LowStateCmdHandler(LowStateMsgHandler):
             kd_groups[self.group_from_name(name, kd_groups.keys())] for name in self.dof_names
         ]
 
-        self.default_pos = np.array([self.cfg.default_dof[name] for name in self.dof_names])
+        self.default_dof_pos = np.array([self.cfg.default_dof_pos[name] for name in self.dof_names])
 
         reset_joint_angles = getattr(self.cfg, "reset_joint_angles", None)
         if reset_joint_angles is not None:
-            reset_pos = [reset_joint_angles[name] for name in self.dof_names]
-            self.reset_pos = np.array(reset_pos)
+            reset_dof_pos = [reset_joint_angles[name] for name in self.dof_names]
+            self.reset_dof_pos = np.array(reset_dof_pos)
         else:
-            default_pos = [self.cfg.default_dof[name] for name in self.dof_names]
-            self.reset_pos = np.array(default_pos)
-        self.target_pos = self.reset_pos
+            default_pos = [self.cfg.default_dof_pos[name] for name in self.dof_names]
+            self.reset_dof_pos = np.array(default_pos)
+        self.target_pos = self.reset_dof_pos
 
-        self.full_default_pos = np.zeros(self.num_full_dof)
+        self.full_default_dof_pos = np.zeros(self.num_full_dof)
         for i in range(self.num_dof):
-            self.full_default_pos[self.dof_index[i]] = self.default_pos[i]
-            self.full_joint_pos[self.dof_index[i]] = self.reset_pos[i]
+            self.full_default_dof_pos[self.dof_index[i]] = self.default_dof_pos[i]
+            self.full_joint_pos[self.dof_index[i]] = self.reset_dof_pos[i]
 
         if self.robot_name == "go2":
             self.low_cmd = unitree_go_msg_dds__LowCmd_()
@@ -93,7 +93,7 @@ class LowStateCmdHandler(LowStateMsgHandler):
     def start(self) -> None:
         self.msc.ReleaseMode()
 
-        self.full_initial_pos = self.full_joint_pos.copy()
+        self.full_initial_dof_pos = self.full_joint_pos.copy()
         self.initial_stage = 0.0
 
         self.init_low_cmd()
@@ -132,6 +132,7 @@ class LowStateCmdHandler(LowStateMsgHandler):
                 120,
                 120,
                 # Left Arm
+                40,
                 40,
                 40,
                 40,
@@ -187,7 +188,7 @@ class LowStateCmdHandler(LowStateMsgHandler):
             self.low_cmd.mode_machine = self.msg.mode_machine
             for i in range(29):
                 self.low_cmd.motor_cmd[i].mode = 1  # 1:Enable, 0:Disable
-                self.low_cmd.motor_cmd[i].q = self.full_initial_pos[i]
+                self.low_cmd.motor_cmd[i].q = self.full_initial_dof_pos[i]
                 self.low_cmd.motor_cmd[i].kp = Kp[i]
                 self.low_cmd.motor_cmd[i].dq = 0
                 self.low_cmd.motor_cmd[i].kd = Kd[i]
@@ -199,7 +200,7 @@ class LowStateCmdHandler(LowStateMsgHandler):
             # self.low_cmd.gpio = 0
             for i in range(12):
                 self.low_cmd.motor_cmd[i].mode = 0x01  # (PMSM) mode
-                self.low_cmd.motor_cmd[i].q = self.full_initial_pos[i]
+                self.low_cmd.motor_cmd[i].q = self.full_initial_dof_pos[i]
                 self.low_cmd.motor_cmd[i].kp = 30
                 self.low_cmd.motor_cmd[i].dq = 0
                 self.low_cmd.motor_cmd[i].kd = 1.5
@@ -239,8 +240,8 @@ class LowStateCmdHandler(LowStateMsgHandler):
             self.set_stop_cmd()
         elif self.initial_stage < 1.0:
             target_pos = (
-                self.full_initial_pos
-                + (self.full_default_pos - self.full_initial_pos) * self.initial_stage
+                self.full_initial_dof_pos
+                + (self.full_default_dof_pos - self.full_initial_dof_pos) * self.initial_stage
             )
             for i in range(self.num_full_dof):
                 self.low_cmd.motor_cmd[i].q = target_pos[i]
@@ -260,6 +261,10 @@ class LowStateCmdHandler(LowStateMsgHandler):
         for g in sorted(groups, key=len, reverse=True):
             if joint_name.endswith(g + "_joint") or joint_name.endswith(g):
                 return g
+
+    @property
+    def is_emergency_stop(self) -> bool:
+        return self._emergency_stop
 
 
 if __name__ == "__main__":

@@ -24,7 +24,7 @@ class UnitreeLeggedEnv(BaseGymRobot):
         self._low_state_controller = LowStateCmdHandler(args.robot_args)
         self.controller.init()
         self.controller.start()
-        self._action_space = spaces.Box(shape=(self.num_dof,), low=-np.inf, high=np.inf)
+        self._action_space = spaces.Box(shape=(self.action_dim,), low=-np.inf, high=np.inf)
         self._action_scale = args.robot_args.action_scale * action_scale
         self._device = device
 
@@ -33,19 +33,23 @@ class UnitreeLeggedEnv(BaseGymRobot):
         pass
 
     def apply_action(self, action: torch.Tensor) -> None:
-        action_np = action.cpu().numpy()
-        target_pos = self.controller.default_pos + action_np * self._action_scale
+        action_np = action[0].cpu().numpy()
+        target_pos = self.controller.default_dof_pos + action_np * self._action_scale
         self.controller.target_pos = target_pos
 
     def emergency_stop(self) -> None:
         self.controller.emergency_stop()
 
     @property
+    def is_emergency_stop(self) -> bool:
+        return self.controller.is_emergency_stop
+
+    @property
     def controller(self) -> LowStateCmdHandler:
         return self._low_state_controller
 
     @property
-    def num_dof(self) -> int:
+    def action_dim(self) -> int:
         return self._low_state_controller.num_dof
 
     @property
@@ -53,12 +57,28 @@ class UnitreeLeggedEnv(BaseGymRobot):
         return self._action_space
 
     @property
+    def action_scale(self) -> float:
+        return self._action_scale
+
+    @property
+    def robot(self) -> LowStateCmdHandler:
+        return self.controller
+
+    @property
+    def dof_names(self) -> list[str]:
+        return self.controller.dof_names
+
+    @property
+    def default_dof_pos(self) -> torch.Tensor:
+        return torch.tensor(self.controller.default_dof_pos, device=self._device)[None, :]
+
+    @property
     def dof_pos(self) -> torch.Tensor:
-        return torch.tensor(self.controller.joint_pos, device=self._device)
+        return torch.tensor(self.controller.joint_pos, device=self._device)[None, :]
 
     @property
     def dof_vel(self) -> torch.Tensor:
-        return torch.tensor(self.controller.joint_vel, device=self._device)
+        return torch.tensor(self.controller.joint_vel, device=self._device)[None, :]
 
     @property
     def projected_gravity(self) -> torch.Tensor:
@@ -66,8 +86,12 @@ class UnitreeLeggedEnv(BaseGymRobot):
             v=np.array([0, 0, -1]),
             q=quaternions.qinverse(self.controller.quat),
         )
-        return torch.tensor(projected_gravity, device=self._device)
+        return torch.tensor(projected_gravity, device=self._device)[None, :]
 
     @property
     def base_ang_vel(self) -> torch.Tensor:
-        return torch.tensor(self.controller.ang_vel, device=self._device)
+        return torch.tensor(self.controller.ang_vel, device=self._device)[None, :]
+
+    @property
+    def device(self) -> torch.device:
+        return self._device
