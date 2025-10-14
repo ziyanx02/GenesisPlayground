@@ -327,7 +327,7 @@ class LeggedRobotEnv(BaseEnv):
                     "dof_vel": self.dof_vel,
                     "projected_gravity": self.projected_gravity,
                     "torque": self.torque,
-                    "dof_pos_limits": self._robot.dof_pos_limits,
+                    "dof_pos_limits": self.dof_pos_limits,
                     "commands": self.commands,
                 }
             )
@@ -451,6 +451,18 @@ class LeggedRobotEnv(BaseEnv):
     @property
     def critic_obs_dim(self) -> int:
         return get_space_dim(self._critic_observation_space)
+
+    @property
+    def dof_names(self) -> list[str]:
+        return self._robot.dof_names
+
+    @property
+    def default_dof_pos(self) -> torch.Tensor:
+        return self._robot.default_dof_pos
+
+    @property
+    def dof_pos_limits(self) -> torch.Tensor:
+        return self._robot.dof_pos_limits
 
     @property
     def dof_pos(self) -> torch.Tensor:

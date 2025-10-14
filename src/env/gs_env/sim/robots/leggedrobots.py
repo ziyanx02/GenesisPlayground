@@ -103,7 +103,7 @@ class LeggedRobotBase(BaseGymRobot):
             self._args.morph_args.euler, dtype=torch.float32, device=self._device
         )
         self._default_quat = quat_from_euler(self._default_euler)
-        default_joint_angles = [self._args.default_dof[name] for name in self.dof_names]
+        default_joint_angles = [self._args.default_dof_pos[name] for name in self.dof_names]
         self._default_dof_pos = torch.tensor(
             default_joint_angles, dtype=torch.float32, device=self._device
         )

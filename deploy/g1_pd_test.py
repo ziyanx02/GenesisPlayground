@@ -103,7 +103,7 @@ def run_single_dof_wave_diagnosis(
 
         target_dof_pos = wave_func(i) + offset
         action[:, dof_idx] = target_dof_pos / env.action_scale
-        dof_pos = env.dof_pos[0, dof_idx].cpu().item()
+        dof_pos = env.dof_pos[0, dof_idx].cpu().item() - env.robot.default_dof_pos[dof_idx]
         target_dof_pos_list.append(target_dof_pos)
         dof_pos_list.append(dof_pos)
         env.apply_action(action)
@@ -216,7 +216,7 @@ def main(
         # "waist_roll": [-0.4, 0.4],
         # "waist_pitch": [-0.4, 0.4],
         # "shoulder_roll": [0.0, 1.0],
-        # "shoulder_pitch": [-0.5, 0.5],
+        "shoulder_pitch": [-0.5, 0.5],
         # "shoulder_yaw": [0.0, 1.0],
         # "elbow": [0.0, 1.0],
         # "wrist_roll": [-1.0, 1.0],
