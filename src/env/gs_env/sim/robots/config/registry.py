@@ -224,7 +224,7 @@ RobotArgsRegistry["franka_teleop"] = ManipulatorRobotArgs(
 )
 
 
-G1_default_dof: dict[str, float] = {
+G1_default_dof_pos: dict[str, float] = {
     "left_hip_roll_joint": 0.0,
     "left_hip_pitch_joint": -0.2,
     "left_hip_yaw_joint": 0.0,
@@ -342,7 +342,7 @@ RobotArgsRegistry["g1_default"] = HumanoidRobotArgs(
         "right_wrist_pitch_joint",
         "right_wrist_yaw_joint",
     ],
-    default_dof=G1_default_dof,
+    default_dof_pos=G1_default_dof_pos,
     soft_dof_pos_range=0.9,
     dof_kp=G1_kp_dict,
     dof_kd=G1_kd_dict,
@@ -401,7 +401,7 @@ RobotArgsRegistry["g1_fixed"] = HumanoidRobotArgs(
         "right_wrist_pitch_joint",
         "right_wrist_yaw_joint",
     ],
-    default_dof=G1_default_dof,
+    default_dof_pos=G1_default_dof_pos,
     soft_dof_pos_range=0.9,
     dof_kp=G1_kp_dict,
     dof_kd=G1_kd_dict,
@@ -456,7 +456,7 @@ RobotArgsRegistry["g1_no_waist"] = HumanoidRobotArgs(
         "right_wrist_pitch_joint",
         "right_wrist_yaw_joint",
     ],
-    default_dof=G1_default_dof,
+    default_dof_pos=G1_default_dof_pos,
     soft_dof_pos_range=0.9,
     dof_kp=G1_kp_dict,
     dof_kd=G1_kd_dict,

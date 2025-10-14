@@ -1,4 +1,3 @@
-import gymnasium as gym
 import torch
 
 #
@@ -6,11 +5,8 @@ from gs_env.common.utils.math_utils import (
     quat_apply,
     quat_inv,
 )
-from gs_env.common.utils.misc_utils import get_space_dim
 from gs_env.sim.envs.config.schema import LeggedRobotEnvArgs
 from gs_env.sim.envs.locomotion.leggedrobot_env import LeggedRobotEnv
-from gs_env.sim.robots.leggedrobots import G1Robot
-from gs_env.sim.scenes import FlatScene
 
 _DEFAULT_DEVICE = torch.device("cpu")
 
@@ -153,7 +149,7 @@ class WalkingEnv(LeggedRobotEnv):
                     "dof_vel": self.dof_vel,
                     "projected_gravity": self.projected_gravity,
                     "torque": self.torque,
-                    "dof_pos_limits": self._robot.dof_pos_limits,
+                    "dof_pos_limits": self.dof_pos_limits,
                     "commands": self.commands,
                     "feet_first_contact": self.feet_first_contact,
                     "feet_air_time": self.feet_air_time,
@@ -180,62 +176,3 @@ class WalkingEnv(LeggedRobotEnv):
         self.commands[:, 1] *= 0
         self.commands[:, :2] *= torch.norm(self.commands[:, :2], dim=-1, keepdim=True) > 0.3
         self.commands[:, 2] *= torch.abs(self.commands[:, 2]) > 0.3
-
-    @property
-    def scene(self) -> FlatScene:
-        return self._scene
-
-    @property
-    def robot(self) -> G1Robot:
-        return self._robot
-
-    @property
-    def num_envs(self) -> int:
-        return self._scene.num_envs
-
-    @property
-    def action_space(self) -> gym.spaces.Box:
-        return self._robot.action_space
-
-    @property
-    def action_dim(self) -> int:
-        act_dim = get_space_dim(self.action_space)
-        return act_dim
-
-    @property
-    def action_scale(self) -> float:
-        return self._args.robot_args.action_scale
-
-    @property
-    def actor_obs_dim(self) -> int:
-        return get_space_dim(self._actor_observation_space)
-
-    @property
-    def critic_obs_dim(self) -> int:
-        return get_space_dim(self._critic_observation_space)
-
-    @property
-    def dof_pos(self) -> torch.Tensor:
-        return self._robot.dof_pos
-
-    @property
-    def dof_vel(self) -> torch.Tensor:
-        return self._robot.dof_vel
-
-    # @property
-    # def depth_shape(self):
-    #     if self._camera is None and self._args.img_resolution is None:
-    #         return None
-    #     return (1, *self._args.img_resolution)
-
-    # @property
-    # def rgb_shape(self):
-    #     if self._camera is None and self._args.img_resolution is None:
-    #         return None
-    #     return (4, *self._args.img_resolution)
-
-    # @property
-    # def img_resolution(self):
-    #     if self._camera is None and self._args.img_resolution is None:
-    #         return None
-    #     return self._args.img_resolution

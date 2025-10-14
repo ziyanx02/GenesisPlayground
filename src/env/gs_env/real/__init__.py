@@ -1,4 +1,4 @@
-from .leggedrobots import UnitreeLeggedEnv
+from .leggedrobot_env import UnitreeLeggedEnv
 
 __all__ = [
     "UnitreeLeggedEnv",

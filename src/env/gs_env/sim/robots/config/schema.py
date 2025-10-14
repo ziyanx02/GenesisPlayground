@@ -109,7 +109,7 @@ class LeggedRobotArgs(BaseModel):
     foot_link_names: list[str]
     show_target: bool
     dof_names: list[str]
-    default_dof: dict[str, float]
+    default_dof_pos: dict[str, float]
     soft_dof_pos_range: float
     dof_kp: dict[str, float]
     dof_kd: dict[str, float]
