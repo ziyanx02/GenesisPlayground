@@ -1,7 +1,6 @@
-#!/usr/bin/env python3
-"""Example: Train PPO on Genesis Walking environment using Genesis RL."""
-
 import platform
+import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -12,39 +11,40 @@ matplotlib.use("Agg")  # Use non-interactive backend to prevent windows from sho
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-from gs_agent.wrappers.gs_env_wrapper import GenesisEnvWrapper
-from gs_env.sim.envs.config.registry import EnvArgsRegistry
-import gs_env.sim.envs as gs_envs
-from utils import plot_metric_on_axis
+from gs_env.sim.envs.config.schema import LeggedRobotEnvArgs
+
+# Add examples to path to import utils
+sys.path.insert(0, str(Path(__file__).parent.parent / "examples"))
+from utils import plot_metric_on_axis, yaml_to_config  # type: ignore
 
 
-def create_gs_env(
-    show_viewer: bool = False,
-    num_envs: int = 4096,
-    device: str = "cuda",
-    args: Any = None,
-    eval_mode: bool = False,
-) -> gs_envs.WalkingEnv:
-    """Create gym environment wrapper with optional config overrides."""
-    if torch.cuda.is_available() and device == "cuda":
-        device_tensor = torch.device("cuda")
-    else:
-        device_tensor = torch.device("cpu")
-    print(f"Using device: {device_tensor}")
+def load_env_args(exp_name: str) -> LeggedRobotEnvArgs:
+    """Load JIT checkpoint and env_args from deploy/logs directory.
 
-    env_class = getattr(gs_envs, args.env_name)
+    Args:
+        exp_name: Experiment name
 
-    return env_class(
-        args=args,
-        num_envs=num_envs,
-        show_viewer=show_viewer,
-        device=device_tensor,  # type: ignore
-        eval_mode=eval_mode,
-    )
+    Returns:
+        env_args
+    """
+
+    deploy_dir = Path(__file__).parent / "logs" / exp_name
+    if not deploy_dir.exists():
+        raise FileNotFoundError(f"Deploy directory not found: {deploy_dir}")
+
+    # Load env_args from YAML
+    env_args_path = deploy_dir / "env_args.yaml"
+    if not env_args_path.exists():
+        raise FileNotFoundError(f"env_args.yaml not found: {env_args_path}")
+
+    print(f"Loading env_args from: {env_args_path}")
+    env_args = yaml_to_config(env_args_path, LeggedRobotEnvArgs)
+
+    return env_args
 
 
 def run_single_dof_wave_diagnosis(
-    env: GenesisEnvWrapper,
+    env: Any,
     dof_idx: int = 0,
     num_dofs: int = 29,
     wave_type: str = "SIN",
@@ -54,13 +54,13 @@ def run_single_dof_wave_diagnosis(
 ) -> tuple[list[float], list[float]]:
     """Run single DoF diagnosis."""
     print(f"Running DoF diagnosis for {wave_type}")
-    NUM_TOTAL_PERIODS = 5
+    NUM_TOTAL_PERIODS = 3
 
     def linear_phase(x: int) -> float:
         return x / period * 2 * np.pi
 
     def quadratic_phase(x: int) -> float:
-        return (x / period) ** 2 * 2 * np.pi / NUM_TOTAL_PERIODS * 3
+        return (x / period) ** 2 * 2 * np.pi / NUM_TOTAL_PERIODS * 2
 
     def linear_amp(x: int) -> float:
         return (10 * (x - 1) / period) // NUM_TOTAL_PERIODS * amplitude / 10
@@ -81,22 +81,32 @@ def run_single_dof_wave_diagnosis(
         raise ValueError(f"Invalid wave type: {wave_type}")
 
     env.reset()
-    action = torch.zeros((env.num_envs, num_dofs), device=env.device)
-    action[:, dof_idx] = offset / env.env.action_scale
+    action = torch.zeros((1, num_dofs), device=env.device)
+    action[:, dof_idx] = offset / env.action_scale
 
-    for _ in range(10):
-        env.step(action)
+    last_update_time = time.time()
+
+    TOTAL_RESET_STEPS = 50
+    for i in range(TOTAL_RESET_STEPS):
+        while time.time() - last_update_time < 0.02:
+            time.sleep(0.001)
+        action[:, dof_idx] = offset * i / TOTAL_RESET_STEPS / env.action_scale
+        env.apply_action(action)
 
     target_dof_pos_list = []
     dof_pos_list = []
 
     for i in range(period * NUM_TOTAL_PERIODS):
+        while time.time() - last_update_time < 0.02:
+            time.sleep(0.001)
+        last_update_time = time.time()
+
         target_dof_pos = wave_func(i) + offset
-        action[:, dof_idx] = target_dof_pos / env.env.action_scale
-        dof_pos = (env.env.dof_pos[0] - env.env.robot.default_dof_pos)[dof_idx].cpu().item()
+        action[:, dof_idx] = target_dof_pos / env.action_scale
+        dof_pos = env.dof_pos[0, dof_idx].cpu().item()
         target_dof_pos_list.append(target_dof_pos)
         dof_pos_list.append(dof_pos)
-        env.step(action)
+        env.apply_action(action)
 
         if i % period == 0:
             print(f"Step {i} of {period * NUM_TOTAL_PERIODS}")
@@ -105,16 +115,17 @@ def run_single_dof_wave_diagnosis(
 
 
 def run_single_dof_diagnosis(
-    env: GenesisEnvWrapper,
+    env: Any,
     dof_idx: int = 0,
     dof_name: str = "DoF",
     num_dofs: int = 29,
     period: int = 100,
     amplitude: float = 1.0,
     offset: float = 0.0,
+    log_dir: Path = Path(__file__).parent / "logs" / "pd_test",
 ) -> None:
     fig, axes = plt.subplots(4, 1, figsize=(12, 12))
-    for i, wave_type in enumerate(["SIN", "FM-SIN", "SQ"]):
+    for i, wave_type in enumerate(["SIN", "FM-SIN"]):
         target_dof_pos_list, dof_pos_list = run_single_dof_wave_diagnosis(
             env,
             dof_idx=dof_idx,
@@ -149,10 +160,9 @@ def run_single_dof_diagnosis(
             )
 
     # Save plot
-    plot_dir = Path("./logs") / "pd_test"
-    plot_dir.mkdir(parents=True, exist_ok=True)
+    log_dir.mkdir(parents=True, exist_ok=True)
 
-    plot_path = plot_dir / f"{dof_name}.png"
+    plot_path = log_dir / f"{dof_name}.png"
     plt.tight_layout()
     plt.savefig(plot_path, dpi=150)
     plt.close(fig)
@@ -162,20 +172,37 @@ def run_single_dof_diagnosis(
 
 def main(
     show_viewer: bool = False,
-    device: str = "cuda",
-    env_name: str = "g1_fixed",
+    device: str = "cpu",
+    exp_name: str = "walk",
+    sim: bool = True,
 ) -> None:
-    # Create environment for evaluation
-    env_args = EnvArgsRegistry[env_name]
-    env = create_gs_env(
-        show_viewer=show_viewer,
-        num_envs=1,
-        device=device,
-        args=env_args,
-        eval_mode=True,
-    )
+    # Load checkpoint and env_args
+    env_args = load_env_args(exp_name)
 
-    wrapped_env = GenesisEnvWrapper(env, device=env.device)
+    if sim:
+        print("Running in SIMULATION mode")
+        import gs_env.sim.envs as envs
+
+        envclass = getattr(envs, env_args.env_name)
+        env = envclass(
+            args=env_args,
+            num_envs=1,
+            show_viewer=show_viewer,
+            device=torch.device(device),
+            eval_mode=True,
+        )
+        env.eval()
+        env.reset()
+
+    else:
+        print("Running in REAL ROBOT mode")
+        from gs_env.real import UnitreeLeggedEnv
+
+        env = UnitreeLeggedEnv(env_args, action_scale=1.0, device=torch.device(device))
+
+        print("Press Start button to start the test")
+        while not env.controller.Start:
+            time.sleep(0.1)
 
     # DoF names, lower bound, upper bound
     test_dofs = {
@@ -183,8 +210,8 @@ def main(
         # "hip_pitch": [-0.5, 0.5],
         # "hip_yaw": [-0.5, 0.5],
         # "knee": [0.0, 1.0],
-        "ankle_roll": [-0.2, 0.2],
-        "ankle_pitch": [-0.5, 0.5],
+        # "ankle_roll": [-0.2, 0.2],
+        # "ankle_pitch": [-0.5, 0.5],
         # "waist_yaw": [-1.0, 1.0],
         # "waist_roll": [-0.4, 0.4],
         # "waist_pitch": [-0.4, 0.4],
@@ -194,25 +221,29 @@ def main(
         # "elbow": [0.0, 1.0],
         # "wrist_roll": [-1.0, 1.0],
         # "wrist_pitch": [-1.0, 1.0],
-        # "wrist_yaw": [-1.0, 1.0],
+        # "wrist_yaw": [0.0, 1.0],
     }
 
     def run_dof_diagnosis_fixed() -> None:
-        nonlocal wrapped_env
-        dof_names = wrapped_env.env.robot.dof_names
+        nonlocal env
+        dof_names = env.dof_names
 
         for dof_name, (lower_bound, upper_bound) in test_dofs.items():
+            dof_idx = -1
             for i, name in enumerate(dof_names):
                 if dof_name in name:
                     dof_idx = i
                     break
+            if dof_idx == -1:
+                print(f"Dof {dof_name} not found")
+                continue
             amplitude = (upper_bound - lower_bound) / 2
             offset = (upper_bound + lower_bound) / 2
             run_single_dof_diagnosis(
-                wrapped_env,
+                env,
                 dof_idx=dof_idx,
                 dof_name=dof_name,
-                num_dofs=29,
+                num_dofs=env.action_dim,
                 period=100,
                 amplitude=amplitude,
                 offset=offset,

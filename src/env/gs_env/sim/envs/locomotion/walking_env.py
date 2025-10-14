@@ -1,32 +1,21 @@
-import importlib
-import platform
-from typing import Any
-
-import genesis as gs
 import gymnasium as gym
-import numpy as np
 import torch
-from PIL import Image
 
 #
-from gs_env.common.bases.base_env import BaseEnv
 from gs_env.common.utils.math_utils import (
     quat_apply,
-    quat_from_angle_axis,
-    quat_from_euler,
     quat_inv,
-    quat_mul,
-    quat_to_euler,
 )
 from gs_env.common.utils.misc_utils import get_space_dim
 from gs_env.sim.envs.config.schema import LeggedRobotEnvArgs
+from gs_env.sim.envs.locomotion.leggedrobot_env import LeggedRobotEnv
 from gs_env.sim.robots.leggedrobots import G1Robot
 from gs_env.sim.scenes import FlatScene
 
 _DEFAULT_DEVICE = torch.device("cpu")
 
 
-class WalkingEnv(BaseEnv):
+class WalkingEnv(LeggedRobotEnv):
     """
     Walking Environment for Legged Robots.
     """
@@ -39,108 +28,17 @@ class WalkingEnv(BaseEnv):
         device: torch.device = _DEFAULT_DEVICE,
         eval_mode: bool = False,
     ) -> None:
-        super().__init__(device=device)
-        self._num_envs = num_envs
-        self._device = device
-        self._show_viewer = show_viewer
-        self._refresh_visualizer = False if platform.system() == "Darwin" else True
-        self._args = args
-        self._eval_mode = eval_mode
-
-        if not gs._initialized:  # noqa: SLF001
-            gs.init(performance_mode=True, backend=getattr(gs.constants.backend, device.type))
-
-        # == setup the scene ==
-        self._scene = FlatScene(
-            num_envs=self._num_envs,
-            args=args.scene_args,
-            show_viewer=self._show_viewer,
-            img_resolution=args.img_resolution,
-            env_spacing=(1.0, 1.0),
+        # Initialize base legged-robot environment
+        super().__init__(
+            args=args,
+            num_envs=num_envs,
+            show_viewer=show_viewer,
+            device=device,
+            eval_mode=eval_mode,
         )
-
-        # == setup the robot ==
-        self._robot = G1Robot(
-            num_envs=self._num_envs,
-            scene=self._scene.scene,
-            args=args.robot_args,
-            device=self._device,
-        )
-
-        # == set up camera ==
-        self._floating_camera = self._scene.scene.add_camera(
-            res=(480, 480),
-            fov=60,
-            GUI=False,
-        )
-
-        # == build the scene ==
-        self._scene.build()
-
-        # == setup reward scalars and functions ==
-        self.dt = self._scene.scene.dt * args.robot_args.decimation
-        self._reward_functions = {}
-        module_name = f"gs_env.common.rewards.{self._args.reward_term}_terms"
-        module = importlib.import_module(module_name)
-        for key in args.reward_args.keys():
-            reward_func = getattr(module, key, None)
-            if reward_func is None:
-                raise ValueError(f"Reward {key} not found in rewards module.")
-            self._reward_functions[key] = reward_func(scale=args.reward_args[key] * self.dt)
-
-        # some auxiliary variables
-        self._max_sim_time = 20.0  # seconds
-        self._command_resample_time = 10.0  # seconds
-        self._random_push_time = 4.0  # seconds
-        #
-        self._init()
-        self.reset()
 
     def _init(self) -> None:
-        # domain randomization
-        self._robot.post_build_init(eval_mode=self._eval_mode)
-
-        # initialize buffers
-        self._action_buf = torch.zeros(
-            (self.num_envs, self.action_dim, self._args.action_latency + 1), device=self._device
-        )
-        self._action = torch.zeros((self.num_envs, self.action_dim), device=self._device)
-        self.last_action = torch.zeros((self.num_envs, self.action_dim), device=self._device)
-        self.last_last_action = torch.zeros((self.num_envs, self.action_dim), device=self._device)
-        self.torque = torch.zeros((self.num_envs, self.action_dim), device=self._device)
-
-        self.base_default_pos: torch.Tensor = self._robot.default_pos[None, :].repeat(
-            self.num_envs, 1
-        )
-        self.base_default_quat: torch.Tensor = self._robot.default_quat[None, :].repeat(
-            self.num_envs, 1
-        )
-        self.base_pos = torch.zeros(self.num_envs, 3, dtype=torch.float32, device=self._device)
-        self.base_quat = torch.zeros(self.num_envs, 4, dtype=torch.float32, device=self._device)
-        self.base_euler = torch.zeros(self.num_envs, 3, dtype=torch.float32, device=self._device)
-        self.base_lin_vel = torch.zeros(self.num_envs, 3, dtype=torch.float32, device=self._device)
-        self.base_ang_vel = torch.zeros(self.num_envs, 3, dtype=torch.float32, device=self._device)
-
-        global_gravity = torch.tensor([0.0, 0.0, -1.0], device=self.device, dtype=torch.float32)
-        self.global_gravity = global_gravity[None, :].repeat(self.num_envs, 1)
-        self.projected_gravity = torch.zeros(
-            (self.num_envs, 3), device=self.device, dtype=torch.float32
-        )
-
-        self.commands = torch.zeros((self.num_envs, 3), device=self.device, dtype=torch.float32)
-
-        self.link_contact_forces = torch.zeros(
-            (self.num_envs, self._robot.n_links, 3), device=self.device, dtype=torch.float32
-        )
-        self.link_positions = torch.zeros(
-            (self.num_envs, self._robot.n_links, 3), device=self.device, dtype=torch.float32
-        )
-        self.link_quaternions = torch.zeros(
-            (self.num_envs, self._robot.n_links, 4), device=self.device, dtype=torch.float32
-        )
-        self.link_velocities = torch.zeros(
-            (self.num_envs, self._robot.n_links, 3), device=self.device, dtype=torch.float32
-        )
+        # Pre-parent: allocate feet-related buffers required by observation terms
         self.feet_height = torch.zeros(
             (self.num_envs, len(self._robot.foot_links_idx)),
             device=self.device,
@@ -177,111 +75,18 @@ class WalkingEnv(BaseEnv):
             dtype=torch.float32,
         )
 
-        #
-        self.reset_buf = torch.zeros(self.num_envs, dtype=torch.bool, device=self._device)
-        self.time_out_buf = torch.zeros(self.num_envs, dtype=torch.bool, device=self._device)
-        self.time_since_reset = torch.zeros(self.num_envs, device=self._device)
+        # Let base class set up common buffers, spaces, and rendering
+        super()._init()
+
+        # Additional timers specific to this environment
+        self._command_resample_time = 10.0  # seconds
         self.time_since_resample = torch.zeros(self.num_envs, device=self._device)
-        self.time_since_random_push = torch.remainder(
-            torch.arange(self.num_envs, device=self._device, dtype=torch.float32) * self.dt,
-            self._random_push_time,
-        )
-
-        # specify the space attributes
-        actor_obs_spaces = {}
-        for obs_term in self._args.actor_obs_terms:
-            assert hasattr(self, obs_term), (
-                f"Observation term {obs_term} not found in the environment."
-            )
-            actor_obs_spaces[obs_term] = gym.spaces.Box(
-                low=-np.inf,
-                high=np.inf,
-                shape=(getattr(self, obs_term).shape[-1],),
-                dtype=np.float32,
-            )
-        self._actor_observation_space = gym.spaces.Dict(actor_obs_spaces)
-        critic_obs_spaces = {}
-        for obs_term in self._args.critic_obs_terms:
-            assert hasattr(self, obs_term), (
-                f"Observation term {obs_term} not found in the environment."
-            )
-            critic_obs_spaces[obs_term] = gym.spaces.Box(
-                low=-np.inf,
-                high=np.inf,
-                shape=(getattr(self, obs_term).shape[-1],),
-                dtype=np.float32,
-            )
-        self._critic_observation_space = gym.spaces.Dict(critic_obs_spaces)
-        self._info_space = gym.spaces.Dict({})
-        self._extra_info = {}
-
-        # rendering
-        self._rendered_images = []
-        self._rendering = False
-        self.camera_lookat = torch.tensor([0.0, 0.0, 0.0], device=self._device)
-        self.camera_pos = torch.tensor([-1.0, -1.0, 0.5], device=self._device)
 
     def reset_idx(self, envs_idx: torch.IntTensor) -> None:
-        default_pos = self._robot.default_pos[None, :].repeat(len(envs_idx), 1)
-        default_quat = self._robot.default_quat[None, :].repeat(len(envs_idx), 1)
-        default_dof_pos = self._robot.default_dof_pos[None, :].repeat(len(envs_idx), 1)
-        random_euler = torch.zeros((len(envs_idx), 3), device=self._device)
-        random_euler[:, :2] = (torch.rand(len(envs_idx), 2, device=self._device) - 0.5) * 0.3
-        random_euler[:, 2] = torch.rand(len(envs_idx), device=self._device) * 2 * np.pi - np.pi
-        random_dof_pos = torch.rand(len(envs_idx), self._robot.dof_dim, device=self._device) - 0.5
-        random_dof_pos *= 0.3
-        if self._eval_mode:
-            random_euler *= 0
-            random_dof_pos *= 0
-        quat = quat_from_euler(random_euler)
-        quat = quat_mul(quat, default_quat)
-        dof_pos = default_dof_pos + random_dof_pos
-        self.time_since_reset[envs_idx] = 0.0
+        super().reset_idx(envs_idx=envs_idx)
         self.feet_air_time[envs_idx] = 0.0
-        self._robot.set_state(pos=default_pos, quat=quat, dof_pos=dof_pos, envs_idx=envs_idx)
         self._resample_commands(envs_idx=envs_idx)
         self.time_since_resample[envs_idx] = 0.0
-
-    def get_terminated(self) -> torch.Tensor:
-        reset_buf = self.get_truncated()
-        tilt_mask = torch.logical_or(
-            torch.abs(self.base_euler[:, 0]) > 0.5,
-            torch.abs(self.base_euler[:, 1]) > 0.5,
-        )
-        height_mask = self.base_pos[:, 2] < 0.5
-        reset_buf |= tilt_mask
-        reset_buf |= height_mask
-        self.reset_buf[:] = reset_buf
-        termination_dict = {}
-        termination_dict["tilt"] = tilt_mask.clone()
-        termination_dict["base_height"] = height_mask.clone()
-        termination_dict["any"] = reset_buf.clone()
-        self._extra_info["termination"] = termination_dict
-        return reset_buf
-
-    def get_truncated(self) -> torch.Tensor:
-        if self._eval_mode:
-            self._max_sim_time = float("inf")
-        time_out_buf = self.time_since_reset > self._max_sim_time
-        self.time_out_buf[:] = time_out_buf
-        return time_out_buf
-
-    def get_observations(self) -> tuple[torch.Tensor, torch.Tensor]:
-        self._update_buffers()
-        obs_components = []
-        for key in self._args.actor_obs_terms:
-            obs_gt = getattr(self, key) * self._args.obs_scales.get(key, 1.0)
-            obs_noise = torch.randn_like(obs_gt) * self._args.obs_noises.get(key, 0.0)
-            if self._eval_mode:
-                obs_noise *= 0
-            obs_components.append(obs_gt + obs_noise)
-        actor_obs = torch.cat(obs_components, dim=-1)
-        obs_components = []
-        for key in self._args.critic_obs_terms:
-            obs_gt = getattr(self, key) * self._args.obs_scales.get(key, 1.0)
-            obs_components.append(obs_gt)
-        critic_obs = torch.cat(obs_components, dim=-1)
-        return actor_obs, critic_obs
 
     def apply_action(self, action: torch.Tensor) -> None:
         action = action.detach().to(self._device)
@@ -302,15 +107,15 @@ class WalkingEnv(BaseEnv):
             self._scene.scene.step(refresh_visualizer=self._refresh_visualizer)
             self.torque = torch.max(self.torque, torch.abs(self._robot.torque))
 
+        self._update_buffers()
+
         # Render if rendering is enabled
         self._render_headless()
         self.feet_first_contact[:] = (self.feet_air_time > 0.0) * self.feet_contact
         self.feet_air_time += self.dt
 
     def update_history(self) -> None:
-        # save for reward computation
-        self.last_last_action = self.last_action.clone()
-        self.last_action = self._action.clone()
+        super().update_history()
         self.feet_air_time *= 1 - self.feet_contact
 
         resample_env_ids = torch.nonzero(
@@ -318,43 +123,12 @@ class WalkingEnv(BaseEnv):
         ).squeeze(-1)
         self._resample_commands(envs_idx=resample_env_ids)
         self.time_since_resample[resample_env_ids] = 0.0
-        push_env_ids = torch.nonzero(
-            self.time_since_random_push >= self._random_push_time, as_tuple=False
-        ).squeeze(-1)
-        if not self._eval_mode:
-            self._random_push(envs_idx=push_env_ids)
-        self.time_since_random_push[push_env_ids] = 0.0
-
-    def get_extra_infos(self) -> dict[str, Any]:
-        self._update_buffers()
-        obs_components = []
-        for key in self._args.critic_obs_terms:
-            obs_gt = getattr(self, key) * self._args.obs_scales.get(key, 1.0)
-            obs_components.append(obs_gt)
-        obs_tensor = torch.cat(obs_components, dim=-1)
-        self._extra_info["observations"] = {"critic": obs_tensor}
-        self._extra_info["time_outs"] = self.time_out_buf.clone()[:, None]
-        return self._extra_info
 
     def _update_buffers(self) -> None:
-        self.base_pos[:] = self._robot.base_pos
-        self.base_quat[:] = self._robot.base_quat
-        base_quat_rel = quat_mul(self._robot.base_quat, quat_inv(self.base_default_quat))
-        self.base_euler[:] = quat_to_euler(base_quat_rel)
-        self.projected_gravity[:] = quat_apply(quat_inv(self.base_quat), self.global_gravity)
-        inv_quat_yaw = quat_from_angle_axis(
-            -self.base_euler[:, 2], torch.tensor([0, 0, 1], device=self.device, dtype=torch.float)
-        )
-        self.base_lin_vel[:] = quat_apply(inv_quat_yaw, self._robot.get_vel())
-        self.base_ang_vel[:] = quat_apply(quat_inv(base_quat_rel), self._robot.get_ang())
-
-        self.link_contact_forces[:] = self._robot.link_contact_forces
+        super()._update_buffers()
         self.feet_contact_force[:] = self.link_contact_forces[:, self._robot.foot_links_idx, 2]
         self.feet_contact[:] = self.feet_contact_force > 1.0
-        self.link_positions[:] = self._robot.link_positions
-        self.link_quaternions[:] = self._robot.link_quaternions
         self.feet_height[:] = self.link_positions[:, self._robot.foot_links_idx, 2]
-        self.link_velocities[:] = self._robot.link_velocities
         self.feet_z_velocity[:] = self.link_velocities[:, self._robot.foot_links_idx, 2]
         feet_quaternions = self.link_quaternions[:, self._robot.foot_links_idx].reshape(-1, 4)
         self.feet_orientation[:] = quat_apply(
@@ -401,78 +175,11 @@ class WalkingEnv(BaseEnv):
 
         return reward_total, reward_dict
 
-    def _render_headless(self) -> None:
-        if self._rendering and len(self._rendered_images) < 1000:
-            robot_pos = self._robot.base_pos[0]
-            robot_pos[2] = 0.7
-            self._floating_camera.set_pose(
-                pos=robot_pos + self.camera_pos,
-                lookat=robot_pos + self.camera_lookat,
-            )
-            rgb, _, _, _ = self._floating_camera.render()
-            self._rendered_images.append(rgb)
-
-    def start_rendering(self) -> None:
-        self._rendering = True
-        self._rendered_images = []
-
-    def stop_rendering(self, save_gif: bool = True, gif_path: str = ".") -> None:
-        self._rendering = False
-        if save_gif and self._rendered_images:
-            self.save_gif(gif_path)
-
-    def save_gif(self, gif_path: str, duration: int = 20) -> None:
-        """
-        Save the rendered images as a GIF.
-
-        Args:
-            gif_path: Path to save the GIF. If None, generates a timestamped filename.
-            duration: Duration of each frame in milliseconds (default: 100ms)
-        """
-        if not self._rendered_images:
-            print("No rendered images to save.")
-            return
-
-        # Convert numpy arrays to PIL Images
-        pil_images = []
-        for img_array in self._rendered_images:
-            # Convert from numpy array to PIL Image
-            # Assuming the image is in RGB format (H, W, 3)
-            if img_array.dtype != np.uint8:
-                img_array = (img_array * 255).astype(np.uint8)
-            pil_img = Image.fromarray(img_array)
-            pil_images.append(pil_img)
-
-        # Save as GIF
-        if pil_images:
-            pil_images[0].save(
-                gif_path,
-                save_all=True,
-                append_images=pil_images[1:],
-                duration=duration,
-                loop=0,  # Infinite loop
-            )
-            print(f"GIF saved to: {gif_path}")
-        else:
-            print("No images to save as GIF.")
-
     def _resample_commands(self, envs_idx: torch.Tensor) -> None:
         self.commands[envs_idx, :] = torch.rand(len(envs_idx), 3, device=self._device)
         self.commands[:, 1] *= 0
         self.commands[:, :2] *= torch.norm(self.commands[:, :2], dim=-1, keepdim=True) > 0.3
         self.commands[:, 2] *= torch.abs(self.commands[:, 2]) > 0.3
-
-    def _random_push(self, envs_idx: torch.Tensor) -> None:
-        if envs_idx.numel() > 0:
-            # sample delta v in [-2, 2] for x and y
-            delta_xy = torch.rand((len(envs_idx), 2), device=self._device) * 2.0 - 1.0
-            cur_vel = self._robot.get_vel()[envs_idx]  # world-frame linear velocity (x,y,z)
-            new_vel = cur_vel.clone()
-            new_vel[:, :2] = new_vel[:, :2] + delta_xy
-            self._robot.set_dofs_velocity(new_vel, envs_idx=envs_idx, dofs_idx_local=[0, 1, 2])
-
-    def eval(self) -> None:
-        self._eval_mode = True
 
     @property
     def scene(self) -> FlatScene:
