@@ -85,6 +85,7 @@ EnvArgsRegistry["g1_walk"] = LeggedRobotEnvArgs(
         "ActionLimitPenalty": 0.1,
         ### Motion Constraints ###
         "AnkleTorquePenalty": 0.001,
+        "StandStillAnkleTorquePenalty": 0.01,
         "HipYawPenalty": 10.0,
         "HipRollPenalty": 100.0,
         # "UpperBodyDofPenalty": 3.0,

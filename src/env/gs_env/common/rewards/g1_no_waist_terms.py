@@ -99,6 +99,20 @@ class AnkleTorquePenalty(RewardTerm):
         return -torch.sum(torch.square(torque[:, [4, 5, 10, 11]]), dim=-1)
 
 
+class StandStillAnkleTorquePenalty(RewardTerm):
+    """
+    Penalize the ankle torque.
+
+    Args:
+        torque: Torque tensor of shape (B, D) where B is the batch size and D is the number of DoFs.
+    """
+
+    required_keys = ("torque", "commands")
+
+    def _compute(self, torque: torch.Tensor, commands: torch.Tensor) -> torch.Tensor:  # type: ignore
+        return -torch.sum(torch.square(torque[:, [4, 5, 10, 11]]), dim=-1) * (torch.norm(commands, dim=1) < 0.1)
+
+
 class G1FeetHeightPenalty(FeetHeightPenalty):
     target_height = 0.2
 
