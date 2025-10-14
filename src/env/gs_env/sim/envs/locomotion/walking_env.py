@@ -172,7 +172,7 @@ class WalkingEnv(LeggedRobotEnv):
         return reward_total, reward_dict
 
     def _resample_commands(self, envs_idx: torch.Tensor) -> None:
-        self.commands[envs_idx, :] = torch.rand(len(envs_idx), 3, device=self._device)
+        self.commands[envs_idx, :] = torch.rand(len(envs_idx), 3, device=self._device) * 2 - 1
         self.commands[:, 1] *= 0
         self.commands[:, :2] *= torch.norm(self.commands[:, :2], dim=-1, keepdim=True) > 0.3
         self.commands[:, 2] *= torch.abs(self.commands[:, 2]) > 0.3

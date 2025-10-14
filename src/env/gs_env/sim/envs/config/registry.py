@@ -73,6 +73,7 @@ EnvArgsRegistry["g1_walk"] = LeggedRobotEnvArgs(
         ### Velocity Tracking ###
         "LinVelXYReward": 10.0,
         "AngVelZReward": 10.0,
+        "LinVelYPenalty": 20.0,
         "LinVelZPenalty": 20.0,
         "AngVelXYPenalty": 5.0,
         ### Pose Tracking ###
