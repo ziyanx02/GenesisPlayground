@@ -76,23 +76,30 @@ class LeggedRobotEnv(BaseEnv):
 
         # == build the scene ==
         self._scene.build()
+        self._max_sim_time = 20.0  # seconds
+
+        # init buffers
+        self._init()
 
         # == setup reward scalars and functions ==
-        self.dt = self._scene.scene.dt * args.robot_args.decimation
         self._reward_functions = {}
+        # Collect the union of all keys required by the configured reward terms
+        self._reward_required_keys: set[str] = set()
         module_name = f"gs_env.common.rewards.{self._args.reward_term}_terms"
         module = importlib.import_module(module_name)
         for key in args.reward_args.keys():
-            reward_func = getattr(module, key, None)
-            if reward_func is None:
+            reward_cls = getattr(module, key, None)
+            if reward_cls is None:
                 raise ValueError(f"Reward {key} not found in rewards module.")
-            self._reward_functions[key] = reward_func(scale=args.reward_args[key] * self.dt)
+            reward_instance = reward_cls(scale=args.reward_args[key] * self.dt)
+            self._reward_functions[key] = reward_instance
+            # Record declared inputs for this reward term, if provided
+            if hasattr(reward_instance, "required_keys"):
+                self._reward_required_keys.update(getattr(reward_instance, "required_keys", ()))
+        for key in self._reward_required_keys:
+            assert hasattr(self, key), f"Required reward key {key} not found in the environment."
 
-        # some auxiliary variables
-        self._max_sim_time = 20.0  # seconds
-
-        #
-        self._init()
+        # reset the environment
         self.reset()
 
     def _init(self) -> None:
@@ -125,8 +132,6 @@ class LeggedRobotEnv(BaseEnv):
         self.projected_gravity = torch.zeros(
             (self.num_envs, 3), device=self.device, dtype=torch.float32
         )
-
-        self.commands = torch.zeros((self.num_envs, 3), device=self.device, dtype=torch.float32)
 
         self.link_contact_forces = torch.zeros(
             (self.num_envs, self._robot.n_links, 3), device=self.device, dtype=torch.float32
@@ -314,23 +319,9 @@ class LeggedRobotEnv(BaseEnv):
         reward_total_pos = torch.zeros(self.num_envs, device=self._device)
         reward_total_neg = torch.zeros(self.num_envs, device=self._device)
         reward_dict = {}
+        state_dict = {key: getattr(self, key) for key in self.reward_required_keys}
         for key, func in self._reward_functions.items():
-            reward = func(
-                {
-                    "action": self._action,
-                    "last_action": self.last_action,
-                    "last_last_action": self.last_last_action,
-                    "base_pos": self.base_pos,
-                    "lin_vel": self.base_lin_vel,
-                    "ang_vel": self.base_ang_vel,
-                    "dof_pos": self.dof_pos,
-                    "dof_vel": self.dof_vel,
-                    "projected_gravity": self.projected_gravity,
-                    "torque": self.torque,
-                    "dof_pos_limits": self.dof_pos_limits,
-                    "commands": self.commands,
-                }
-            )
+            reward = func(state_dict)
             if reward.sum() >= 0:
                 reward_total_pos += reward
             else:
@@ -449,6 +440,18 @@ class LeggedRobotEnv(BaseEnv):
         return self._args.robot_args.action_scale
 
     @property
+    def action(self) -> torch.Tensor:
+        return self._action
+
+    @property
+    def decimation(self) -> int:
+        return self._args.robot_args.decimation
+
+    @property
+    def dt(self) -> float:
+        return self._scene.scene.dt * self._args.robot_args.decimation
+
+    @property
     def actor_obs_dim(self) -> int:
         return get_space_dim(self._actor_observation_space)
 
@@ -475,6 +478,11 @@ class LeggedRobotEnv(BaseEnv):
     @property
     def dof_vel(self) -> torch.Tensor:
         return self._robot.dof_vel
+
+    @property
+    def reward_required_keys(self) -> set[str]:
+        """Union of all keys required by configured reward terms."""
+        return self._reward_required_keys
 
     # @property
     # def depth_shape(self):

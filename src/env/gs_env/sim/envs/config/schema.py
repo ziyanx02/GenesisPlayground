@@ -43,3 +43,8 @@ class LeggedRobotEnvArgs(EnvArgs):
     obs_noises: dict[str, float]
     actor_obs_terms: list[str]
     critic_obs_terms: list[str]
+
+
+class WalkingEnvArgs(LeggedRobotEnvArgs):
+    command_resample_time: float = 10.0
+    commands_range: tuple[tuple[float, float], ...]
