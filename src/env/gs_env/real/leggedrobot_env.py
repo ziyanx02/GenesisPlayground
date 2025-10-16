@@ -69,15 +69,21 @@ class UnitreeLeggedEnv(BaseGymRobot):
 
     @property
     def default_dof_pos(self) -> torch.Tensor:
-        return torch.tensor(self.controller.default_dof_pos, device=self._device)[None, :]
+        return torch.tensor(
+            self.controller.default_dof_pos, device=self._device, dtype=torch.float32
+        )[None, :]
 
     @property
     def dof_pos(self) -> torch.Tensor:
-        return torch.tensor(self.controller.joint_pos, device=self._device)[None, :]
+        return torch.tensor(self.controller.joint_pos, device=self._device, dtype=torch.float32)[
+            None, :
+        ]
 
     @property
     def dof_vel(self) -> torch.Tensor:
-        return torch.tensor(self.controller.joint_vel, device=self._device)[None, :]
+        return torch.tensor(self.controller.joint_vel, device=self._device, dtype=torch.float32)[
+            None, :
+        ]
 
     @property
     def projected_gravity(self) -> torch.Tensor:
@@ -85,11 +91,13 @@ class UnitreeLeggedEnv(BaseGymRobot):
             v=np.array([0, 0, -1]),
             q=quaternions.qinverse(self.controller.quat),
         )
-        return torch.tensor(projected_gravity, device=self._device)[None, :]
+        return torch.tensor(projected_gravity, device=self._device, dtype=torch.float32)[None, :]
 
     @property
     def base_ang_vel(self) -> torch.Tensor:
-        return torch.tensor(self.controller.ang_vel, device=self._device)[None, :]
+        return torch.tensor(self.controller.ang_vel, device=self._device, dtype=torch.float32)[
+            None, :
+        ]
 
     @property
     def device(self) -> torch.device:
