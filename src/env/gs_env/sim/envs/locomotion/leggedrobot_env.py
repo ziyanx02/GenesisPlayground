@@ -127,23 +127,23 @@ class LeggedRobotEnv(BaseEnv):
         self.base_lin_vel = torch.zeros(self.num_envs, 3, dtype=torch.float32, device=self._device)
         self.base_ang_vel = torch.zeros(self.num_envs, 3, dtype=torch.float32, device=self._device)
 
-        global_gravity = torch.tensor([0.0, 0.0, -1.0], device=self.device, dtype=torch.float32)
+        global_gravity = torch.tensor([0.0, 0.0, -1.0], device=self._device, dtype=torch.float32)
         self.global_gravity = global_gravity[None, :].repeat(self.num_envs, 1)
         self.projected_gravity = torch.zeros(
-            (self.num_envs, 3), device=self.device, dtype=torch.float32
+            (self.num_envs, 3), device=self._device, dtype=torch.float32
         )
 
         self.link_contact_forces = torch.zeros(
-            (self.num_envs, self._robot.n_links, 3), device=self.device, dtype=torch.float32
+            (self.num_envs, self._robot.n_links, 3), device=self._device, dtype=torch.float32
         )
         self.link_positions = torch.zeros(
-            (self.num_envs, self._robot.n_links, 3), device=self.device, dtype=torch.float32
+            (self.num_envs, self._robot.n_links, 3), device=self._device, dtype=torch.float32
         )
         self.link_quaternions = torch.zeros(
-            (self.num_envs, self._robot.n_links, 4), device=self.device, dtype=torch.float32
+            (self.num_envs, self._robot.n_links, 4), device=self._device, dtype=torch.float32
         )
         self.link_velocities = torch.zeros(
-            (self.num_envs, self._robot.n_links, 3), device=self.device, dtype=torch.float32
+            (self.num_envs, self._robot.n_links, 3), device=self._device, dtype=torch.float32
         )
 
         #
@@ -304,7 +304,7 @@ class LeggedRobotEnv(BaseEnv):
         self.base_euler[:] = quat_to_euler(base_quat_rel)
         self.projected_gravity[:] = quat_apply(quat_inv(self.base_quat), self.global_gravity)
         inv_quat_yaw = quat_from_angle_axis(
-            -self.base_euler[:, 2], torch.tensor([0, 0, 1], device=self.device, dtype=torch.float)
+            -self.base_euler[:, 2], torch.tensor([0, 0, 1], device=self._device, dtype=torch.float)
         )
         self.base_lin_vel[:] = quat_apply(inv_quat_yaw, self._robot.get_vel())
         self.base_ang_vel[:] = quat_apply(quat_inv(base_quat_rel), self._robot.get_ang())
@@ -319,6 +319,9 @@ class LeggedRobotEnv(BaseEnv):
         reward_total_pos = torch.zeros(self.num_envs, device=self._device)
         reward_total_neg = torch.zeros(self.num_envs, device=self._device)
         reward_dict = {}
+        if self._eval_mode:
+            return reward_total, reward_dict
+
         state_dict = {key: getattr(self, key) for key in self.reward_required_keys}
         for key, func in self._reward_functions.items():
             reward = func(state_dict)
@@ -398,21 +401,42 @@ class LeggedRobotEnv(BaseEnv):
             new_vel[:, :2] = new_vel[:, :2] + delta_xy
             self._robot.set_dofs_velocity(new_vel, envs_idx=envs_idx, dofs_idx_local=[0, 1, 2])
 
-    def _random_push(self, envs_idx: torch.Tensor) -> None:
-        if envs_idx.numel() > 0:
-            # sample delta v in [-2, 2] for x and y
-            delta_xy = torch.rand((len(envs_idx), 2), device=self._device) * 2.0 - 1.0
-            cur_vel = self._robot.get_vel()[envs_idx]  # world-frame linear velocity (x,y,z)
-            new_vel = cur_vel.clone()
-            new_vel[:, :2] = new_vel[:, :2] + delta_xy
-            self._robot.set_dofs_velocity(new_vel, envs_idx=envs_idx, dofs_idx_local=[0, 1, 2])
-
     def eval(self) -> None:
         self._eval_mode = True
 
     def step_visualizer(self) -> None:
         if self.scene.scene.visualizer is not None:
             self.scene.scene.visualizer.update()
+
+    def get_link_idx_local_by_name(self, name: str) -> int:
+        return self._robot.get_link_idx_local_by_name(name)
+
+    def set_link_pose(
+        self, link_idx_local: int, pos: torch.Tensor, quat: torch.Tensor | None = None
+    ) -> None:
+        assert self.num_envs == 1, "Only support single environment for setting link pose"
+        assert pos.shape == (3,), "Position must be a 3D vector"
+        if quat is not None:
+            assert quat.shape == (4,), "Quaternion must be a 4D vector"
+            self._update_buffers()
+            link_quat = self.link_quaternions[0][link_idx_local]
+            print("link_quat", link_quat)
+            print("quat", quat)
+            print("base_quat", self.base_quat[0])
+            rotation_quat = quat_mul(quat, quat_inv(link_quat))
+            print("rotation_quat", rotation_quat)
+            base_quat = quat_mul(rotation_quat, self.base_quat[0])
+            print("base_quat", base_quat)
+            self._robot.set_state(quat=base_quat)
+        self._update_buffers()
+        link_pos = self.link_positions[0][link_idx_local]
+        base_pos = self.base_pos[0] + pos - link_pos
+        self._robot.set_state(pos=base_pos)
+
+    def set_dof_pos(self, dof_pos: torch.Tensor) -> None:
+        assert self.num_envs == 1, "Only support single environment for setting dof pos"
+        assert dof_pos.shape == (self._robot.dof_dim,), "Dof pos must match the number of joints"
+        self._robot.set_state(dof_pos=dof_pos)
 
     @property
     def scene(self) -> FlatScene:
