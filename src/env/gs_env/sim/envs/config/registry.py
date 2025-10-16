@@ -111,7 +111,7 @@ EnvArgsRegistry["g1_walk"] = LeggedRobotEnvArgs(
     },
     obs_noises={
         "dof_pos": 0.01,
-        "dof_vel": 0.2,
+        "dof_vel": 0.02,
         "projected_gravity": 0.05,
         "base_ang_vel": 0.2,
     },

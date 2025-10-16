@@ -51,6 +51,8 @@ class PPO(BaseAlgo):
         # Adaptive learning rate tracking
         self._current_lr = cfg.lr
 
+        self.use_clipped_value_loss = cfg.use_clipped_value_loss
+
         #
         self._build_actor_critic()
         self._build_rollouts()
@@ -206,6 +208,7 @@ class PPO(BaseAlgo):
         old_sigma = mini_batch[GAEBufferKey.SIGMA]
         advantage = mini_batch[GAEBufferKey.ADVANTAGES]
         returns = mini_batch[GAEBufferKey.RETURNS]
+        target_values = mini_batch[GAEBufferKey.VALUES]
 
         #
         new_log_prob = self._actor.evaluate_log_prob(actor_obs, act)
@@ -242,7 +245,16 @@ class PPO(BaseAlgo):
 
         # Calculate value loss
         values = self._critic(critic_obs)
-        value_loss = (returns - values).pow(2).mean()
+
+        if self.use_clipped_value_loss:
+            clipped_values = target_values + (values - target_values).clamp(
+                -self.cfg.clip_ratio, self.cfg.clip_ratio
+            )
+            value_loss = (values - returns).pow(2)
+            clipped_value_loss = (clipped_values - returns).pow(2)
+            value_loss = torch.max(value_loss, clipped_value_loss).mean()
+        else:
+            value_loss = (returns - values).pow(2).mean()
 
         # Calculate entropy loss
         entropy = self._actor.entropy_on(actor_obs)
