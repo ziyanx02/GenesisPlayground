@@ -1,4 +1,9 @@
-from gs_env.sim.envs.config.schema import EnvArgs, GenesisInitArgs, LeggedRobotEnvArgs
+from gs_env.sim.envs.config.schema import (
+    EnvArgs,
+    GenesisInitArgs,
+    LeggedRobotEnvArgs,
+    WalkingEnvArgs,
+)
 from gs_env.sim.objects.config.registry import ObjectArgsRegistry
 from gs_env.sim.robots.config.registry import RobotArgsRegistry
 from gs_env.sim.scenes.config.registry import SceneArgsRegistry
@@ -61,7 +66,7 @@ EnvArgsRegistry["pick_cube_default"] = EnvArgs(
 )
 
 
-EnvArgsRegistry["g1_walk"] = LeggedRobotEnvArgs(
+EnvArgsRegistry["g1_walk"] = WalkingEnvArgs(
     env_name="WalkingEnv",
     gs_init_args=GenesisInitArgsRegistry["default"],
     scene_args=SceneArgsRegistry["flat_scene_legged"],
@@ -134,6 +139,12 @@ EnvArgsRegistry["g1_walk"] = LeggedRobotEnvArgs(
         "feet_height",
         "feet_contact_force",
     ],
+    command_resample_time=10.0,
+    commands_range=(
+        (-1.0, 1.0),  # Forward/Backward
+        (0.0, 0.0),  # Left/Right
+        (-1.0, 1.0),  # Turn
+    ),
 )
 
 

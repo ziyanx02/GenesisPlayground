@@ -5,7 +5,7 @@ from gs_env.common.utils.math_utils import (
     quat_apply,
     quat_inv,
 )
-from gs_env.sim.envs.config.schema import LeggedRobotEnvArgs
+from gs_env.sim.envs.config.schema import WalkingEnvArgs
 from gs_env.sim.envs.locomotion.leggedrobot_env import LeggedRobotEnv
 
 _DEFAULT_DEVICE = torch.device("cpu")
@@ -18,13 +18,14 @@ class WalkingEnv(LeggedRobotEnv):
 
     def __init__(
         self,
-        args: LeggedRobotEnvArgs,
+        args: WalkingEnvArgs,
         num_envs: int,
         show_viewer: bool = False,
         device: torch.device = _DEFAULT_DEVICE,
         eval_mode: bool = False,
     ) -> None:
         # Initialize base legged-robot environment
+        self._args = args
         super().__init__(
             args=args,
             num_envs=num_envs,
@@ -71,11 +72,17 @@ class WalkingEnv(LeggedRobotEnv):
             dtype=torch.float32,
         )
 
+        # Additional buffers for walking environment
+        self.commands_range = self._args.commands_range
+        self.commands = torch.zeros(
+            (self.num_envs, len(self.commands_range)), device=self.device, dtype=torch.float32
+        )
+
         # Let base class set up common buffers, spaces, and rendering
         super()._init()
 
         # Additional timers specific to this environment
-        self._command_resample_time = 10.0  # seconds
+        self._command_resample_time = self._args.command_resample_time  # seconds
         self.time_since_resample = torch.zeros(self.num_envs, device=self._device)
 
     def reset_idx(self, envs_idx: torch.IntTensor) -> None:
@@ -89,7 +96,7 @@ class WalkingEnv(LeggedRobotEnv):
         self._action = action
         self._action_buf[:] = torch.cat([self._action_buf[:, :, 1:], action.unsqueeze(-1)], dim=-1)
         exec_action = self._action_buf[:, :, 0]
-        exec_action *= self._args.robot_args.action_scale
+        exec_action *= self.action_scale
 
         self.torque *= 0
 
@@ -131,48 +138,10 @@ class WalkingEnv(LeggedRobotEnv):
             quat_inv(feet_quaternions), self.global_gravity.repeat(2, 1)
         ).reshape(self.num_envs, len(self._robot.foot_links_idx), 3)
 
-    def get_reward(self) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
-        reward_total = torch.zeros(self.num_envs, device=self._device)
-        reward_total_pos = torch.zeros(self.num_envs, device=self._device)
-        reward_total_neg = torch.zeros(self.num_envs, device=self._device)
-        reward_dict = {}
-        for key, func in self._reward_functions.items():
-            reward = func(
-                {
-                    "action": self._action,
-                    "last_action": self.last_action,
-                    "last_last_action": self.last_last_action,
-                    "base_pos": self.base_pos,
-                    "lin_vel": self.base_lin_vel,
-                    "ang_vel": self.base_ang_vel,
-                    "dof_pos": self.dof_pos,
-                    "dof_vel": self.dof_vel,
-                    "projected_gravity": self.projected_gravity,
-                    "torque": self.torque,
-                    "dof_pos_limits": self.dof_pos_limits,
-                    "commands": self.commands,
-                    "feet_first_contact": self.feet_first_contact,
-                    "feet_air_time": self.feet_air_time,
-                    "feet_height": self.feet_height,
-                    "feet_z_velocity": self.feet_z_velocity,
-                    "feet_contact_force": self.feet_contact_force,
-                    "feet_orientation": self.feet_orientation,
-                }
-            )
-            if reward.sum() >= 0:
-                reward_total_pos += reward
-            else:
-                reward_total_neg += reward
-            reward_dict[f"{key}"] = reward.clone()
-        reward_total = reward_total_pos * torch.exp(reward_total_neg)
-        reward_dict["Total"] = reward_total
-        reward_dict["TotalPositive"] = reward_total_pos
-        reward_dict["TotalNegative"] = reward_total_neg
-
-        return reward_total, reward_dict
-
     def _resample_commands(self, envs_idx: torch.Tensor) -> None:
-        self.commands[envs_idx, :] = torch.rand(len(envs_idx), 3, device=self._device) * 2 - 1
-        self.commands[:, 1] *= 0
-        self.commands[:, :2] *= torch.norm(self.commands[:, :2], dim=-1, keepdim=True) > 0.3
-        self.commands[:, 2] *= torch.abs(self.commands[:, 2]) > 0.3
+        for i in range(len(self.commands_range)):
+            self.commands[envs_idx, i] = (
+                torch.rand(len(envs_idx), device=self._device)
+                * (self.commands_range[i][1] - self.commands_range[i][0])
+                + self.commands_range[i][0]
+            )

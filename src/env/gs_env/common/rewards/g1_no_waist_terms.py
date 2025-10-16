@@ -159,10 +159,10 @@ class LinVelYPenalty(RewardTerm):
     Penalize the linear velocity in the Y direction.
 
     Args:
-        lin_vel: Linear velocity tensor of shape (B, 3) where B is the batch size.
+        base_lin_vel: Linear velocity tensor of shape (B, 3) where B is the batch size.
     """
 
-    required_keys = ("lin_vel",)
+    required_keys = ("base_lin_vel",)
 
-    def _compute(self, lin_vel: torch.Tensor) -> torch.Tensor:  # type: ignore
-        return -torch.square(lin_vel[:, 1])
+    def _compute(self, base_lin_vel: torch.Tensor) -> torch.Tensor:  # type: ignore
+        return -torch.square(base_lin_vel[:, 1])
