@@ -509,7 +509,6 @@ class DataDescriptions:
     def add_data(
         self,
         new_data: MarkerSetDescription
-        | RBMarker
         | RigidBodyDescription
         | SkeletonDescription
         | ForcePlateDescription
@@ -543,7 +542,6 @@ class DataDescriptions:
         self, list_name: str, pos_num: int
     ) -> (
         MarkerSetDescription
-        | RBMarker
         | RigidBodyDescription
         | SkeletonDescription
         | ForcePlateDescription
@@ -634,7 +632,6 @@ def test_hash(
     test_name: str,
     test_hash_str: str,
     test_object: MarkerSetDescription
-    | RBMarker
     | RigidBodyDescription
     | SkeletonDescription
     | ForcePlateDescription
@@ -662,7 +659,6 @@ def test_hash2(
     test_name: str,
     test_hash_str: str,
     test_object: MarkerSetDescription
-    | RBMarker
     | RigidBodyDescription
     | SkeletonDescription
     | ForcePlateDescription
@@ -722,7 +718,6 @@ def get_as_string(input_str: str | bytes) -> str:
 
 def get_data_sub_packet_type(
     new_data: MarkerSetDescription
-    | RBMarker
     | RigidBodyDescription
     | SkeletonDescription
     | ForcePlateDescription
@@ -849,8 +844,8 @@ def generate_device_description(dev_num: int = 0) -> DeviceDescription:
 
 def generate_camera_description(cam_num: int = 0) -> CameraDescription:
     """generate_camera_description - Generate Test CameraDescription data"""
-    pos_vec3 = [1, 2, 3]
-    orientation_quat = [1, 2, 3, 4]
+    pos_vec3 = [1.0, 2.0, 3.0]
+    orientation_quat = [1.0, 2.0, 3.0, 4.0]
     return CameraDescription(f"Camera_{cam_num:3.3d}", pos_vec3, orientation_quat)
 
 
