@@ -73,7 +73,6 @@ EnvArgsRegistry["g1_walk"] = LeggedRobotEnvArgs(
         ### Velocity Tracking ###
         "LinVelXYReward": 10.0,
         "AngVelZReward": 10.0,
-        "LinVelYPenalty": 20.0,
         "LinVelZPenalty": 20.0,
         "AngVelXYPenalty": 5.0,
         ### Pose Tracking ###
@@ -86,7 +85,6 @@ EnvArgsRegistry["g1_walk"] = LeggedRobotEnvArgs(
         "ActionLimitPenalty": 0.1,
         ### Motion Constraints ###
         "AnkleTorquePenalty": 0.001,
-        "StandStillAnkleTorquePenalty": 0.01,
         "HipYawPenalty": 10.0,
         "HipRollPenalty": 100.0,
         # "UpperBodyDofPenalty": 3.0,
@@ -99,6 +97,7 @@ EnvArgsRegistry["g1_walk"] = LeggedRobotEnvArgs(
         "FeetOrientationPenalty": 30.0,
         "StandStillFeetContactPenalty": 3e-4,
         "StandStillActionRatePenalty": 1.0,
+        # "StandStillAnkleTorquePenalty": 0.01,
         "G1FeetContactForceLimitPenalty": 1e-4,
     },
     img_resolution=(480, 270),
