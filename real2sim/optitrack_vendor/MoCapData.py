@@ -53,10 +53,10 @@ class MarkerData:
         self.model_name = ""
         self.marker_pos_list = []
 
-    def set_model_name(self, model_name: str) -> None:
+    def set_model_name(self, model_name: str | bytes) -> None:
         self.model_name = model_name
 
-    def add_pos(self, pos: list[float]) -> int:
+    def add_pos(self, pos: list[float] | tuple[float, float, float]) -> int:
         self.marker_pos_list.append(copy.deepcopy(pos))
         return len(self.marker_pos_list)
 
@@ -163,7 +163,12 @@ class RigidBodyMarker:
 
 
 class RigidBody:
-    def __init__(self, new_id: int, pos: list[float], rot: list[float]) -> None:
+    def __init__(
+        self,
+        new_id: int,
+        pos: list[float] | tuple[float, float, float],
+        rot: list[float] | tuple[float, float, float, float],
+    ) -> None:
         self.id_num = new_id
         self.pos = pos
         self.rot = rot
@@ -422,7 +427,7 @@ class LabeledMarker:
     def __init__(
         self,
         new_id: int,
-        pos: list[float],
+        pos: list[float] | tuple[float, float, float],
         size: tuple[float, float, float] | float = 0.0,
         param: int = 0,
         residual: float = 0.0,

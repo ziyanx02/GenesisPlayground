@@ -42,13 +42,13 @@ class MarkerSetDescription:
         self.marker_set_name = "Not Set"
         self.marker_names_list = []
 
-    def set_name(self, new_name: str) -> None:
+    def set_name(self, new_name: str | bytes) -> None:
         self.marker_set_name = new_name
 
     def get_num_markers(self) -> int:
         return len(self.marker_names_list)
 
-    def add_marker_name(self, marker_name: str) -> int:
+    def add_marker_name(self, marker_name: str | bytes) -> int:
         self.marker_names_list.append(copy.copy(marker_name))
         return self.get_num_markers()
 
@@ -72,7 +72,7 @@ class RBMarker:
         self,
         marker_name: str = "",
         active_label: int = 0,
-        pos: list[float] | None = None,
+        pos: list[float] | tuple[float, float, float] | None = None,
     ) -> None:
         if pos is None:
             pos = [0.0, 0.0, 0.0]
@@ -104,7 +104,7 @@ class RigidBodyDescription:
         self.rb_marker_list = []
         self.rb_num = -1
 
-    def set_name(self, new_name: str) -> None:
+    def set_name(self, new_name: str | bytes) -> None:
         self.sz_name = new_name
 
     def set_id(self, new_id: int) -> None:
@@ -149,7 +149,7 @@ class SkeletonDescription:
         self.id_num = new_id
         self.rigid_body_description_list = []
 
-    def set_name(self, new_name: str) -> None:
+    def set_name(self, new_name: str | bytes) -> None:
         self.name = new_name
 
     def set_id(self, new_id: int) -> None:
@@ -189,7 +189,7 @@ class ForcePlateDescription:
     def set_id(self, new_id: int) -> None:
         self.id_num = new_id
 
-    def set_serial_number(self, serial_number: str) -> None:
+    def set_serial_number(self, serial_number: str | bytes) -> None:
         self.serial_number = serial_number
 
     def set_dimensions(self, width: float, length: float) -> None:
@@ -211,7 +211,7 @@ class ForcePlateDescription:
     def set_channel_data_type(self, channel_data_type: int) -> None:
         self.channel_data_type = channel_data_type
 
-    def add_channel_name(self, channel_name: str) -> int:
+    def add_channel_name(self, channel_name: str | bytes) -> int:
         self.channel_list.append(copy.deepcopy(channel_name))
         return len(self.channel_list)
 
@@ -278,7 +278,12 @@ class DeviceDescription:
     """Device Description class"""
 
     def __init__(
-        self, new_id: int, name: str, serial_number: str, device_type: int, channel_data_type: int
+        self,
+        new_id: int,
+        name: str | bytes,
+        serial_number: str | bytes,
+        device_type: int,
+        channel_data_type: int,
     ) -> None:
         self.id_num = new_id
         self.name = name
@@ -295,7 +300,7 @@ class DeviceDescription:
         """Set the Device name"""
         self.name = name
 
-    def add_channel_name(self, channel_name: str) -> int:
+    def add_channel_name(self, channel_name: str | bytes) -> int:
         """Add channel name to channel_list"""
         self.channel_list.append(channel_name)
         return len(self.channel_list)
@@ -323,7 +328,10 @@ class CameraDescription:
     """Camera Description class"""
 
     def __init__(
-        self, name: str, position_vec3: list[float], orientation_quat: list[float]
+        self,
+        name: str | bytes,
+        position_vec3: list[float] | tuple[float, float, float],
+        orientation_quat: list[float] | tuple[float, float, float, float],
     ) -> None:
         self.name = name
         self.position = position_vec3
@@ -344,9 +352,9 @@ class MarkerDescription:
 
     def __init__(
         self,
-        name: str,
+        name: str | bytes,
         marker_id: int,
-        position: list[float],
+        position: list[float] | tuple[float, float, float],
         marker_size: float,
         marker_params: int,
     ) -> None:
@@ -374,7 +382,7 @@ class AssetDescription:
 
     def __init__(
         self,
-        name: str,
+        name: str | bytes,
         assetType: int,
         assetID: int,
         rigidbodyArray: list[RigidBodyDescription],
