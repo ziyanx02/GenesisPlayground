@@ -9,13 +9,13 @@ class LinVelXYReward(RewardTerm):
     Reward the linear velocity in the X and Y directions.
 
     Args:
-        lin_vel: Linear velocity tensor of shape (B, 3) where B is the batch size.
+        base_lin_vel: Linear velocity tensor of shape (B, 3) where B is the batch size.
     """
 
-    required_keys = ("lin_vel", "commands")
+    required_keys = ("base_lin_vel", "commands")
 
-    def _compute(self, lin_vel: torch.Tensor, commands: torch.Tensor) -> torch.Tensor:  # type: ignore
-        return torch.exp(-torch.sum(torch.square(lin_vel[:, :2] - commands[:, :2]), dim=-1))
+    def _compute(self, base_lin_vel: torch.Tensor, commands: torch.Tensor) -> torch.Tensor:  # type: ignore
+        return torch.exp(-torch.sum(torch.square(base_lin_vel[:, :2] - commands[:, :2]), dim=-1))
 
 
 class AngVelZReward(RewardTerm):
@@ -23,14 +23,14 @@ class AngVelZReward(RewardTerm):
     Reward the angular velocity in the Z direction.
 
     Args:
-        ang_vel: Angular velocity tensor of shape (B, 3) where B is the batch size.
+        base_ang_vel: Angular velocity tensor of shape (B, 3) where B is the batch size.
         command_ang_vel: Commanded angular velocity tensor of shape (B,) representing desired yaw rate.
     """
 
-    required_keys = ("ang_vel", "commands")
+    required_keys = ("base_ang_vel", "commands")
 
-    def _compute(self, ang_vel: torch.Tensor, commands: torch.Tensor) -> torch.Tensor:  # type: ignore
-        return torch.exp(-torch.square(ang_vel[:, 2] - commands[:, 2]))
+    def _compute(self, base_ang_vel: torch.Tensor, commands: torch.Tensor) -> torch.Tensor:  # type: ignore
+        return torch.exp(-torch.square(base_ang_vel[:, 2] - commands[:, 2]))
 
 
 class LinVelZPenalty(RewardTerm):
@@ -38,13 +38,13 @@ class LinVelZPenalty(RewardTerm):
     Penalize the linear velocity in the Z direction.
 
     Args:
-        lin_vel: Linear velocity tensor of shape (B, 3) where B is the batch size.
+        base_lin_vel: Linear velocity tensor of shape (B, 3) where B is the batch size.
     """
 
-    required_keys = ("lin_vel",)
+    required_keys = ("base_lin_vel",)
 
-    def _compute(self, lin_vel: torch.Tensor) -> torch.Tensor:  # type: ignore
-        return -torch.square(lin_vel[:, 2])
+    def _compute(self, base_lin_vel: torch.Tensor) -> torch.Tensor:  # type: ignore
+        return -torch.square(base_lin_vel[:, 2])
 
 
 class AngVelXYPenalty(RewardTerm):
@@ -52,13 +52,13 @@ class AngVelXYPenalty(RewardTerm):
     Penalize the angular velocity in the X and Y directions.
 
     Args:
-        ang_vel: Angular velocity tensor of shape (B, 3) where B is the batch size.
+        base_ang_vel: Angular velocity tensor of shape (B, 3) where B is the batch size.
     """
 
-    required_keys = ("ang_vel",)
+    required_keys = ("base_ang_vel",)
 
-    def _compute(self, ang_vel: torch.Tensor) -> torch.Tensor:  # type: ignore
-        return -torch.sum(torch.square(ang_vel[:, :2]), dim=-1)
+    def _compute(self, base_ang_vel: torch.Tensor) -> torch.Tensor:  # type: ignore
+        return -torch.sum(torch.square(base_ang_vel[:, :2]), dim=-1)
 
 
 class OrientationPenalty(RewardTerm):
