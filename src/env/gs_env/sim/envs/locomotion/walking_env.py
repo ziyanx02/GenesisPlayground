@@ -38,44 +38,44 @@ class WalkingEnv(LeggedRobotEnv):
         # Pre-parent: allocate feet-related buffers required by observation terms
         self.feet_height = torch.zeros(
             (self.num_envs, len(self._robot.foot_links_idx)),
-            device=self.device,
+            device=self._device,
             dtype=torch.float32,
         )
         self.feet_z_velocity = torch.zeros(
             (self.num_envs, len(self._robot.foot_links_idx)),
-            device=self.device,
+            device=self._device,
             dtype=torch.float32,
         )
         self.feet_orientation = torch.zeros(
             (self.num_envs, len(self._robot.foot_links_idx), 3),
-            device=self.device,
+            device=self._device,
             dtype=torch.float32,
         )
         self.feet_contact = torch.zeros(
             (self.num_envs, len(self._robot.foot_links_idx)),
-            device=self.device,
+            device=self._device,
             dtype=torch.float32,
         )
         self.feet_contact_force = torch.zeros(
             (self.num_envs, len(self._robot.foot_links_idx)),
-            device=self.device,
+            device=self._device,
             dtype=torch.float32,
         )
         self.feet_first_contact = torch.zeros(
             (self.num_envs, len(self._robot.foot_links_idx)),
-            device=self.device,
+            device=self._device,
             dtype=torch.float32,
         )
         self.feet_air_time = torch.zeros(
             (self.num_envs, len(self._robot.foot_links_idx)),
-            device=self.device,
+            device=self._device,
             dtype=torch.float32,
         )
 
         # Additional buffers for walking environment
         self.commands_range = self._args.commands_range
         self.commands = torch.zeros(
-            (self.num_envs, len(self.commands_range)), device=self.device, dtype=torch.float32
+            (self.num_envs, len(self.commands_range)), device=self._device, dtype=torch.float32
         )
 
         # Let base class set up common buffers, spaces, and rendering
