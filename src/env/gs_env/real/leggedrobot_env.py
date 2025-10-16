@@ -16,6 +16,7 @@ class UnitreeLeggedEnv(BaseGymRobot):
         self,
         args: LeggedRobotEnvArgs,
         action_scale: float = 0.0,
+        interactive: bool = False,
         device: torch.device = _DEFAULT_DEVICE,
     ) -> None:
         super().__init__()

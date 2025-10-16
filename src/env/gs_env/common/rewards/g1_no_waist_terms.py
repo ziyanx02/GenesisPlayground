@@ -110,7 +110,9 @@ class StandStillAnkleTorquePenalty(RewardTerm):
     required_keys = ("torque", "commands")
 
     def _compute(self, torque: torch.Tensor, commands: torch.Tensor) -> torch.Tensor:  # type: ignore
-        return -torch.sum(torch.square(torque[:, [4, 5, 10, 11]]), dim=-1) * (torch.norm(commands, dim=1) < 0.1)
+        return -torch.sum(torch.square(torque[:, [4, 5, 10, 11]]), dim=-1) * (
+            torch.norm(commands, dim=1) < 0.1
+        )
 
 
 class G1FeetHeightPenalty(FeetHeightPenalty):
@@ -150,3 +152,17 @@ class FeetOrientationPenalty(RewardTerm):
 
 class G1FeetContactForceLimitPenalty(FeetContactForceLimitPenalty):
     contact_force_limit = 300.0
+
+
+class LinVelYPenalty(RewardTerm):
+    """
+    Penalize the linear velocity in the Y direction.
+
+    Args:
+        base_lin_vel: Linear velocity tensor of shape (B, 3) where B is the batch size.
+    """
+
+    required_keys = ("base_lin_vel",)
+
+    def _compute(self, base_lin_vel: torch.Tensor) -> torch.Tensor:  # type: ignore
+        return -torch.square(base_lin_vel[:, 1])

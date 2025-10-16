@@ -46,7 +46,7 @@ class LeggedRobotBase(BaseGymRobot):
         # == Genesis configurations ==
         material = gs.materials.Rigid(**args.material_args.model_dump())
         morph = gs.morphs.URDF(**args.morph_args.model_dump())
-        self._robot: RigidEntity = scene.add_entity(
+        self._robot: RigidEntity = scene.add_entity(  # type: ignore
             material=material,
             morph=morph,
             visualize_contact=args.visualize_contact,
@@ -116,7 +116,7 @@ class LeggedRobotBase(BaseGymRobot):
         )
 
         # == set up control dispatch ==
-        self._dispatch: dict[CtrlType, Callable[[BaseAction], None]] = {
+        self._dispatch: dict[CtrlType, Callable[[BaseAction], None]] = {  # type: ignore
             CtrlType.JOINT_POSITION.value: self._apply_joint_pos,
             CtrlType.DR_JOINT_POSITION.value: self._apply_dr_joint_pos,
         }
@@ -136,7 +136,7 @@ class LeggedRobotBase(BaseGymRobot):
         self._torque_limits = self._robot.get_dofs_force_range(self._dofs_idx_local)[1]
 
     def _init_domain_randomization(self) -> None:
-        envs_idx: torch.IntTensor = torch.arange(0, self._num_envs, device=self._device)
+        envs_idx: torch.IntTensor = torch.arange(0, self._num_envs, device=self._device)  # type: ignore
         self._randomize_rigids(envs_idx)
         self._randomize_controls(envs_idx)
 
@@ -196,12 +196,14 @@ class LeggedRobotBase(BaseGymRobot):
             torch.rand(len(envs_idx), self._dof_dim) * (max_offset - min_offset) + min_offset
         )
 
-    def reset(self, envs_idx: torch.IntTensor) -> None:
+    def reset(self, envs_idx: torch.Tensor | None = None) -> None:
+        if envs_idx is None:
+            envs_idx = torch.arange(self._num_envs, device=self._device)
         if len(envs_idx) == 0:
             return
         self.reset_idx(envs_idx)
 
-    def reset_idx(self, envs_idx: torch.IntTensor) -> None:
+    def reset_idx(self, envs_idx: torch.Tensor) -> None:
         self._robot.set_pos(
             self._default_pos[None].repeat(len(envs_idx), 1),
             envs_idx=envs_idx,
@@ -223,21 +225,26 @@ class LeggedRobotBase(BaseGymRobot):
 
     def set_state(
         self,
-        pos: torch.Tensor,
-        quat: torch.Tensor,
-        dof_pos: torch.Tensor,
-        envs_idx: torch.IntTensor,
+        envs_idx: torch.Tensor | None = None,
+        pos: torch.Tensor | None = None,
+        quat: torch.Tensor | None = None,
+        dof_pos: torch.Tensor | None = None,
         lin_vel: torch.Tensor | None = None,
         ang_vel: torch.Tensor | None = None,
         dof_vel: torch.Tensor | None = None,
     ) -> None:
-        self._robot.set_pos(pos, envs_idx=envs_idx)
-        self._robot.set_quat(quat, envs_idx=envs_idx)
-        dof_pos = torch.clamp(dof_pos, self._dof_pos_limits[:, 0], self._dof_pos_limits[:, 1])
-        self._robot.set_dofs_position(
-            dof_pos, envs_idx=envs_idx, dofs_idx_local=self._dofs_idx_local
-        )
-        self._dof_pos[envs_idx] = dof_pos.clone()
+        if envs_idx is None:
+            envs_idx = torch.arange(self._num_envs, device=self._device)
+        if pos is not None:
+            self._robot.set_pos(pos, envs_idx=envs_idx)
+        if quat is not None:
+            self._robot.set_quat(quat, envs_idx=envs_idx)
+        if dof_pos is not None:
+            dof_pos = torch.clamp(dof_pos, self._dof_pos_limits[:, 0], self._dof_pos_limits[:, 1])
+            self._robot.set_dofs_position(
+                dof_pos, envs_idx=envs_idx, dofs_idx_local=self._dofs_idx_local
+            )
+            self._dof_pos[envs_idx] = dof_pos.clone()
         if lin_vel is not None:
             self._robot.set_dofs_velocity(lin_vel, envs_idx=envs_idx, dofs_idx_local=[0, 1, 2])
         else:
@@ -311,6 +318,9 @@ class LeggedRobotBase(BaseGymRobot):
         q_force = torch.clamp(q_force, -self._torque_limits, self._torque_limits)
         self._torque[:] = q_force
         self._robot.control_dofs_force(force=q_force, dofs_idx_local=self._dofs_idx_local)
+
+    def get_link_idx_local_by_name(self, name: str) -> int:
+        return self._robot.get_link(name).idx_local
 
     @property
     def action_space(self) -> spaces.Box:
@@ -400,9 +410,9 @@ class HumanoidRobotBase(LeggedRobotBase):
         num_envs: int,
         scene: gs.Scene,
         args: ManipulatorRobotArgs | QuadrupedRobotArgs | HumanoidRobotArgs,
-        device: str = "cpu",
+        device: torch.device,
     ) -> None:
-        super().__init__(num_envs, scene, args, device)
+        super().__init__(num_envs, scene, args, device)  # type: ignore
 
 
 class G1Robot(HumanoidRobotBase):
@@ -411,6 +421,6 @@ class G1Robot(HumanoidRobotBase):
         num_envs: int,
         scene: gs.Scene,
         args: ManipulatorRobotArgs | QuadrupedRobotArgs | HumanoidRobotArgs,
-        device: str = "cpu",
+        device: torch.device,
     ) -> None:
-        super().__init__(num_envs, scene=scene, args=args, device=device)
+        super().__init__(num_envs, scene=scene, args=args, device=device)  # type: ignore
