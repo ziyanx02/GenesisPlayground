@@ -79,7 +79,7 @@ EnvArgsRegistry["g1_walk"] = WalkingEnvArgs(
         "LinVelXYReward": 10.0,
         "AngVelZReward": 10.0,
         "LinVelZPenalty": 20.0,
-        "AngVelXYPenalty": 5.0,
+        "AngVelXYPenalty": 1.0,
         ### Pose Tracking ###
         "OrientationPenalty": 100.0,
         ### Regularization ###
@@ -94,7 +94,7 @@ EnvArgsRegistry["g1_walk"] = WalkingEnvArgs(
         "HipRollPenalty": 100.0,
         # "UpperBodyDofPenalty": 3.0,
         "UpperBodyActionPenalty": 0.5,
-        "WaistDofPenalty": 10.0,
+        "WaistDofPenalty": 300.0,
         # "FeetAirTimeReward": 200.0,
         "FeetAirTimePenalty": 500.0,
         "G1FeetHeightPenalty": 100.0,
