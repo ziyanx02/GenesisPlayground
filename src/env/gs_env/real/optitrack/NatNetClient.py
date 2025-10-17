@@ -178,7 +178,7 @@ class NatNetClient:
             (major != self.__nat_net_requested_version[0])
             or (minor != self.__nat_net_requested_version[1])
         ):
-            sz_command = f"Bitstream,{major:1.1d}.{minor:1.1d}"
+            sz_command = f"Bitstream,{major:1d}.{minor:1d}"
             return_code = self.send_command(sz_command)
             if return_code >= 0:
                 self.__nat_net_requested_version[0] = major
@@ -311,7 +311,7 @@ class NatNetClient:
         return result
 
     def __unpack_rigid_body_3_and_above(
-        self, data: bytes | memoryview[int], rb_num: int
+        self, data: bytes | memoryview, rb_num: int
     ) -> tuple[int, MoCapData.RigidBody]:
         """Calculates offset for NatNet 3 and above for rigid body
         unpacking"""
@@ -321,7 +321,7 @@ class NatNetClient:
         new_id = int.from_bytes(data[offset : offset + 4], byteorder="little", signed=True)
         offset += 4
 
-        trace_mf(f"RB: {rb_num:3.1d} ID: {new_id:3.1d}")
+        trace_mf(f"RB: {rb_num:3d} ID: {new_id:3d}")
 
         # Position and orientation
         pos = Vector3.unpack(data[offset : offset + 12])
@@ -358,7 +358,7 @@ class NatNetClient:
         return offset, rigid_body
 
     def __unpack_rigid_body_2_6_to_3(
-        self, data: bytes | memoryview[int], rb_num: int
+        self, data: bytes | memoryview, rb_num: int
     ) -> tuple[int, MoCapData.RigidBody]:
         """Calculates offset starting at NatNet 2.6 and going
         to (but not inclusive of 3)"""
@@ -368,7 +368,7 @@ class NatNetClient:
         new_id = int.from_bytes(data[offset : offset + 4], byteorder="little", signed=True)
         offset += 4
 
-        trace_mf(f"RB: {rb_num:3.1d} ID: {new_id:3.1d}")
+        trace_mf(f"RB: {rb_num:3d} ID: {new_id:3d}")
 
         # Position and orientation
         pos = Vector3.unpack(data[offset : offset + 12])
@@ -436,7 +436,7 @@ class NatNetClient:
         return offset, rigid_body
 
     def __unpack_rigid_body_pre_2_6(
-        self, data: bytes | memoryview[int], major: int, rb_num: int
+        self, data: bytes | memoryview, major: int, rb_num: int
     ) -> tuple[int, MoCapData.RigidBody]:
         """Calculates offset for anything below NatNet 2.6"""
         offset = 0
@@ -445,7 +445,7 @@ class NatNetClient:
         new_id = int.from_bytes(data[offset : offset + 4], byteorder="little", signed=True)
         offset += 4
 
-        trace_mf(f"RB: {rb_num:3.1d} ID: {new_id:3.1d}")
+        trace_mf(f"RB: {rb_num:3d} ID: {new_id:3d}")
 
         # Position and orientation
         pos = Vector3.unpack(data[offset : offset + 12])
@@ -504,7 +504,7 @@ class NatNetClient:
         return offset, rigid_body
 
     def __unpack_rigid_body_0_case(
-        self, data: bytes | memoryview[int], rb_num: int
+        self, data: bytes | memoryview, rb_num: int
     ) -> tuple[int, MoCapData.RigidBody]:
         """Calculates offset for case where major version is 0"""
         offset = 0
@@ -513,7 +513,7 @@ class NatNetClient:
         new_id = int.from_bytes(data[offset : offset + 4], byteorder="little", signed=True)
         offset += 4
 
-        trace_mf(f"RB: {rb_num:3.1d} ID: {new_id:3.1d}")
+        trace_mf(f"RB: {rb_num:3d} ID: {new_id:3d}")
 
         # Position and orientation
         pos = Vector3.unpack(data[offset : offset + 12])
@@ -532,7 +532,7 @@ class NatNetClient:
         return offset, rigid_body
 
     def __unpack_rigid_body(
-        self, data: bytes | memoryview[int], major: int, minor: int, rb_num: int
+        self, data: bytes | memoryview, major: int, minor: int, rb_num: int
     ) -> tuple[int, MoCapData.RigidBody]:
         if major >= 3:
             offset, rigid_body = self.__unpack_rigid_body_3_and_above(data, rb_num)
@@ -543,24 +543,24 @@ class NatNetClient:
         elif major == 0:
             offset, rigid_body = self.__unpack_rigid_body_0_case(data, rb_num)
         else:
-            raise ValueError(f"Invalid Version {major:1.1d}.{minor:1.1d}")
+            raise ValueError(f"Invalid Version {major:1d}.{minor:1d}")
         return offset, rigid_body
 
     # Unpack a skeleton object from a data packet
     def __unpack_skeleton(
-        self, data: bytes | memoryview[int], major: int, minor: int, skeleton_num: int = 0
+        self, data: bytes | memoryview, major: int, minor: int, skeleton_num: int = 0
     ) -> tuple[int, MoCapData.Skeleton]:
         offset = 0
         new_id = int.from_bytes(data[offset : offset + 4], byteorder="little", signed=True)
         offset += 4
-        trace_mf(f"Skeleton {skeleton_num:3.1d} ID: {new_id:3.1d}")
+        trace_mf(f"Skeleton {skeleton_num:3d} ID: {new_id:3d}")
         skeleton = MoCapData.Skeleton(new_id)
 
         rigid_body_count = int.from_bytes(
             data[offset : offset + 4], byteorder="little", signed=True
         )
         offset += 4
-        trace_mf(f"Rigid Body Count: {rigid_body_count:3.1d}")
+        trace_mf(f"Rigid Body Count: {rigid_body_count:3d}")
         if rigid_body_count > 0:
             for rb_num in range(0, rigid_body_count):
                 offset_tmp, rigid_body = self.__unpack_rigid_body(
@@ -572,7 +572,7 @@ class NatNetClient:
         return offset, skeleton
 
     def __unpack_asset(
-        self, data: bytes | memoryview[int], major: int, minor: int, asset_num: int = 0
+        self, data: bytes | memoryview, major: int, minor: int, asset_num: int = 0
     ) -> tuple[int, MoCapData.Asset]:
         offset = 0
         trace_dd(f"\tAsset       : {asset_num}")
@@ -611,18 +611,18 @@ class NatNetClient:
     # Unpack Mocap Data Functions
 
     def __unpack_frame_prefix_data(
-        self, data: bytes | memoryview[int]
+        self, data: bytes | memoryview
     ) -> tuple[int, MoCapData.FramePrefixData]:
         offset = 0
         # Frame number (4 bytes)
         frame_number = int.from_bytes(data[offset : offset + 4], byteorder="little", signed=True)
         offset += 4
-        trace_mf(f"Frame #: {frame_number:3.1d}")
+        trace_mf(f"Frame #: {frame_number:3d}")
         frame_prefix_data = MoCapData.FramePrefixData(frame_number)
         return offset, frame_prefix_data
 
     def __unpack_data_size(
-        self, data: bytes | memoryview[int], major: int, minor: int
+        self, data: bytes | memoryview, major: int, minor: int
     ) -> tuple[int, int]:
         sizeInBytes = 0
         offset = 0
@@ -630,12 +630,12 @@ class NatNetClient:
         if ((major == 4) and (minor > 0)) or (major > 4):
             sizeInBytes = int.from_bytes(data[offset : offset + 4], byteorder="little", signed=True)
             offset += 4
-            trace_mf(f"Byte Count: {sizeInBytes:3.1d}")
+            trace_mf(f"Byte Count: {sizeInBytes:3d}")
 
         return offset, sizeInBytes
 
     def __unpack_legacy_other_markers(
-        self, data: bytes | memoryview[int], packet_size: int, major: int, minor: int
+        self, data: bytes | memoryview, packet_size: int, major: int, minor: int
     ) -> tuple[int, MoCapData.LegacyMarkerData]:
         offset = 0
 
@@ -657,12 +657,12 @@ class NatNetClient:
             for j in range(0, other_marker_count):
                 pos = Vector3.unpack(data[offset : offset + 12])
                 offset += 12
-                trace_mf(f"\tMarker {j:3.1d}: [x={pos[0]:3.2f},y={pos[1]:3.2f},z={pos[2]:3.2f}]")
+                trace_mf(f"\tMarker {j:3d}: [x={pos[0]:3.2f},y={pos[1]:3.2f},z={pos[2]:3.2f}]")
                 other_marker_data.add_pos(pos)
         return offset, other_marker_data
 
     def __unpack_marker_set_data(
-        self, data: bytes | memoryview[int], packet_size: int, major: int, minor: int
+        self, data: bytes | memoryview, packet_size: int, major: int, minor: int
     ) -> tuple[int, MoCapData.MarkerSetData]:
         marker_set_data = MoCapData.MarkerSetData()
         offset = 0
@@ -707,7 +707,7 @@ class NatNetClient:
                     break
                 pos = Vector3.unpack(data[offset : offset + 12])
                 offset += 12
-                trace_mf(f"\tMarker {j:3.1d}: [x={pos[0]:3.2f},y={pos[1]:3.2f},z={pos[2]:3.2f}]")
+                trace_mf(f"\tMarker {j:3d}: [x={pos[0]:3.2f},y={pos[1]:3.2f},z={pos[2]:3.2f}]")
                 marker_data.add_pos(pos)
             marker_set_data.add_marker_data(marker_data)
 
@@ -719,12 +719,12 @@ class NatNetClient:
         # for i in range(0, unlabeled_markers_count):
         #    pos = Vector3.unpack(data[offset:offset+12])
         #    offset += 12
-        #    trace_mf("\tMarker %3.1d: [%3.2f,%3.2f,%3.2f]" % (i, pos[0], pos[1], pos[2])) #type: ignore
+        #    trace_mf("\tMarker %3d: [%3.2f,%3.2f,%3.2f]" % (i, pos[0], pos[1], pos[2])) #type: ignore
         #    marker_set_data.add_unlabeled_marker(pos)
         return offset, marker_set_data
 
     def __unpack_rigid_body_data(
-        self, data: bytes | memoryview[int], packet_size: int, major: int, minor: int
+        self, data: bytes | memoryview, packet_size: int, major: int, minor: int
     ) -> tuple[int, MoCapData.RigidBodyData]:
         rigid_body_data = MoCapData.RigidBodyData()
         offset = 0
@@ -747,7 +747,7 @@ class NatNetClient:
         return offset, rigid_body_data
 
     def __unpack_skeleton_data(
-        self, data: bytes | memoryview[int], packet_size: int, major: int, minor: int
+        self, data: bytes | memoryview, packet_size: int, major: int, minor: int
     ) -> tuple[int, MoCapData.SkeletonData]:
         skeleton_data = MoCapData.SkeletonData()
 
@@ -781,7 +781,7 @@ class NatNetClient:
         return model_id, marker_id
 
     def __unpack_labeled_marker_data(
-        self, data: bytes | memoryview[int], packet_size: int, major: int, minor: int
+        self, data: bytes | memoryview, packet_size: int, major: int, minor: int
     ) -> tuple[int, MoCapData.LabeledMarkerData]:
         labeled_marker_data = MoCapData.LabeledMarkerData()
         offset = 0
@@ -806,10 +806,10 @@ class NatNetClient:
                 model_id, marker_id = self.__decode_marker_id(tmp_id)
                 pos = Vector3.unpack(data[offset : offset + 12])
                 offset += 12
-                size = FloatValue.unpack(data[offset : offset + 4])
+                (size,) = FloatValue.unpack(data[offset : offset + 4])
                 offset += 4
                 trace_mf(
-                    f" {lm_num:3.1d} ID    : [MarkerID: {marker_id:3.1d}] [ModelID: {model_id:3.1d}]"
+                    f" {lm_num:3d} ID    : [MarkerID: {marker_id:3d}] [ModelID: {model_id:3d}]"
                 )
                 trace_mf(f"    pos : [{pos[0]:3.2f}, {pos[1]:3.2f}, {pos[2]:3.2f}]")
                 trace_mf(f"    size: [{size:3.2f}]")
@@ -837,7 +837,7 @@ class NatNetClient:
         return offset, labeled_marker_data
 
     def __unpack_force_plate_data(
-        self, data: bytes | memoryview[int], packet_size: int, major: int, minor: int
+        self, data: bytes | memoryview, packet_size: int, major: int, minor: int
     ) -> tuple[int, MoCapData.ForcePlateData]:
         force_plate_data = MoCapData.ForcePlateData()
         n_frames_show_max = 4
@@ -870,7 +870,7 @@ class NatNetClient:
                 offset += 4
 
                 trace_mf(
-                    f"\tForce Plate {i:3.1d} ID: {force_plate_id:3.1d} Num Channels: {force_plate_channel_count:3.1d}"
+                    f"\tForce Plate {i:3d} ID: {force_plate_id:3d} Num Channels: {force_plate_channel_count:3d}"
                 )
 
                 # Channel Data
@@ -880,8 +880,8 @@ class NatNetClient:
                         data[offset : offset + 4], byteorder="little", signed=True
                     )
                     offset += 4
-                    out_string = f"\tChannel {j:3.1d}: "
-                    out_string += f"  {force_plate_channel_frame_count:3.1d} Frames - Frame Data: "
+                    out_string = f"\tChannel {j:3d}: "
+                    out_string += f"  {force_plate_channel_frame_count:3d} Frames - Frame Data: "
 
                     # Force plate frames
                     n_frames_show = min(force_plate_channel_frame_count, n_frames_show_max)
@@ -893,13 +893,13 @@ class NatNetClient:
                         if k < n_frames_show:
                             out_string += f" {force_plate_channel_val:3.2f} "
                     if n_frames_show < force_plate_channel_frame_count:
-                        out_string += f" showing {n_frames_show:3.1d} of {force_plate_channel_frame_count:3.1d} frames"
+                        out_string += f" showing {n_frames_show:3d} of {force_plate_channel_frame_count:3d} frames"
                     force_plate.add_channel_data(fp_channel_data)
                 force_plate_data.add_force_plate(force_plate)
         return offset, force_plate_data
 
     def __unpack_device_data(
-        self, data: bytes | memoryview[int], packet_size: int, major: int, minor: int
+        self, data: bytes | memoryview, packet_size: int, major: int, minor: int
     ) -> tuple[int, MoCapData.DeviceData]:
         device_data = MoCapData.DeviceData()
         n_frames_show_max = 4
@@ -931,7 +931,7 @@ class NatNetClient:
                 offset += 4
 
                 trace_mf(
-                    f"\tDevice {i:3.1d}      ID: {device_id:3.1d} Num Channels: {device_channel_count:3.1d}"
+                    f"\tDevice {i:3d}      ID: {device_id:3d} Num Channels: {device_channel_count:3d}"
                 )
 
                 # Channel Data
@@ -941,8 +941,8 @@ class NatNetClient:
                         data[offset : offset + 4], byteorder="little", signed=True
                     )
                     offset += 4
-                    out_string = f"\tChannel {j:3.1d} "
-                    out_string += f"  {device_channel_frame_count:3.1d} Frames - Frame Data: "
+                    out_string = f"\tChannel {j:3d} "
+                    out_string += f"  {device_channel_frame_count:3d} Frames - Frame Data: "
 
                     # Device Frame Data
                     n_frames_show = min(device_channel_frame_count, n_frames_show_max)
@@ -957,7 +957,9 @@ class NatNetClient:
 
                         device_channel_data.add_frame_entry(device_channel_val)
                     if n_frames_show < device_channel_frame_count:
-                        out_string += f" showing {n_frames_show:3.1d} of {device_channel_frame_count:3.1d} frames"
+                        out_string += (
+                            f" showing {n_frames_show:3d} of {device_channel_frame_count:3d} frames"
+                        )
                     trace_mf(f" {out_string}")
                     device.add_channel_data(device_channel_data)
                 device_data.add_device(device)
@@ -965,11 +967,11 @@ class NatNetClient:
 
     def __unpack_frame_suffix_data_4_1_to_present(
         self,
-        data: bytes | memoryview[int],
+        data: bytes | memoryview,
         offset: int,
         frame_suffix_data: MoCapData.FrameSuffixData,
         param: int,
-    ) -> tuple[bytes | memoryview[int], int, MoCapData.FrameSuffixData, int]:
+    ) -> tuple[bytes | memoryview, int, MoCapData.FrameSuffixData, int]:
         """Unpacks frame suffix data from NatNet 4.1 to present NatNet"""
         (timestamp,) = DoubleValue.unpack(data[offset : offset + 8])
         offset += 8
@@ -979,7 +981,7 @@ class NatNetClient:
         stamp_camera_mid_exposure = int.from_bytes(
             data[offset : offset + 8], byteorder="little", signed=True
         )
-        trace_mf(f"Mid-exposure timestamp        : {stamp_camera_mid_exposure:3.1d}")
+        trace_mf(f"Mid-exposure timestamp        : {stamp_camera_mid_exposure:3d}")
         offset += 8
         frame_suffix_data.stamp_camera_mid_exposure = stamp_camera_mid_exposure
 
@@ -988,11 +990,11 @@ class NatNetClient:
         )
         offset += 8
         frame_suffix_data.stamp_data_received = stamp_data_received
-        trace_mf(f"Camera data received timestamp: {stamp_data_received:3.1d}")
+        trace_mf(f"Camera data received timestamp: {stamp_data_received:3d}")
 
         stamp_transmit = int.from_bytes(data[offset : offset + 8], byteorder="little", signed=True)
         offset += 8
-        trace_mf(f"Transmit timestamp            : {stamp_transmit:3.1d}")
+        trace_mf(f"Transmit timestamp            : {stamp_transmit:3d}")
         frame_suffix_data.stamp_transmit = stamp_transmit
 
         prec_timestamp_secs = int.from_bytes(
@@ -1001,16 +1003,16 @@ class NatNetClient:
         # hours = int(prec_timestamp_secs/3600)
         # minutes=int(prec_timestamp_secs/60)%60
         # seconds=prec_timestamp_secs%60
-        # out_string= "Precision timestamp (h:m:s) - %4.1d:%2.2d:%2.2d" % (hours, minutes, seconds) #type: ignore
+        # out_string= "Precision timestamp (h:m:s) - %4d:%2d:%2d" % (hours, minutes, seconds) #type: ignore
         # trace_mf(" %s" %out_string)
-        trace_mf(f"Precision timestamp (sec)     : {prec_timestamp_secs:3.1d}")
+        trace_mf(f"Precision timestamp (sec)     : {prec_timestamp_secs:3d}")
         offset += 4
         frame_suffix_data.prec_timestamp_secs = prec_timestamp_secs
 
         prec_timestamp_frac_secs = int.from_bytes(
             data[offset : offset + 4], byteorder="little", signed=True
         )
-        trace_mf(f"Precision timestamp (frac sec): {prec_timestamp_frac_secs:3.1d}")
+        trace_mf(f"Precision timestamp (frac sec): {prec_timestamp_frac_secs:3d}")
         offset += 4
         frame_suffix_data.prec_timestamp_frac_secs = prec_timestamp_frac_secs
         (param,) = struct.unpack("h", data[offset : offset + 2])
@@ -1020,11 +1022,11 @@ class NatNetClient:
 
     def __unpack_frame_suffix_data_3_to_4(
         self,
-        data: bytes | memoryview[int],
+        data: bytes | memoryview,
         offset: int,
         frame_suffix_data: MoCapData.FrameSuffixData,
         param: int,
-    ) -> tuple[bytes | memoryview[int], int, MoCapData.FrameSuffixData, int]:
+    ) -> tuple[bytes | memoryview, int, MoCapData.FrameSuffixData, int]:
         """Unpacks frame suffix data inclusive from NatNet 3 to NatNet 4"""
         (timestamp,) = DoubleValue.unpack(data[offset : offset + 8])
         offset += 8
@@ -1033,7 +1035,7 @@ class NatNetClient:
         stamp_camera_mid_exposure = int.from_bytes(
             data[offset : offset + 8], byteorder="little", signed=True
         )
-        trace_mf(f"Mid-exposure timestamp        : {stamp_camera_mid_exposure:3.1d}")
+        trace_mf(f"Mid-exposure timestamp        : {stamp_camera_mid_exposure:3d}")
         offset += 8
         frame_suffix_data.stamp_camera_mid_exposure = stamp_camera_mid_exposure
 
@@ -1042,11 +1044,11 @@ class NatNetClient:
         )
         offset += 8
         frame_suffix_data.stamp_data_received = stamp_data_received
-        trace_mf(f"Camera data received timestamp: {stamp_data_received:3.1d}")
+        trace_mf(f"Camera data received timestamp: {stamp_data_received:3d}")
 
         stamp_transmit = int.from_bytes(data[offset : offset + 8], byteorder="little", signed=True)
         offset += 8
-        trace_mf(f"Transmit timestamp            : {stamp_transmit:3.1d}")
+        trace_mf(f"Transmit timestamp            : {stamp_transmit:3d}")
         frame_suffix_data.stamp_transmit = stamp_transmit
         (param,) = struct.unpack("h", data[offset : offset + 2])
         offset += 2
@@ -1054,11 +1056,11 @@ class NatNetClient:
 
     def __unpack_frame_suffix_data_2_7_to_3(
         self,
-        data: bytes | memoryview[int],
+        data: bytes | memoryview,
         offset: int,
         frame_suffix_data: MoCapData.FrameSuffixData,
         param: int,
-    ) -> tuple[bytes | memoryview[int], int, MoCapData.FrameSuffixData, int]:
+    ) -> tuple[bytes | memoryview, int, MoCapData.FrameSuffixData, int]:
         """Unpacks frame suffix data from inclusive of NatNet 2.7 to but not
         including NatNet 3"""
         (timestamp,) = DoubleValue.unpack(data[offset : offset + 8])
@@ -1072,11 +1074,11 @@ class NatNetClient:
 
     def __unpack_frame_suffix_data_pre_2_7(
         self,
-        data: bytes | memoryview[int],
+        data: bytes | memoryview,
         offset: int,
         frame_suffix_data: MoCapData.FrameSuffixData,
         param: int,
-    ) -> tuple[bytes | memoryview[int], int, MoCapData.FrameSuffixData, int]:
+    ) -> tuple[bytes | memoryview, int, MoCapData.FrameSuffixData, int]:
         """Unpacks frame suffix data for any NatNet version before
         NatNet 2.7"""
         (timestamp,) = FloatValue.unpack(data[offset : offset + 4])
@@ -1090,11 +1092,11 @@ class NatNetClient:
 
     def __unpack_frame_suffix_data_0_case(
         self,
-        data: bytes | memoryview[int],
+        data: bytes | memoryview,
         offset: int,
         frame_suffix_data: MoCapData.FrameSuffixData,
         param: int,
-    ) -> tuple[bytes | memoryview[int], int, MoCapData.FrameSuffixData, int]:
+    ) -> tuple[bytes | memoryview, int, MoCapData.FrameSuffixData, int]:
         """Unpacks frame suffix data if the major case is 0"""
         (timestamp,) = DoubleValue.unpack(data[offset : offset + 8])
         offset += 8
@@ -1105,7 +1107,7 @@ class NatNetClient:
         return data, offset, frame_suffix_data, param
 
     def __unpack_frame_suffix_data(
-        self, data: bytes | memoryview[int], packet_size: int, major: int, minor: int
+        self, data: bytes | memoryview, packet_size: int, major: int, minor: int
     ) -> tuple[int, MoCapData.FrameSuffixData]:
         frame_suffix_data = MoCapData.FrameSuffixData()
         offset = 0
@@ -1158,7 +1160,7 @@ class NatNetClient:
 
     # Unpack data from a motion capture frame message
     def __unpack_mocap_data(
-        self, data: bytes | memoryview[int], packet_size: int, major: int, minor: int
+        self, data: bytes | memoryview, packet_size: int, major: int, minor: int
     ) -> tuple[int, MoCapData.MoCapData]:
         mocap_data = MoCapData.MoCapData()
         data = memoryview(data)
@@ -1289,7 +1291,7 @@ class NatNetClient:
         return offset, mocap_data
 
     def __unpack_marker_set_description(
-        self, data: bytes | memoryview[int], major: int, minor: int
+        self, data: bytes | memoryview, major: int, minor: int
     ) -> tuple[int, DataDescriptions.MarkerSetDescription]:
         """Unpack marker description packet"""
         ms_desc = DataDescriptions.MarkerSetDescription()
@@ -1308,13 +1310,13 @@ class NatNetClient:
             for i in range(0, marker_count):
                 name, separator, remainder = bytes(data[offset:]).partition(b"\0")
                 offset += len(name) + 1
-                trace_dd(f"\t{i:2.1d} Marker Name: {name.decode('utf-8')}")
+                trace_dd(f"\t{i:2d} Marker Name: {name.decode('utf-8')}")
                 ms_desc.add_marker_name(name)
 
         return offset, ms_desc
 
     def __unpack_rigid_body_descript_4_2_to_current(
-        self, data: bytes | memoryview[int]
+        self, data: bytes | memoryview
     ) -> tuple[int, DataDescriptions.RigidBodyDescription]:
         """Unpack rigid body helper function for NatNet 4.2"""
         rb_desc = DataDescriptions.RigidBodyDescription()
@@ -1380,14 +1382,14 @@ class NatNetClient:
             rb_marker = DataDescriptions.RBMarker(marker_name, active_label, marker_offset)
             rb_desc.add_rb_marker(rb_marker)
             trace_dd(
-                f"\t{marker:3.1d} Marker Label: {active_label} Position: [{marker_offset[0]:3.2f} {marker_offset[1]:3.2f} {marker_offset[2]:3.2f}] {marker_name}"
+                f"\t{marker:3d} Marker Label: {active_label} Position: [{marker_offset[0]:3.2f} {marker_offset[1]:3.2f} {marker_offset[2]:3.2f}] {marker_name}"
             )
             offset = offset3
         trace_dd(f"\tunpack_rigid_body_description processed bytes: {offset}")
         return offset, rb_desc
 
     def __unpack_rigid_body_descript_4_n_4_1(
-        self, data: bytes | memoryview[int]
+        self, data: bytes | memoryview
     ) -> tuple[int, DataDescriptions.RigidBodyDescription]:
         """Unpack rigid body description data for NatNet Versions 4 and
         4.1"""
@@ -1449,7 +1451,7 @@ class NatNetClient:
             rb_marker = DataDescriptions.RBMarker(marker_name, active_label, marker_offset)
             rb_desc.add_rb_marker(rb_marker)
             trace_dd(
-                f"\t{marker:3.1d} Marker Label: {active_label} Position: [{marker_offset[0]:3.2f} {marker_offset[1]:3.2f} {marker_offset[2]:3.2f}] {marker_name}"
+                f"\t{marker:3d} Marker Label: {active_label} Position: [{marker_offset[0]:3.2f} {marker_offset[1]:3.2f} {marker_offset[2]:3.2f}] {marker_name}"
             )
             offset = offset3
 
@@ -1457,7 +1459,7 @@ class NatNetClient:
         return offset, rb_desc
 
     def __unpack_rigid_body_descript_3_to_4_0(
-        self, data: bytes | memoryview[int]
+        self, data: bytes | memoryview
     ) -> tuple[int, DataDescriptions.RigidBodyDescription]:
         """Helper function for NatNets versions 3 to 4.0
         not inclusive of 4.0"""
@@ -1514,7 +1516,7 @@ class NatNetClient:
             rb_marker = DataDescriptions.RBMarker(marker_name, active_label, marker_offset)
             rb_desc.add_rb_marker(rb_marker)
             trace_dd(
-                f"\t{marker:3.1d} Marker Label: {active_label} Position: [{marker_offset[0]:3.2f} {marker_offset[1]:3.2f} {marker_offset[2]:3.2f}] {marker_name}"
+                f"\t{marker:3d} Marker Label: {active_label} Position: [{marker_offset[0]:3.2f} {marker_offset[1]:3.2f} {marker_offset[2]:3.2f}] {marker_name}"
             )
             offset = offset3
 
@@ -1522,7 +1524,7 @@ class NatNetClient:
         return offset, rb_desc
 
     def __unpack_rigid_body_descript_2_to_3(
-        self, data: bytes | memoryview[int]
+        self, data: bytes | memoryview
     ) -> tuple[int, DataDescriptions.RigidBodyDescription]:
         """Helper function for NatNet version inclusive 2,
         to not inclusive 3"""
@@ -1557,7 +1559,7 @@ class NatNetClient:
         return offset, rb_desc
 
     def __unpack_rigid_body_descript_under_2(
-        self, data: bytes | memoryview[int]
+        self, data: bytes | memoryview
     ) -> tuple[int, DataDescriptions.RigidBodyDescription]:
         """Helper function for NatNet versions under 2"""
         rb_desc = DataDescriptions.RigidBodyDescription()
@@ -1586,7 +1588,7 @@ class NatNetClient:
         return offset, rb_desc
 
     def __unpack_rigid_body_descript_0_case(
-        self, data: bytes | memoryview[int]
+        self, data: bytes | memoryview
     ) -> tuple[int, DataDescriptions.RigidBodyDescription]:
         """Helper function for NatNet 0 case"""
         rb_desc = DataDescriptions.RigidBodyDescription()
@@ -1659,7 +1661,7 @@ class NatNetClient:
         return offset, rb_desc
 
     def __unpack_rigid_body_description(
-        self, data: bytes | memoryview[int], major: int, minor: int
+        self, data: bytes | memoryview, major: int, minor: int
     ) -> tuple[int, DataDescriptions.RigidBodyDescription]:
         if major == 0:
             offset, rb_desc = self.__unpack_rigid_body_descript_0_case(data)
@@ -1674,13 +1676,13 @@ class NatNetClient:
         elif major < 2:
             offset, rb_desc = self.__unpack_rigid_body_descript_under_2(data)
         else:
-            raise ValueError(f"Invalid Version {major:1.1d}.{minor:1.1d}")
+            raise ValueError(f"Invalid Version {major:1d}.{minor:1d}")
 
         return offset, rb_desc
 
     # Unpack a skeleton description packet
     def __unpack_skeleton_description(
-        self, data: bytes | memoryview[int], major: int, minor: int
+        self, data: bytes | memoryview, major: int, minor: int
     ) -> tuple[int, DataDescriptions.SkeletonDescription]:
         skeleton_desc = DataDescriptions.SkeletonDescription()
         offset = 0
@@ -1695,14 +1697,14 @@ class NatNetClient:
         new_id = int.from_bytes(data[offset : offset + 4], byteorder="little", signed=True)
         offset += 4
         skeleton_desc.set_id(new_id)
-        trace_dd(f"ID: {new_id:3.1d}")
+        trace_dd(f"ID: {new_id:3d}")
 
         # # of RigidBodies
         rigid_body_count = int.from_bytes(
             data[offset : offset + 4], byteorder="little", signed=True
         )
         offset += 4
-        trace_dd(f"Rigid Body (Bone) Count: {rigid_body_count:3.1d}")
+        trace_dd(f"Rigid Body (Bone) Count: {rigid_body_count:3d}")
 
         # Loop over all Rigid Bodies
         for i in range(0, rigid_body_count):
@@ -1715,7 +1717,7 @@ class NatNetClient:
         return offset, skeleton_desc
 
     def __unpack_force_plate_description(
-        self, data: bytes | memoryview[int], major: int, minor: int
+        self, data: bytes | memoryview, major: int, minor: int
     ) -> tuple[int, DataDescriptions.ForcePlateDescription]:
         fp_desc = None
         offset = 0
@@ -1755,7 +1757,7 @@ class NatNetClient:
             for i in range(0, 12):
                 cal_matrix_row = FPCalMatrixRow.unpack(data[offset : offset + (12 * 4)])
                 trace_dd(
-                    f"\t{i:3.1d} {cal_matrix_row[0]:3.3e} {cal_matrix_row[1]:3.3e} {cal_matrix_row[2]:3.3e} {cal_matrix_row[3]:3.3e} {cal_matrix_row[4]:3.3e} {cal_matrix_row[5]:3.3e} {cal_matrix_row[6]:3.3e} {cal_matrix_row[7]:3.3e} {cal_matrix_row[8]:3.3e} {cal_matrix_row[9]:3.3e} {cal_matrix_row[10]:3.3e} {cal_matrix_row[11]:3.3e}"
+                    f"\t{i:3d} {cal_matrix_row[0]:3.3e} {cal_matrix_row[1]:3.3e} {cal_matrix_row[2]:3.3e} {cal_matrix_row[3]:3.3e} {cal_matrix_row[4]:3.3e} {cal_matrix_row[5]:3.3e} {cal_matrix_row[6]:3.3e} {cal_matrix_row[7]:3.3e} {cal_matrix_row[8]:3.3e} {cal_matrix_row[9]:3.3e} {cal_matrix_row[10]:3.3e} {cal_matrix_row[11]:3.3e}"
                 )
                 cal_matrix_tmp[i] = list(copy.deepcopy(cal_matrix_row))
                 offset += 12 * 4
@@ -1768,7 +1770,7 @@ class NatNetClient:
             corners_tmp = [[0.0 for col in range(3)] for row in range(4)]
             for i in range(0, 4):
                 trace_dd(
-                    f"\t{i:3.1d} {corners[o_2]:3.3e} {corners[o_2 + 1]:3.3e} {corners[o_2 + 2]:3.3e}"
+                    f"\t{i:3d} {corners[o_2]:3.3e} {corners[o_2 + 1]:3.3e} {corners[o_2 + 2]:3.3e}"
                 )
                 corners_tmp[i][0] = corners[o_2]
                 corners_tmp[i][1] = corners[o_2 + 1]
@@ -1801,16 +1803,16 @@ class NatNetClient:
             for i in range(0, num_channels):
                 channel_name, separator, remainder = bytes(data[offset:]).partition(b"\0")
                 offset += len(channel_name) + 1
-                trace_dd(f"\tChannel Name {i:3.1d}: {channel_name.decode('utf-8')}")
+                trace_dd(f"\tChannel Name {i:3d}: {channel_name.decode('utf-8')}")
                 fp_desc.add_channel_name(channel_name)
         else:
-            raise ValueError(f"Invalid Version {major:1.1d}.{minor:1.1d}")
+            raise ValueError(f"Invalid Version {major:1d}.{minor:1d}")
 
         trace_dd(f"unpackForcePlate processed {offset} bytes")
         return offset, fp_desc
 
     def __unpack_device_description(
-        self, data: bytes | memoryview[int], major: int, minor: int
+        self, data: bytes | memoryview, major: int, minor: int
     ) -> tuple[int, DataDescriptions.DeviceDescription]:
         device_desc = None
         offset = 0
@@ -1860,13 +1862,13 @@ class NatNetClient:
                 device_desc.add_channel_name(channel_name)
                 trace_dd(f"\tChannel {i} Name: {channel_name.decode('utf-8')}")
         else:
-            raise ValueError(f"Invalid Version {major:1.1d}.{minor:1.1d}")
+            raise ValueError(f"Invalid Version {major:1d}.{minor:1d}")
 
         trace_dd(f"unpack_device_description processed {offset} bytes")
         return offset, device_desc
 
     def __unpack_camera_description(
-        self, data: bytes | memoryview[int], major: int, minor: int
+        self, data: bytes | memoryview, major: int, minor: int
     ) -> tuple[int, DataDescriptions.CameraDescription]:
         offset = 0
         # Name
@@ -1884,13 +1886,13 @@ class NatNetClient:
         trace_dd(
             f"\tOrientation: [{orientation[0]:3.2f}, {orientation[1]:3.2f}, {orientation[2]:3.2f}, {orientation[3]:3.2f}]"
         )
-        trace_dd(f"unpack_camera_description processed {offset:3.1d} bytes")
+        trace_dd(f"unpack_camera_description processed {offset:3d} bytes")
 
         camera_desc = DataDescriptions.CameraDescription(name, position, orientation)
         return offset, camera_desc
 
     def __unpack_marker_description(
-        self, data: bytes | memoryview[int], major: int, minor: int
+        self, data: bytes | memoryview, major: int, minor: int
     ) -> tuple[int, DataDescriptions.MarkerDescription]:
         offset = 0
 
@@ -1921,7 +1923,7 @@ class NatNetClient:
         offset += 2
         trace_mf(f"\tParams    : {marker_params}")
 
-        trace_dd(f"\tunpack_marker_description processed {offset:3.1d} bytes")
+        trace_dd(f"\tunpack_marker_description processed {offset:3d} bytes")
 
         # Package for return object
         marker_desc = DataDescriptions.MarkerDescription(
@@ -1930,7 +1932,7 @@ class NatNetClient:
         return offset, marker_desc
 
     def __unpack_asset_rigid_body_data(
-        self, data: bytes | memoryview[int], major: int, minor: int
+        self, data: bytes | memoryview, major: int, minor: int
     ) -> tuple[int, MoCapData.AssetRigidBodyData]:
         offset = 0
         # ID
@@ -1958,14 +1960,14 @@ class NatNetClient:
         offset += 2
         trace_mf(f"\tParams     : {marker_params}")
 
-        trace_dd(f"unpack_marker_description processed {offset:3.1d} bytes")
+        trace_dd(f"unpack_marker_description processed {offset:3d} bytes")
         # Package for return object
         rigid_body_data = MoCapData.AssetRigidBodyData(rbID, pos, rot, mean_error, marker_params)
 
         return offset, rigid_body_data
 
     def __unpack_asset_marker_data(
-        self, data: bytes | memoryview[int], major: int, minor: int
+        self, data: bytes | memoryview, major: int, minor: int
     ) -> tuple[int, MoCapData.AssetMarkerData]:
         offset = 0
         # ID
@@ -1999,7 +2001,7 @@ class NatNetClient:
         return offset, marker_data
 
     def __unpack_asset_data(
-        self, data: bytes | memoryview[int], packet_size: int, major: int, minor: int
+        self, data: bytes | memoryview, packet_size: int, major: int, minor: int
     ) -> tuple[int, MoCapData.AssetData]:
         asset_data = MoCapData.AssetData()
 
@@ -2023,7 +2025,7 @@ class NatNetClient:
         return offset, asset_data
 
     def __unpack_asset_description(
-        self, data: bytes | memoryview[int], major: int, minor: int
+        self, data: bytes | memoryview, major: int, minor: int
     ) -> tuple[int, DataDescriptions.AssetDescription]:
         offset = 0
 
@@ -2066,7 +2068,7 @@ class NatNetClient:
             offset += offset1
             markerArray.append(marker)
 
-        trace_dd(f"\tunpack_asset_description processed {offset:3.1d} bytes")
+        trace_dd(f"\tunpack_asset_description processed {offset:3d} bytes")
 
         # package for output
         asset_desc = DataDescriptions.AssetDescription(
@@ -2076,7 +2078,7 @@ class NatNetClient:
 
     # Unpack a data description packet
     def __unpack_data_descriptions(
-        self, data: bytes | memoryview[int], packet_size: int, major: int, minor: int
+        self, data: bytes | memoryview, packet_size: int, major: int, minor: int
     ) -> tuple[int, DataDescriptions.DataDescriptions]:
         data_descs = DataDescriptions.DataDescriptions()
         offset = 0
@@ -2139,7 +2141,7 @@ class NatNetClient:
     # and will update the values for the versions/ NatNet capabilities
     # of the server.
     def __unpack_server_info(
-        self, data: bytes | memoryview[int], packet_size: int, major: int, minor: int
+        self, data: bytes | memoryview, packet_size: int, major: int, minor: int
     ) -> int:
         offset = 0
         # Server name
@@ -2245,7 +2247,7 @@ class NatNetClient:
             if len(buffer_list[buffer_list_in_use_index]) > 0:
                 # peek ahead at message_id
                 message_id = get_message_id(buffer_list[buffer_list_in_use_index])
-                tmp_str = f"mi_{message_id:1.1d}"
+                tmp_str = f"mi_{message_id:1d}"
                 if tmp_str not in message_id_dict:
                     message_id_dict[tmp_str] = 0
                 message_id_dict[tmp_str] += 1
@@ -2296,7 +2298,7 @@ class NatNetClient:
             if len(data) > 0:
                 # peek ahead at message_id
                 message_id = get_message_id(data)
-                tmp_str = f"mi_{message_id:1.1d}"
+                tmp_str = f"mi_{message_id:1d}"
                 if tmp_str not in message_id_dict:
                     message_id_dict[tmp_str] = 0
                 message_id_dict[tmp_str] += 1
@@ -2331,7 +2333,7 @@ class NatNetClient:
         # skip the 4 bytes for message ID and packet_size
         offset = 4
         if message_id == self.NAT_FRAMEOFDATA:
-            trace(f"Message ID : {message_id:3.1d} NAT_FRAMEOFDATA")
+            trace(f"Message ID : {message_id:3d} NAT_FRAMEOFDATA")
             trace(f"Packet Size: {packet_size}")
 
             offset_tmp, mocap_data = self.__unpack_mocap_data(
@@ -2348,7 +2350,7 @@ class NatNetClient:
                 print(f" {mocap_data_str}\n")
 
         elif message_id == self.NAT_MODELDEF:
-            trace(f"Message ID : {message_id:3.1d} NAT_MODELDEF")
+            trace(f"Message ID : {message_id:3d} NAT_MODELDEF")
             trace(f"Packet Size: {packet_size}")
             offset_tmp, data_descs = self.__unpack_data_descriptions(
                 data[offset:], packet_size, major, minor
@@ -2364,12 +2366,12 @@ class NatNetClient:
                 self.data_description_listener(data_descs)
 
         elif message_id == self.NAT_SERVERINFO:
-            trace(f"Message ID : {message_id:3.1d} NAT_SERVERINFO")
+            trace(f"Message ID : {message_id:3d} NAT_SERVERINFO")
             trace(f"Packet Size: {packet_size}")
             offset += self.__unpack_server_info(data[offset:], packet_size, major, minor)
 
         elif message_id == self.NAT_RESPONSE:
-            trace(f"Message ID : {message_id:3.1d} NAT_RESPONSE")
+            trace(f"Message ID : {message_id:3d} NAT_RESPONSE")
             trace(f"Packet Size: {packet_size}")
             if packet_size == 4:
                 command_response = int.from_bytes(
@@ -2405,17 +2407,17 @@ class NatNetClient:
                 else:
                     trace(f"Command response: {message.decode('utf-8')}")
         elif message_id == self.NAT_UNRECOGNIZED_REQUEST:
-            trace(f"Message ID : {message_id:3.1d} NAT_UNRECOGNIZED_REQUEST: ")
+            trace(f"Message ID : {message_id:3d} NAT_UNRECOGNIZED_REQUEST: ")
             trace(f"Packet Size: {packet_size}")
             trace("Received 'Unrecognized request' from server")
         elif message_id == self.NAT_MESSAGESTRING:
-            trace(f"Message ID : {message_id:3.1d} NAT_MESSAGESTRING")
+            trace(f"Message ID : {message_id:3d} NAT_MESSAGESTRING")
             trace(f"Packet Size: {packet_size}")
             message, separator, remainder = bytes(data[offset:]).partition(b"\0")
             offset += len(message) + 1
             trace(f"Received message from server: {message.decode('utf-8')}")
         else:
-            trace(f"Message ID : {message_id:3.1d} UNKNOWN")
+            trace(f"Message ID : {message_id:3d} UNKNOWN")
             trace("Packet Size: ", packet_size)
             trace("ERROR: Unrecognized packet type")
 

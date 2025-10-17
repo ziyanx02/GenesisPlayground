@@ -2,3 +2,7 @@
 __pycache__
 *.egg-info
 logs
+
+cyclonedds
+
+unitree_sdk2_python
