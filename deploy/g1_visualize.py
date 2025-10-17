@@ -33,8 +33,10 @@ def main(
                 continue
             last_update_time = time.time()
 
-            sim_env.set_dof_pos(real_env.dof_pos)
-            sim_env.robot.set_state(quat=real_env.quat)
+            sim_env.set_dof_pos(real_env.dof_pos[0])
+            # sim_env.robot.set_state(quat=real_env.quat[0])
+            link_idx_local = sim_env.get_link_idx_local_by_name("imu_in_torso")
+            sim_env.set_link_pose(link_idx_local, quat=real_env.quat[0])
             sim_env.step_visualizer()
 
     except KeyboardInterrupt:
