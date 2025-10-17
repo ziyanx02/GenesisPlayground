@@ -275,5 +275,19 @@ class FeetContactForceLimitPenalty(RewardTerm):
     contact_force_limit: float = 0.0
 
     def _compute(self, feet_contact_force: torch.Tensor) -> torch.Tensor:  # type: ignore
-        out_of_limits = (feet_contact_force - self.contact_force_limit).clip(min=0.0).square()
+        out_of_limits = (feet_contact_force - self.contact_force_limit).clip(min=0.0)
         return -torch.sum(out_of_limits, dim=1)
+
+
+class DofVelPenalty(RewardTerm):
+    """
+    Penalize the dof velocities.
+
+    Args:
+        dof_vel: dof_vel tensor of shape (B, D) where B is the batch size and D is the number of DoFs.
+    """
+
+    required_keys = ("dof_vel",)
+
+    def _compute(self, dof_vel: torch.Tensor) -> torch.Tensor:  # type: ignore
+        return -torch.sum(torch.square(dof_vel), dim=-1)

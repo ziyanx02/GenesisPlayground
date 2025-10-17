@@ -18,11 +18,12 @@ cd /scratch4/workspace/junyunhuang_umass_edu-myworkspace/GenesisPlayground
 export WANDB_ENTITY="h975894552"
 export WANDB_PROJECT="genesis"
 
-exp_name=${1:-noG1FeetContactForcePenalty-limitnotsquare}
+exp_name=${1:-setting2}
 python /scratch4/workspace/junyunhuang_umass_edu-myworkspace/GenesisPlayground/examples/run_ppo_walking.py \
     --exp_name $exp_name \
-    # --reward_args.G1FeetContactForceLimitPenalty 1e-5 \
-    # --reward_args.G1FeetContactForcePenalty 2 \
+    # --reward_args.HipYawPenalty 100 \
+    # --reward_args.DofVelPenalty 0.1 \
+    # --reward_args.DofPosLimitPenalty 100 \
     # --reward_args.G1FeetHeightPenalty 100 \
     # --reward_args.G1FeetContactForcePenalty 30 \
 python /scratch4/workspace/junyunhuang_umass_edu-myworkspace/GenesisPlayground/examples/run_ppo_walking.py \
