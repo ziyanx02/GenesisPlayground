@@ -7,6 +7,7 @@ from .leggedrobot_terms import (
     AngVelZReward,  # noqa
     BaseHeightPenalty,
     DofPosLimitPenalty,  # noqa
+    DofVelPenalty,  # noqa
     FeetAirTimePenalty,  # noqa
     FeetAirTimeReward,  # noqa
     FeetContactForceLimitPenalty,
@@ -24,7 +25,7 @@ from .reward_terms import RewardTerm
 
 ### ---- Reward Terms ---- ###
 class G1BaseHeightPenalty(BaseHeightPenalty):
-    target_height = 0.75
+    target_height = 1
 
 
 class UpperBodyDofPenalty(RewardTerm):
@@ -97,6 +98,20 @@ class HipRollPenalty(RewardTerm):
 
     def _compute(self, dof_pos: torch.Tensor) -> torch.Tensor:  # type: ignore
         return -torch.sum(torch.square(dof_pos[:, [0, 6]]), dim=-1)
+
+
+class HipPositionPenalty(RewardTerm):
+    """
+    Penalize the hip position deviation from origin.
+
+    Args:
+        dof_pos: DoF position tensor of shape (B, D) where B is the batch size and D is the number of DoFs.
+    """
+
+    required_keys = ("dof_pos",)
+
+    def _compute(self, dof_pos: torch.Tensor) -> torch.Tensor:  # type: ignore
+        return -torch.sum(torch.square(dof_pos[:, [0, 1, 2, 6, 7, 8]]), dim=-1)
 
 
 class AnkleTorquePenalty(RewardTerm):

@@ -25,7 +25,7 @@ from .reward_terms import RewardTerm
 
 ### ---- Reward Terms ---- ###
 class G1BaseHeightPenalty(BaseHeightPenalty):
-    target_height = 0.75
+    target_height = 1.0
 
 
 class UpperBodyDofPenalty(RewardTerm):
