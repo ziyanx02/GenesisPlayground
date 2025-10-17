@@ -108,7 +108,7 @@ def run_single_dof_wave_diagnosis(
 
         target_dof_pos = wave_func(i) + offset
         action[:, dof_idx] = target_dof_pos / env.action_scale
-        dof_pos = env.dof_pos[0, dof_idx].cpu().item() - env.default_dof_pos[dof_idx].cpu().item()
+        dof_pos = env.dof_pos[0, dof_idx].cpu().item() - env.robot.default_dof_pos[dof_idx]
         target_dof_pos_list.append(target_dof_pos)
         dof_pos_list.append(dof_pos)
         env.apply_action(action)
