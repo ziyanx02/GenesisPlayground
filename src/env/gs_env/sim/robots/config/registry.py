@@ -50,6 +50,20 @@ MaterialArgsRegistry["g1_default"] = RigidMaterialArgs(
 )
 
 
+MaterialArgsRegistry["g1_fixed"] = RigidMaterialArgs(
+    rho=200.0,
+    friction=None,
+    needs_coup=True,
+    coup_friction=0.1,
+    coup_softness=0.002,
+    coup_restitution=0.0,
+    sdf_cell_size=0.005,
+    sdf_min_res=32,
+    sdf_max_res=128,
+    gravity_compensation=1,
+)
+
+
 # ------------------------------------------------------------
 # Morph
 # ------------------------------------------------------------
@@ -101,7 +115,7 @@ MorphArgsRegistry["g1_default"] = URDFMorphArgs(
     recompute_inertia=False,
     fixed=False,
     prioritize_urdf_material=False,
-    merge_fixed_links=False,
+    merge_fixed_links=True,
     links_to_keep=[],
     decimate=True,
 )
@@ -112,7 +126,7 @@ MorphArgsRegistry["g1_fixed"] = URDFMorphArgs(
     euler=(0, 0, 0),
     quat=None,
     visualization=True,
-    collision=True,
+    collision=False,
     requires_jac_and_IK=True,
     is_free=True,
     file="assets/robot/unitree_g1/g1_custom_collision_29dof.urdf",
@@ -262,8 +276,8 @@ G1_kp_dict: dict[str, float] = {
     "knee": 200.0,
     "ankle_roll": 40.0,
     "ankle_pitch": 40.0,
-    "waist_roll": 150.0,
-    "waist_pitch": 150.0,
+    "waist_roll": 400.0,
+    "waist_pitch": 400.0,
     "waist_yaw": 150.0,
     "shoulder_roll": 60.0,
     "shoulder_pitch": 60.0,
@@ -280,9 +294,9 @@ G1_kd_dict: dict[str, float] = {
     "knee": 6.0,
     "ankle_roll": 2.0,
     "ankle_pitch": 2.0,
+    "waist_roll": 6.0,
+    "waist_pitch": 6.0,
     "waist_yaw": 4.0,
-    "waist_roll": 4.0,
-    "waist_pitch": 4.0,
     "shoulder_roll": 2.0,
     "shoulder_pitch": 2.0,
     "shoulder_yaw": 1.6,
@@ -353,7 +367,7 @@ RobotArgsRegistry["g1_default"] = HumanoidRobotArgs(
 
 
 RobotArgsRegistry["g1_fixed"] = HumanoidRobotArgs(
-    material_args=MaterialArgsRegistry["g1_default"],
+    material_args=MaterialArgsRegistry["g1_fixed"],
     morph_args=MorphArgsRegistry["g1_fixed"],
     dr_args=DRArgsRegistry["default"],
     visualize_contact=False,
