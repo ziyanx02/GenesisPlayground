@@ -214,18 +214,17 @@ class FeetAirTimePenalty(RewardTerm):
 
 class FeetHeightPenalty(RewardTerm):
     """
-    Reward the feet air time.
+    Penalize the feet height.
 
     Args:
-        feet_position: Feet position tensor of shape (B, N, 3) where B is the batch size and N is the number of feet.
+        feet_height: Feet height tensor of shape (B, N) where B is the batch size and N is the number of feet.
         commands: Commands tensor of shape (B, 3) where B is the batch size.
     """
 
-    required_keys = ("feet_position", "commands")
+    required_keys = ("feet_height", "commands")
     target_height: float = 0.0
 
-    def _compute(self, feet_position: torch.Tensor, commands: torch.Tensor) -> torch.Tensor:  # type: ignore
-        feet_height = feet_position[:, :, 2]
+    def _compute(self, feet_height: torch.Tensor, commands: torch.Tensor) -> torch.Tensor:  # type: ignore
         feet_height = feet_height.max(dim=1)[0] - self.target_height
         feet_height = feet_height.clip(max=0.0)
         feet_height *= torch.norm(commands, dim=1) > 0.1
