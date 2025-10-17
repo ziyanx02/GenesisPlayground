@@ -97,30 +97,14 @@ class WalkingEnv(LeggedRobotEnv):
         self.time_since_resample[envs_idx] = 0.0
 
     def apply_action(self, action: torch.Tensor) -> None:
-        action = action.detach().to(self._device)
-        self._action = action
-        self._action_buf[:] = torch.cat([self._action_buf[:, :, 1:], action.unsqueeze(-1)], dim=-1)
-        exec_action = self._action_buf[:, :, 0]
-        exec_action *= self.action_scale
+        super().apply_action(action=action)
 
-        self.torque *= 0
-
-        # Apply actions and simulate physics
-        for _ in range(self._args.robot_args.decimation):
-            self.time_since_reset += self._scene.scene.dt
-            self.time_since_resample += self._scene.scene.dt
-            self.time_since_random_push += self._scene.scene.dt
-
-            self._robot.apply_action(action=exec_action)
-            self._scene.scene.step(refresh_visualizer=self._refresh_visualizer)
-            self.torque = torch.max(self.torque, torch.abs(self._robot.torque))
-
-        self._update_buffers()
-
-        # Render if rendering is enabled
-        self._render_headless()
         self.feet_first_contact[:] = (self.feet_air_time > 0.0) * self.feet_contact
         self.feet_air_time += self.dt
+
+    def _pre_step(self) -> None:
+        super()._pre_step()
+        self.time_since_resample += self._scene.scene.dt
 
     def update_history(self) -> None:
         super().update_history()

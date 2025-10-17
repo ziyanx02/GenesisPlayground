@@ -6,7 +6,7 @@ from pathlib import Path
 import fire
 import numpy as np
 import torch
-from gs_env.sim.envs.config.schema import LeggedRobotEnvArgs
+from gs_env.sim.envs.config.schema import WalkingEnvArgs
 
 # Add examples to path to import utils
 sys.path.insert(0, str(Path(__file__).parent.parent / "examples"))
@@ -15,7 +15,7 @@ from utils import yaml_to_config  # type: ignore
 
 def load_checkpoint_and_env_args(
     exp_name: str, num_ckpt: int | None = None, device: str = "cuda"
-) -> tuple[torch.jit.ScriptModule, LeggedRobotEnvArgs]:
+) -> tuple[torch.jit.ScriptModule, WalkingEnvArgs]:
     """Load JIT checkpoint and env_args from deploy/logs directory.
 
     Args:
@@ -36,7 +36,7 @@ def load_checkpoint_and_env_args(
         raise FileNotFoundError(f"env_args.yaml not found: {env_args_path}")
 
     print(f"Loading env_args from: {env_args_path}")
-    env_args = yaml_to_config(env_args_path, LeggedRobotEnvArgs)
+    env_args = yaml_to_config(env_args_path, WalkingEnvArgs)
 
     # Load checkpoint
     if num_ckpt is not None:
@@ -70,7 +70,7 @@ def main(
     exp_name: str = "walk",
     num_ckpt: int | None = None,
     device: str = "cpu",
-    show_viewer: bool = False,
+    show_viewer: bool = True,
     sim: bool = True,
     action_scale: float = 0.0,  # only for real robot
 ) -> None:
@@ -108,10 +108,12 @@ def main(
         print("Running in REAL ROBOT mode")
         from gs_env.real import UnitreeLeggedEnv
 
-        env = UnitreeLeggedEnv(env_args, action_scale=action_scale, device=torch.device(device))
+        env = UnitreeLeggedEnv(
+            env_args, action_scale=action_scale, interactive=True, device=torch.device(device)
+        )
 
         print("Press Start button to start the policy")
-        while not env.controller.Start:
+        while not env.robot.Start:
             time.sleep(0.1)
 
     print("=" * 80)
@@ -143,9 +145,9 @@ def main(
             last_update_time = time.time()
 
             if not sim:
-                commands_t[0, 0] = env.controller.Ly  # forward velocity (m/s)
-                commands_t[0, 1] = -env.controller.Lx  # lateral velocity (m/s)
-                commands_t[0, 2] = -env.controller.Rx  # angular velocity (rad/s)
+                commands_t[0, 0] = env.robot.Ly  # forward velocity (m/s)
+                commands_t[0, 1] = -env.robot.Lx  # lateral velocity (m/s)
+                commands_t[0, 2] = -env.robot.Rx  # angular velocity (rad/s)
             else:
                 # Update commands (can be modified for different behaviors)
                 commands_t[0, 0] = 0.0  # forward velocity (m/s)

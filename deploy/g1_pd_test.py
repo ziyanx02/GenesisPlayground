@@ -11,6 +11,7 @@ matplotlib.use("Agg")  # Use non-interactive backend to prevent windows from sho
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+from gs_env.sim.envs.config.registry import EnvArgsRegistry
 from gs_env.sim.envs.config.schema import LeggedRobotEnvArgs
 
 # Add examples to path to import utils
@@ -86,12 +87,16 @@ def run_single_dof_wave_diagnosis(
 
     last_update_time = time.time()
 
+    current_dof_pos = env.dof_pos[0] - env.default_dof_pos
     TOTAL_RESET_STEPS = 50
     for i in range(TOTAL_RESET_STEPS):
         while time.time() - last_update_time < 0.02:
             time.sleep(0.001)
-        action[:, dof_idx] = offset * i / TOTAL_RESET_STEPS / env.action_scale
-        env.apply_action(action)
+        last_update_time = time.time()
+        env.apply_action(
+            current_dof_pos / env.action_scale * (1 - i / TOTAL_RESET_STEPS)
+            + action * (i / TOTAL_RESET_STEPS)
+        )
 
     target_dof_pos_list = []
     dof_pos_list = []
@@ -173,18 +178,16 @@ def run_single_dof_diagnosis(
 def main(
     show_viewer: bool = False,
     device: str = "cpu",
-    exp_name: str = "walk",
     sim: bool = True,
 ) -> None:
     # Load checkpoint and env_args
-    env_args = load_env_args(exp_name)
+    env_args = EnvArgsRegistry["g1_fixed"]
 
     if sim:
         print("Running in SIMULATION mode")
-        import gs_env.sim.envs as envs
+        from gs_env.sim.envs.locomotion.leggedrobot_env import LeggedRobotEnv
 
-        envclass = getattr(envs, env_args.env_name)
-        env = envclass(
+        env = LeggedRobotEnv(
             args=env_args,
             num_envs=1,
             show_viewer=show_viewer,
@@ -198,35 +201,42 @@ def main(
         print("Running in REAL ROBOT mode")
         from gs_env.real import UnitreeLeggedEnv
 
-        env = UnitreeLeggedEnv(env_args, action_scale=1.0, device=torch.device(device))
+        env = UnitreeLeggedEnv(
+            env_args, action_scale=1.0, interactive=True, device=torch.device(device)
+        )
 
         print("Press Start button to start the test")
-        while not env.controller.Start:
+        while not env.robot.Start:
             time.sleep(0.1)
 
     # DoF names, lower bound, upper bound
     test_dofs = {
-        # "hip_roll": [0.0, 1.0],
-        # "hip_pitch": [-0.5, 0.5],
-        # "hip_yaw": [-0.5, 0.5],
-        # "knee": [0.0, 1.0],
-        # "ankle_roll": [-0.2, 0.2],
-        # "ankle_pitch": [-0.5, 0.5],
-        # "waist_yaw": [-1.0, 1.0],
-        # "waist_roll": [-0.4, 0.4],
-        "waist_pitch": [-0.4, 0.4],
-        # "shoulder_roll": [0.0, 1.0],
-        # "shoulder_pitch": [-0.5, 0.5],
-        # "shoulder_yaw": [0.0, 1.0],
-        # "elbow": [0.0, 1.0],
-        # "wrist_roll": [-1.0, 1.0],
-        # "wrist_pitch": [-1.0, 1.0],
-        # "wrist_yaw": [0.0, 1.0],
+        "hip_roll": [0.0, 0.8],
+        "hip_pitch": [-0.5, 0.5],
+        "hip_yaw": [-0.5, 0.5],
+        "knee": [0.0, 1.0],
+        "ankle_roll": [-0.2, 0.2],
+        "ankle_pitch": [-0.5, 0.5],
+        "waist_yaw": [-1.0, 1.0],
+        "waist_roll": [-0.3, 0.3],
+        "waist_pitch": [-0.3, 0.3],
+        "shoulder_roll": [0.0, 1.0],
+        "shoulder_pitch": [-0.5, 0.5],
+        "shoulder_yaw": [0.0, 1.0],
+        "elbow": [0.0, 1.0],
+        "wrist_roll": [-1.0, 1.0],
+        "wrist_pitch": [-1.0, 1.0],
+        "wrist_yaw": [0.0, 1.0],
     }
 
     def run_dof_diagnosis_fixed() -> None:
         nonlocal env
         dof_names = env.dof_names
+
+        if sim:
+            log_dir = Path(__file__).parent / "logs" / "pd_test" / "sim"
+        else:
+            log_dir = Path(__file__).parent / "logs" / "pd_test" / "real"
 
         for dof_name, (lower_bound, upper_bound) in test_dofs.items():
             dof_idx = -1
@@ -247,6 +257,7 @@ def main(
                 period=100,
                 amplitude=amplitude,
                 offset=offset,
+                log_dir=log_dir,
             )
 
     try:
