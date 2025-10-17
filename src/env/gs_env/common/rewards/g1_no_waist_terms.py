@@ -130,9 +130,9 @@ class G1FeetContactForcePenalty(RewardTerm):
     required_keys = ("feet_contact_force", "commands")
 
     def _compute(self, feet_contact_force: torch.Tensor, commands: torch.Tensor) -> torch.Tensor:  # type: ignore
-        contact_force_diff = 200 - feet_contact_force.max(dim=-1).values.clamp(max=200)
+        contact_force_diff = 300 - feet_contact_force.max(dim=-1).values.clamp(max=300)
         contact_force_diff *= torch.norm(commands, dim=1) > 0.1
-        return -torch.square(contact_force_diff / 200)
+        return -torch.square(contact_force_diff / 300)
 
 
 class FeetOrientationPenalty(RewardTerm):
@@ -151,7 +151,7 @@ class FeetOrientationPenalty(RewardTerm):
 
 
 class G1FeetContactForceLimitPenalty(FeetContactForceLimitPenalty):
-    contact_force_limit = 300.0
+    contact_force_limit = 400.0
 
 
 class LinVelYPenalty(RewardTerm):
