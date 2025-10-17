@@ -262,8 +262,7 @@ class LeggedRobotEnv(BaseEnv):
 
         # Apply actions and simulate physics
         for _ in range(self._args.robot_args.decimation):
-            self.time_since_reset += self._scene.scene.dt
-            self.time_since_random_push += self._scene.scene.dt
+            self._pre_step()
 
             self._robot.apply_action(action=exec_action)
             self._scene.scene.step(refresh_visualizer=self._refresh_visualizer)
@@ -273,6 +272,10 @@ class LeggedRobotEnv(BaseEnv):
 
         # Render if rendering is enabled
         self._render_headless()
+
+    def _pre_step(self) -> None:
+        self.time_since_reset += self._scene.scene.dt
+        self.time_since_random_push += self._scene.scene.dt
 
     def update_history(self) -> None:
         # save for reward computation

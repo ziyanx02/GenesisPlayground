@@ -11,6 +11,7 @@ matplotlib.use("Agg")  # Use non-interactive backend to prevent windows from sho
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+from gs_env.sim.envs.config.registry import EnvArgsRegistry
 from gs_env.sim.envs.config.schema import LeggedRobotEnvArgs
 
 # Add examples to path to import utils
@@ -171,20 +172,18 @@ def run_single_dof_diagnosis(
 
 
 def main(
-    show_viewer: bool = False,
+    show_viewer: bool = True,
     device: str = "cpu",
-    exp_name: str = "walk",
     sim: bool = True,
 ) -> None:
     # Load checkpoint and env_args
-    env_args = load_env_args(exp_name)
+    env_args = EnvArgsRegistry["g1_fixed"]
 
     if sim:
         print("Running in SIMULATION mode")
-        import gs_env.sim.envs as envs
+        from gs_env.sim.envs.locomotion.leggedrobot_env import LeggedRobotEnv
 
-        envclass = getattr(envs, env_args.env_name)
-        env = envclass(
+        env = LeggedRobotEnv(
             args=env_args,
             num_envs=1,
             show_viewer=show_viewer,
@@ -201,7 +200,7 @@ def main(
         env = UnitreeLeggedEnv(env_args, action_scale=1.0, device=torch.device(device))
 
         print("Press Start button to start the test")
-        while not env.controller.Start:
+        while not env.robot.Start:
             time.sleep(0.1)
 
     # DoF names, lower bound, upper bound
@@ -212,8 +211,8 @@ def main(
         # "knee": [0.0, 1.0],
         # "ankle_roll": [-0.2, 0.2],
         # "ankle_pitch": [-0.5, 0.5],
-        # "waist_yaw": [-1.0, 1.0],
-        # "waist_roll": [-0.4, 0.4],
+        "waist_yaw": [-1.0, 1.0],
+        "waist_roll": [-0.4, 0.4],
         "waist_pitch": [-0.4, 0.4],
         # "shoulder_roll": [0.0, 1.0],
         # "shoulder_pitch": [-0.5, 0.5],

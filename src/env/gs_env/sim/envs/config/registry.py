@@ -65,6 +65,9 @@ EnvArgsRegistry["pick_cube_default"] = EnvArgs(
     img_resolution=(480, 270),
 )
 
+# ------------------------------------------------------------
+# G1 Configuration
+# ------------------------------------------------------------
 
 EnvArgsRegistry["g1_walk"] = WalkingEnvArgs(
     env_name="WalkingEnv",
