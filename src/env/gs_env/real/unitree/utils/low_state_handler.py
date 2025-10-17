@@ -42,6 +42,10 @@ JointID = {
         "right_knee_joint": 9,
         "right_ankle_pitch_joint": 10,
         "right_ankle_roll_joint": 11,
+        # Waist 12:15
+        "waist_yaw_joint": 12,
+        "waist_roll_joint": 13,
+        "waist_pitch_joint": 14,
         # Left Upper body 12:19
         "left_shoulder_pitch_joint": 15,
         "left_shoulder_roll_joint": 16,
@@ -163,7 +167,7 @@ class LowStateMsgHandler:
             self.robot_lowstate_subscriber.Init(self.LowStateHandler_hg, 10)
         while not self.msg_received:
             print("Waiting for Low State Message...")
-            time.sleep(0.1)
+            time.sleep(0.5)
         print("Low State Message Received!!!")
 
         self.main_thread.start()

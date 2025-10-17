@@ -145,10 +145,10 @@ def main(
             if not sim:
                 commands_t[0, 0] = env.controller.Ly  # forward velocity (m/s)
                 commands_t[0, 1] = -env.controller.Lx  # lateral velocity (m/s)
-                commands_t[0, 2] = -env.controller.Ry  # angular velocity (rad/s)
+                commands_t[0, 2] = -env.controller.Rx  # angular velocity (rad/s)
             else:
                 # Update commands (can be modified for different behaviors)
-                commands_t[0, 0] = 1.0  # forward velocity (m/s)
+                commands_t[0, 0] = 0.0  # forward velocity (m/s)
                 commands_t[0, 1] = 0.0  # lateral velocity (m/s)
                 commands_t[0, 2] = 0.0  # angular velocity (rad/s)
 

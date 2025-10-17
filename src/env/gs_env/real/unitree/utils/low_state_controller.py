@@ -128,9 +128,9 @@ class LowStateCmdHandler(LowStateMsgHandler):
                 40,
                 40,
                 # Waist
-                120,
-                120,
-                120,
+                400,
+                400,
+                150,
                 # Left Arm
                 40,
                 40,
@@ -166,7 +166,7 @@ class LowStateCmdHandler(LowStateMsgHandler):
                 # Waist
                 6,
                 6,
-                6,
+                4,
                 # Left Arm
                 1,
                 1,

@@ -36,13 +36,13 @@ class WalkingEnv(LeggedRobotEnv):
 
     def _init(self) -> None:
         # Pre-parent: allocate feet-related buffers required by observation terms
-        self.feet_height = torch.zeros(
-            (self.num_envs, len(self._robot.foot_links_idx)),
+        self.feet_position = torch.zeros(
+            (self.num_envs, len(self._robot.foot_links_idx), 3),
             device=self._device,
             dtype=torch.float32,
         )
-        self.feet_z_velocity = torch.zeros(
-            (self.num_envs, len(self._robot.foot_links_idx)),
+        self.feet_velocity = torch.zeros(
+            (self.num_envs, len(self._robot.foot_links_idx), 3),
             device=self._device,
             dtype=torch.float32,
         )
@@ -131,8 +131,8 @@ class WalkingEnv(LeggedRobotEnv):
         super()._update_buffers()
         self.feet_contact_force[:] = self.link_contact_forces[:, self._robot.foot_links_idx, 2]
         self.feet_contact[:] = self.feet_contact_force > 1.0
-        self.feet_height[:] = self.link_positions[:, self._robot.foot_links_idx, 2]
-        self.feet_z_velocity[:] = self.link_velocities[:, self._robot.foot_links_idx, 2]
+        self.feet_position[:] = self.link_positions[:, self._robot.foot_links_idx]
+        self.feet_velocity[:] = self.link_velocities[:, self._robot.foot_links_idx]
         feet_quaternions = self.link_quaternions[:, self._robot.foot_links_idx].reshape(-1, 4)
         self.feet_orientation[:] = quat_apply(
             quat_inv(feet_quaternions), self.global_gravity.repeat(2, 1)

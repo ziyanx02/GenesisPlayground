@@ -217,14 +217,15 @@ class FeetHeightPenalty(RewardTerm):
     Reward the feet air time.
 
     Args:
-        feet_height: Feet height tensor of shape (B, 2) where B is the batch size.
+        feet_position: Feet position tensor of shape (B, N, 3) where B is the batch size and N is the number of feet.
         commands: Commands tensor of shape (B, 3) where B is the batch size.
     """
 
-    required_keys = ("feet_height", "commands")
+    required_keys = ("feet_position", "commands")
     target_height: float = 0.0
 
-    def _compute(self, feet_height: torch.Tensor, commands: torch.Tensor) -> torch.Tensor:  # type: ignore
+    def _compute(self, feet_position: torch.Tensor, commands: torch.Tensor) -> torch.Tensor:  # type: ignore
+        feet_height = feet_position[:, :, 2]
         feet_height = feet_height.max(dim=1)[0] - self.target_height
         feet_height = feet_height.clip(max=0.0)
         feet_height *= torch.norm(commands, dim=1) > 0.1
@@ -236,12 +237,13 @@ class FeetZVelocityPenalty(RewardTerm):
     Penalize the feet vertical velocity.
 
     Args:
-        feet_z_velocity: Feet vertical velocity tensor of shape (B, 2) where B is the batch size.
+        feet_velocity: Feet velocity tensor of shape (B, N, 3) where B is the batch size and N is the number of feet.
     """
 
-    required_keys = ("feet_z_velocity",)
+    required_keys = ("feet_velocity",)
 
-    def _compute(self, feet_z_velocity: torch.Tensor) -> torch.Tensor:  # type: ignore
+    def _compute(self, feet_velocity: torch.Tensor) -> torch.Tensor:  # type: ignore
+        feet_z_velocity = feet_velocity[:, :, 2]
         feet_z_velocity = torch.square(feet_z_velocity).sum(dim=1)
         return -feet_z_velocity
 
@@ -251,7 +253,7 @@ class StandStillFeetContactPenalty(RewardTerm):
     Penalize the uneven feet contact force when stand still.
 
     Args:
-        feet_contact_force: Feet contact force tensor of shape (B, 2) where B is the batch size.
+        feet_contact_force: Feet contact force tensor of shape (B, N) where B is the batch size and N is the number of feet.
     """
 
     required_keys = ("feet_contact_force", "commands")
@@ -268,7 +270,7 @@ class FeetContactForceLimitPenalty(RewardTerm):
     Penalize the feet contact force limit violations.
 
     Args:
-        feet_contact_force: Feet contact force tensor of shape (B, 2) where B is the batch size.
+        feet_contact_force: Feet contact force tensor of shape (B, N) where B is the batch size and N is the number of feet.
     """
 
     required_keys = ("feet_contact_force",)
