@@ -23,10 +23,11 @@ class UnitreeLeggedEnv(BaseGymRobot):
         self._args = args
         if interactive:
             self._robot = LowStateCmdHandler(args.robot_args)
+            self._robot.init()
+            self._robot.start()
         else:
             self._robot = LowStateMsgHandler(args.robot_args)
-        self.robot.init()
-        self.robot.start()
+            self._robot.init()
         self._action_space = spaces.Box(shape=(self.action_dim,), low=-np.inf, high=np.inf)
         self._action_scale = args.robot_args.action_scale * action_scale
         self._device = device
