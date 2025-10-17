@@ -415,26 +415,22 @@ class LeggedRobotEnv(BaseEnv):
         return self._robot.get_link_idx_local_by_name(name)
 
     def set_link_pose(
-        self, link_idx_local: int, pos: torch.Tensor, quat: torch.Tensor | None = None
+        self, link_idx_local: int, pos: torch.Tensor | None = None, quat: torch.Tensor | None = None
     ) -> None:
         assert self.num_envs == 1, "Only support single environment for setting link pose"
-        assert pos.shape == (3,), "Position must be a 3D vector"
         if quat is not None:
             assert quat.shape == (4,), "Quaternion must be a 4D vector"
             self._update_buffers()
             link_quat = self.link_quaternions[0][link_idx_local]
-            print("link_quat", link_quat)
-            print("quat", quat)
-            print("base_quat", self.base_quat[0])
             rotation_quat = quat_mul(quat, quat_inv(link_quat))
-            print("rotation_quat", rotation_quat)
             base_quat = quat_mul(rotation_quat, self.base_quat[0])
-            print("base_quat", base_quat)
             self._robot.set_state(quat=base_quat)
-        self._update_buffers()
-        link_pos = self.link_positions[0][link_idx_local]
-        base_pos = self.base_pos[0] + pos - link_pos
-        self._robot.set_state(pos=base_pos)
+        if pos is not None:
+            assert pos.shape == (3,), "Position must be a 3D vector"
+            self._update_buffers()
+            link_pos = self.link_positions[0][link_idx_local]
+            base_pos = self.base_pos[0] + pos - link_pos
+            self._robot.set_state(pos=base_pos)
 
     def set_dof_pos(self, dof_pos: torch.Tensor) -> None:
         assert self.num_envs == 1, "Only support single environment for setting dof pos"
