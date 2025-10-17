@@ -41,6 +41,11 @@ class WalkingEnv(LeggedRobotEnv):
             device=self._device,
             dtype=torch.float32,
         )
+        self.feet_height = torch.zeros(
+            (self.num_envs, len(self._robot.foot_links_idx)),
+            device=self._device,
+            dtype=torch.float32,
+        )
         self.feet_velocity = torch.zeros(
             (self.num_envs, len(self._robot.foot_links_idx), 3),
             device=self._device,
@@ -132,6 +137,7 @@ class WalkingEnv(LeggedRobotEnv):
         self.feet_contact_force[:] = self.link_contact_forces[:, self._robot.foot_links_idx, 2]
         self.feet_contact[:] = self.feet_contact_force > 1.0
         self.feet_position[:] = self.link_positions[:, self._robot.foot_links_idx]
+        self.feet_height[:] = self.feet_position[:, :, 2]
         self.feet_velocity[:] = self.link_velocities[:, self._robot.foot_links_idx]
         feet_quaternions = self.link_quaternions[:, self._robot.foot_links_idx].reshape(-1, 4)
         self.feet_orientation[:] = quat_apply(
