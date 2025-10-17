@@ -65,15 +65,18 @@ EnvArgsRegistry["pick_cube_default"] = EnvArgs(
     img_resolution=(480, 270),
 )
 
+# ------------------------------------------------------------
+# G1 Configuration
+# ------------------------------------------------------------
 
 EnvArgsRegistry["g1_walk"] = WalkingEnvArgs(
     env_name="WalkingEnv",
     gs_init_args=GenesisInitArgsRegistry["default"],
     scene_args=SceneArgsRegistry["flat_scene_legged"],
-    robot_args=RobotArgsRegistry["g1_no_waist"],
+    robot_args=RobotArgsRegistry["g1_default"],
     objects_args=[],
     sensors_args=[],
-    reward_term="g1_no_waist",
+    reward_term="g1",
     reward_args={
         ### Velocity Tracking ###
         "LinVelXYReward": 1.0,
@@ -97,6 +100,7 @@ EnvArgsRegistry["g1_walk"] = WalkingEnvArgs(
         "HipRollPenalty": 1.0,
         # "UpperBodyDofPenalty": 3.0,
         "UpperBodyActionPenalty": 0.5,
+        "WaistDofPenalty": 10.0,
         # "FeetAirTimeReward": 200.0,
         "FeetAirTimePenalty": 500.0,
         "G1FeetHeightPenalty": 10.0,

@@ -214,10 +214,10 @@ class FeetAirTimePenalty(RewardTerm):
 
 class FeetHeightPenalty(RewardTerm):
     """
-    Reward the feet air time.
+    Penalize the feet height.
 
     Args:
-        feet_height: Feet height tensor of shape (B, 2) where B is the batch size.
+        feet_height: Feet height tensor of shape (B, N) where B is the batch size and N is the number of feet.
         commands: Commands tensor of shape (B, 3) where B is the batch size.
     """
 
@@ -236,12 +236,13 @@ class FeetZVelocityPenalty(RewardTerm):
     Penalize the feet vertical velocity.
 
     Args:
-        feet_z_velocity: Feet vertical velocity tensor of shape (B, 2) where B is the batch size.
+        feet_velocity: Feet velocity tensor of shape (B, N, 3) where B is the batch size and N is the number of feet.
     """
 
-    required_keys = ("feet_z_velocity",)
+    required_keys = ("feet_velocity",)
 
-    def _compute(self, feet_z_velocity: torch.Tensor) -> torch.Tensor:  # type: ignore
+    def _compute(self, feet_velocity: torch.Tensor) -> torch.Tensor:  # type: ignore
+        feet_z_velocity = feet_velocity[:, :, 2]
         feet_z_velocity = torch.square(feet_z_velocity).sum(dim=1)
         return -feet_z_velocity
 
@@ -251,7 +252,7 @@ class StandStillFeetContactPenalty(RewardTerm):
     Penalize the uneven feet contact force when stand still.
 
     Args:
-        feet_contact_force: Feet contact force tensor of shape (B, 2) where B is the batch size.
+        feet_contact_force: Feet contact force tensor of shape (B, N) where B is the batch size and N is the number of feet.
     """
 
     required_keys = ("feet_contact_force", "commands")
@@ -268,7 +269,7 @@ class FeetContactForceLimitPenalty(RewardTerm):
     Penalize the feet contact force limit violations.
 
     Args:
-        feet_contact_force: Feet contact force tensor of shape (B, 2) where B is the batch size.
+        feet_contact_force: Feet contact force tensor of shape (B, N) where B is the batch size and N is the number of feet.
     """
 
     required_keys = ("feet_contact_force",)

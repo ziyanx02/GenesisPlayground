@@ -111,7 +111,7 @@ def main(
         env = UnitreeLeggedEnv(env_args, action_scale=action_scale, device=torch.device(device))
 
         print("Press Start button to start the policy")
-        while not env.controller.Start:
+        while not env.robot.Start:
             time.sleep(0.1)
 
     print("=" * 80)
@@ -143,9 +143,9 @@ def main(
             last_update_time = time.time()
 
             if not sim:
-                commands_t[0, 0] = env.controller.Ly  # forward velocity (m/s)
-                commands_t[0, 1] = -env.controller.Lx  # lateral velocity (m/s)
-                commands_t[0, 2] = -env.controller.Rx  # angular velocity (rad/s)
+                commands_t[0, 0] = env.robot.Ly  # forward velocity (m/s)
+                commands_t[0, 1] = -env.robot.Lx  # lateral velocity (m/s)
+                commands_t[0, 2] = -env.robot.Rx  # angular velocity (rad/s)
             else:
                 # Update commands (can be modified for different behaviors)
                 commands_t[0, 0] = 0.0  # forward velocity (m/s)
