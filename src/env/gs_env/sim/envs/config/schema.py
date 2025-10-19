@@ -48,3 +48,7 @@ class LeggedRobotEnvArgs(EnvArgs):
 class WalkingEnvArgs(LeggedRobotEnvArgs):
     command_resample_time: float = 10.0
     commands_range: tuple[tuple[float, float], ...]
+
+
+class MotionEnvArgs(LeggedRobotEnvArgs):
+    motion_file: str
