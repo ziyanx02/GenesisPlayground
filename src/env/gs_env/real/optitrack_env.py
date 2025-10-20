@@ -45,10 +45,11 @@ class OptitrackEnv(BaseEnv):
         self.robot_link_offsets = {}
         with open(self._args.offset_config) as f:
             off = yaml.safe_load(f)
-        for name, data in off.items():
+        for name in self._args.tracked_link_names:
+            data = off.get(name, {})
             self.robot_link_offsets[name] = {
-                "pos": np.array(data["pos"], dtype=np.float32),
-                "quat": np.array(data["quat"], dtype=np.float32),
+                "pos": np.array(data.get("pos", [0.0, 0.0, 0.0]), dtype=np.float32),
+                "quat": np.array(data.get("quat", [1.0, 0.0, 0.0, 0.0]), dtype=np.float32),
             }
 
     def _calculate_tracked_link_by_name(

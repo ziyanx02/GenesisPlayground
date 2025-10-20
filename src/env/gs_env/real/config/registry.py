@@ -11,7 +11,7 @@ EnvArgsRegistry["g1_links_tracking"] = OptitrackEnvArgs(
     server_ip="192.168.0.232",
     client_ip="192.168.0.128",
     use_multicast=False,
-    offset_config="./config/optitrack/offset.yaml",
+    offset_config="./config/optitrack_offset/calibrated.yaml",
     tracked_link_names=[
         "pelvis_contour_link",
         "torso_link",

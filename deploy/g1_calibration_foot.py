@@ -5,7 +5,7 @@ from typing import Any
 import numpy as np
 import torch
 import yaml
-from gs_env.common.utils.math_utils import get_RT_between
+from gs_env.common.utils.math_utils import get_RT_between, transform_RT_by
 from gs_env.real.config.registry import EnvArgsRegistry as real_env_registry
 from gs_env.real.config.schema import OptitrackEnvArgs
 from gs_env.real.optitrack_env import OptitrackEnv
@@ -18,14 +18,14 @@ from .g1_r2s_config import G1_CB1_LINK_NAMES, G1_CB1_POS, G1_CB1_QUAT
 
 def main(args: argparse.Namespace) -> None:
     # Create OptiTrack env with zero offsets
-    offset_config_path = (
+    load_config_path = (
         Path(__file__).resolve().parent.parent
         / "config"
-        / "optitrack"
-        / (args.offset_config + ".yaml")
+        / "optitrack_offset"
+        / (args.load_config + ".yaml")
     )
     optitrack_env_args = real_env_registry["g1_links_tracking"].model_copy(
-        update={"offset_config": offset_config_path},
+        update={"offset_config": load_config_path},
     )
     assert isinstance(optitrack_env_args, OptitrackEnvArgs)
     optitrack_env = OptitrackEnv(num_envs=1, args=optitrack_env_args)
@@ -73,14 +73,15 @@ def main(args: argparse.Namespace) -> None:
     save_path = (
         Path(__file__).resolve().parent.parent
         / "config"
-        / "optitrack"
-        / (args.offset_config + "_foot" + ".yaml")
+        / "optitrack_offset"
+        / (args.save_config + ".yaml")
     )
 
     while True:
         offset_sampled += 1
         frame = optitrack_env.get_tracked_links()
         for link_name in G1_CB1_LINK_NAMES:
+            # Calculcation
             R_m, T_m = frame[link_name][1], frame[link_name][0]
             idx_local = viewer_env.robot.get_link_idx_local_by_name(link_name)
             Pose_s = viewer_env.get_link_pose(idx_local)
@@ -90,6 +91,20 @@ def main(args: argparse.Namespace) -> None:
             link_offsets[link_name]["pos"] = m * link_offsets[link_name]["pos"] + (1 - m) * T_o
             link_offsets[link_name]["quat"] = m * link_offsets[link_name]["quat"] + (1 - m) * R_o
 
+            # Visualization
+            current_quat, current_pos = transform_RT_by(
+                R_m,
+                T_m,
+                link_offsets[link_name]["quat"],
+                link_offsets[link_name]["pos"],
+            )
+            viewer_env.scene.set_obj_pose(
+                name=link_name,
+                pos=torch.tensor(current_pos).unsqueeze(0),
+                quat=torch.tensor(current_quat).unsqueeze(0),
+            )
+        viewer_env.step_visualizer()
+
         if offset_sampled % 100 == 0:
             save_offsets(save_path)
 
@@ -97,7 +112,8 @@ def main(args: argparse.Namespace) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--offset_config", type=str, default="offset_default"
-    )  # when calibrating foot, should always use offset_default
+        "--load_config", type=str, default="default"
+    )  # when calibrating foot, should always use zero offsets
+    parser.add_argument("--save_config", type=str, default="foot")
     args = parser.parse_args()
     main(args)
