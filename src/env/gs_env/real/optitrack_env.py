@@ -70,13 +70,16 @@ class OptitrackEnv(BaseEnv):
 
     def get_tracked_links(
         self,
+        force_refresh: bool = False,
     ) -> dict[str, tuple[np.typing.NDArray[np.float32], np.typing.NDArray[np.float32]]]:
         """
         Get all tracked links.
         """
         aligned_poses = {}
         frame = self._client.get_frame()
-
+        if force_refresh:
+            frame = self._client.get_frame()
+            # to ensure we get the latest frame if not called for a while
         for name, (pos, quat) in frame.items():
             if name in self._args.tracked_link_names:
                 new_pos, new_quat = self._calculate_tracked_link_by_name(name, pos, quat)

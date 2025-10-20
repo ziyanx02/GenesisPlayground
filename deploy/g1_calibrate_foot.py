@@ -19,10 +19,7 @@ from .g1_r2s_config import G1_CB1_LINK_NAMES, G1_CB1_POS, G1_CB1_QUAT
 def main(args: argparse.Namespace) -> None:
     # Create OptiTrack env with zero offsets
     load_config_path = (
-        Path(__file__).resolve().parent.parent
-        / "config"
-        / "optitrack_offset"
-        / (args.load_config + ".yaml")
+        Path(__file__).resolve().parent.parent / "config" / "optitrack_offset" / "default.yaml"
     )
     optitrack_env_args = real_env_registry["g1_links_tracking"].model_copy(
         update={"offset_config": load_config_path},
@@ -46,29 +43,13 @@ def main(args: argparse.Namespace) -> None:
     )
 
     # Initialize zero offsets
-    link_offsets = {}
+    link_offsets: dict[str, dict[str, np.typing.NDArray[np.float32]]] = {}
     for name in G1_CB1_LINK_NAMES:
         link_offsets[name] = {
             "pos": np.array([0.0, 0.0, 0.0]),
             "quat": np.array([1.0, 0.0, 0.0, 0.0]),
         }
-    offset_sampled = 0
-
-    def save_offsets(save_path: str) -> None:
-        save_data = {}
-
-        def represent_list(dumper: yaml.Dumper, data: list[Any]) -> yaml.nodes.SequenceNode:
-            return dumper.represent_sequence("tag:yaml.org,2002:seq", data, flow_style=True)
-
-        yaml.add_representer(list, represent_list)
-        for name, offset in link_offsets.items():
-            save_data[name] = {
-                "pos": offset["pos"].tolist(),
-                "quat": offset["quat"].tolist(),
-            }
-        with open(save_path, "w") as f:
-            yaml.dump(save_data, f, sort_keys=False)
-        print(f"Offsets saved to {save_path}.")
+    offset_sampled: int = 0
 
     save_path = (
         Path(__file__).resolve().parent.parent
@@ -77,6 +58,7 @@ def main(args: argparse.Namespace) -> None:
         / (args.save_config + ".yaml")
     )
 
+    print("[INFO] Calibration started.")
     while True:
         offset_sampled += 1
         frame = optitrack_env.get_tracked_links()
@@ -88,8 +70,12 @@ def main(args: argparse.Namespace) -> None:
             R_s, T_s = Pose_s[1].cpu().numpy(), Pose_s[0].cpu().numpy()
             R_o, T_o = get_RT_between(R_m, T_m, R_s, T_s)
             m = 1 - 1 / offset_sampled
-            link_offsets[link_name]["pos"] = m * link_offsets[link_name]["pos"] + (1 - m) * T_o
-            link_offsets[link_name]["quat"] = m * link_offsets[link_name]["quat"] + (1 - m) * R_o
+            link_offsets[link_name]["pos"] = (
+                m * link_offsets[link_name]["pos"] + (1 - m) * T_o
+            ).astype(np.float32)
+            link_offsets[link_name]["quat"] = (
+                m * link_offsets[link_name]["quat"] + (1 - m) * R_o
+            ).astype(np.float32)
 
             # Visualization
             current_quat, current_pos = transform_RT_by(
@@ -106,13 +92,26 @@ def main(args: argparse.Namespace) -> None:
         viewer_env.step_visualizer()
 
         if offset_sampled % 100 == 0:
-            save_offsets(save_path)
+            save_data: dict[str, dict[str, list[float]]] = {}
+
+            def represent_list(dumper: yaml.Dumper, data: list[Any]) -> yaml.nodes.SequenceNode:
+                return dumper.represent_sequence("tag:yaml.org,2002:seq", data, flow_style=True)
+
+            yaml.add_representer(list, represent_list)
+            for name, offset in link_offsets.items():
+                save_data[name] = {
+                    "pos": offset["pos"].tolist(),
+                    "quat": offset["quat"].tolist(),
+                }
+            with open(save_path, "w") as f:
+                yaml.dump(save_data, f, sort_keys=False)
+            print(f"[INFO] {offset_sampled} frames sampled. Offsets saved to {save_path}.")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--load_config", type=str, default="default")
-    # when calibrating foot, should always use zero offsets
     parser.add_argument("--save_config", type=str, default="foot")
+    # when calibrating foot, should always use zero offsets as input
+    # only save foot offsets to file
     args = parser.parse_args()
     main(args)
