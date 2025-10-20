@@ -65,22 +65,24 @@ EnvArgsRegistry["pick_cube_default"] = EnvArgs(
     img_resolution=(480, 270),
 )
 
+# ------------------------------------------------------------
+# G1 Configuration
+# ------------------------------------------------------------
 
 EnvArgsRegistry["g1_walk"] = WalkingEnvArgs(
     env_name="WalkingEnv",
     gs_init_args=GenesisInitArgsRegistry["default"],
     scene_args=SceneArgsRegistry["flat_scene_legged"],
-    robot_args=RobotArgsRegistry["g1_no_waist"],
+    robot_args=RobotArgsRegistry["g1_default"],
     objects_args=[],
     sensors_args=[],
-    reward_term="g1_no_waist",
+    reward_term="g1",
     reward_args={
         ### Velocity Tracking ###
         "LinVelXYReward": 10.0,
         "AngVelZReward": 10.0,
-        "LinVelYPenalty": 20.0,
         "LinVelZPenalty": 20.0,
-        "AngVelXYPenalty": 5.0,
+        "AngVelXYPenalty": 1.0,
         ### Pose Tracking ###
         "OrientationPenalty": 100.0,
         ### Regularization ###
@@ -91,11 +93,11 @@ EnvArgsRegistry["g1_walk"] = WalkingEnvArgs(
         "ActionLimitPenalty": 0.1,
         ### Motion Constraints ###
         "AnkleTorquePenalty": 0.001,
-        "StandStillAnkleTorquePenalty": 0.01,
         "HipYawPenalty": 10.0,
         "HipRollPenalty": 100.0,
         # "UpperBodyDofPenalty": 3.0,
         "UpperBodyActionPenalty": 0.5,
+        "WaistDofPenalty": 300.0,
         # "FeetAirTimeReward": 200.0,
         "FeetAirTimePenalty": 500.0,
         "G1FeetHeightPenalty": 100.0,
@@ -104,6 +106,7 @@ EnvArgsRegistry["g1_walk"] = WalkingEnvArgs(
         "FeetOrientationPenalty": 30.0,
         "StandStillFeetContactPenalty": 3e-4,
         "StandStillActionRatePenalty": 1.0,
+        # "StandStillAnkleTorquePenalty": 0.01,
         "G1FeetContactForceLimitPenalty": 1e-4,
     },
     img_resolution=(480, 270),

@@ -36,13 +36,18 @@ class WalkingEnv(LeggedRobotEnv):
 
     def _init(self) -> None:
         # Pre-parent: allocate feet-related buffers required by observation terms
+        self.feet_position = torch.zeros(
+            (self.num_envs, len(self._robot.foot_links_idx), 3),
+            device=self._device,
+            dtype=torch.float32,
+        )
         self.feet_height = torch.zeros(
             (self.num_envs, len(self._robot.foot_links_idx)),
             device=self._device,
             dtype=torch.float32,
         )
-        self.feet_z_velocity = torch.zeros(
-            (self.num_envs, len(self._robot.foot_links_idx)),
+        self.feet_velocity = torch.zeros(
+            (self.num_envs, len(self._robot.foot_links_idx), 3),
             device=self._device,
             dtype=torch.float32,
         )
@@ -92,30 +97,14 @@ class WalkingEnv(LeggedRobotEnv):
         self.time_since_resample[envs_idx] = 0.0
 
     def apply_action(self, action: torch.Tensor) -> None:
-        action = action.detach().to(self._device)
-        self._action = action
-        self._action_buf[:] = torch.cat([self._action_buf[:, :, 1:], action.unsqueeze(-1)], dim=-1)
-        exec_action = self._action_buf[:, :, 0]
-        exec_action *= self.action_scale
+        super().apply_action(action=action)
 
-        self.torque *= 0
-
-        # Apply actions and simulate physics
-        for _ in range(self._args.robot_args.decimation):
-            self.time_since_reset += self._scene.scene.dt
-            self.time_since_resample += self._scene.scene.dt
-            self.time_since_random_push += self._scene.scene.dt
-
-            self._robot.apply_action(action=exec_action)
-            self._scene.scene.step(refresh_visualizer=self._refresh_visualizer)
-            self.torque = torch.max(self.torque, torch.abs(self._robot.torque))
-
-        self._update_buffers()
-
-        # Render if rendering is enabled
-        self._render_headless()
         self.feet_first_contact[:] = (self.feet_air_time > 0.0) * self.feet_contact
         self.feet_air_time += self.dt
+
+    def _pre_step(self) -> None:
+        super()._pre_step()
+        self.time_since_resample += self._scene.scene.dt
 
     def update_history(self) -> None:
         super().update_history()
@@ -131,8 +120,9 @@ class WalkingEnv(LeggedRobotEnv):
         super()._update_buffers()
         self.feet_contact_force[:] = self.link_contact_forces[:, self._robot.foot_links_idx, 2]
         self.feet_contact[:] = self.feet_contact_force > 1.0
-        self.feet_height[:] = self.link_positions[:, self._robot.foot_links_idx, 2]
-        self.feet_z_velocity[:] = self.link_velocities[:, self._robot.foot_links_idx, 2]
+        self.feet_position[:] = self.link_positions[:, self._robot.foot_links_idx]
+        self.feet_height[:] = self.feet_position[:, :, 2]
+        self.feet_velocity[:] = self.link_velocities[:, self._robot.foot_links_idx]
         feet_quaternions = self.link_quaternions[:, self._robot.foot_links_idx].reshape(-1, 4)
         self.feet_orientation[:] = quat_apply(
             quat_inv(feet_quaternions), self.global_gravity.repeat(2, 1)
