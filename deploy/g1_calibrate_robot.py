@@ -8,13 +8,11 @@ from typing import Any
 import numpy as np
 from gs_env.real.config.registry import EnvArgsRegistry as real_env_registry
 from gs_env.real.config.schema import OptitrackEnvArgs
+from gs_env.real.leggedrobot_env import UnitreeLeggedEnv
 from gs_env.real.optitrack_env import OptitrackEnv
-from gs_env.real.unitree.utils.low_state_handler import LowStateMsgHandler
 from gs_env.sim.envs.config.registry import EnvArgsRegistry as sim_env_registry
 from gs_env.sim.envs.config.schema import LeggedRobotEnvArgs
 from gs_env.sim.envs.locomotion.custom_env import CustomEnv
-from gs_env.sim.robots.config.registry import RobotArgsRegistry
-from gs_env.sim.robots.config.schema import HumanoidRobotArgs
 
 from .g1_r2s_config import G1_FK_TABLES
 
@@ -52,11 +50,11 @@ def main(args: argparse.Namespace) -> None:
     )
 
     # Create low state handler
-    low_state_handler_robot_args = RobotArgsRegistry["g1_default"]
-    assert isinstance(low_state_handler_robot_args, HumanoidRobotArgs)
-    low_state_handler = LowStateMsgHandler(low_state_handler_robot_args)
-    low_state_handler.init()
+    real_env_args = sim_env_registry["g1_walk"]
+    assert isinstance(real_env_args, LeggedRobotEnvArgs)
+    real_env = UnitreeLeggedEnv(args=real_env_args, interactive=False)
 
+    # Parse save path
     save_path = (
         Path(__file__).resolve().parent.parent
         / "config"
@@ -64,13 +62,13 @@ def main(args: argparse.Namespace) -> None:
         / (args.save_config + ".yaml")
     )
 
+    print("[INFO] Starting collection... press 'c' to capture a sample, 'q' to quit and calibrate.")
     collected_data: list[dict[str, Any]] = []
-    print("[INFO] Collection started. Press 'c' to capture a sample, 'q' to quit and calibrate.")
     while True:
         key = getch()
         if key == "c":
             link_poses = optitrack_env.get_tracked_links(force_refresh=True)
-            qpos = low_state_handler.joint_pos.astype(np.float32)
+            qpos = real_env.dof_pos[0].cpu().numpy().astype(np.float32)
             data = {
                 "link_poses": link_poses,
                 "qpos": qpos,
@@ -81,16 +79,12 @@ def main(args: argparse.Namespace) -> None:
             break
 
     print(f"[INFO] Total samples: {len(collected_data)}, starting calibration...")
-    dof_names = low_state_handler_robot_args.dof_names
-    dof_idx_local = [
-        viewer_env.robot.get_joint_dofs_idx_local_by_name(name)[0] for name in dof_names
-    ]
 
     # Saved for pre-commit, TODO
     def _touch(*args, **kwargs) -> None:
         pass
 
-    _touch(G1_FK_TABLES, viewer_env, save_path, dof_idx_local)
+    _touch(G1_FK_TABLES, viewer_env, save_path)
     raise NotImplementedError("TODO")
 
 

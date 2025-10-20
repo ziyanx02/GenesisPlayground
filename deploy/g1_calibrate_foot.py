@@ -1,4 +1,7 @@
 import argparse
+import sys
+import termios
+import tty
 from pathlib import Path
 from typing import Any
 
@@ -14,6 +17,22 @@ from gs_env.sim.envs.config.schema import LeggedRobotEnvArgs
 from gs_env.sim.envs.locomotion.custom_env import CustomEnv
 
 from .g1_r2s_config import G1_CB1_LINK_NAMES, G1_CB1_POS, G1_CB1_QUAT
+
+
+def getch_nonblocking() -> str | None:
+    """Try reading one key without blocking."""
+    import select
+
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setcbreak(fd)
+        if select.select([sys.stdin], [], [], 0)[0]:
+            return sys.stdin.read(1)
+        else:
+            return None
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
 
 def main(args: argparse.Namespace) -> None:
@@ -36,6 +55,16 @@ def main(args: argparse.Namespace) -> None:
         show_viewer=True,
     )
 
+    # Parse save path
+    save_path = (
+        Path(__file__).resolve().parent.parent
+        / "config"
+        / "optitrack_offset"
+        / (args.save_config + ".yaml")
+    )
+
+    print("[INFO] Starting calibration... press 'q' to quit and save.")
+
     # Set robot to initial pose
     pelvis_idx_local = viewer_env.robot.get_link_idx_local_by_name("pelvis")
     viewer_env.set_link_pose(
@@ -51,14 +80,6 @@ def main(args: argparse.Namespace) -> None:
         }
     offset_sampled: int = 0
 
-    save_path = (
-        Path(__file__).resolve().parent.parent
-        / "config"
-        / "optitrack_offset"
-        / (args.save_config + ".yaml")
-    )
-
-    print("[INFO] Calibration started.")
     while True:
         offset_sampled += 1
         frame = optitrack_env.get_tracked_links()
@@ -91,21 +112,24 @@ def main(args: argparse.Namespace) -> None:
             )
         viewer_env.step_visualizer()
 
-        if offset_sampled % 100 == 0:
-            save_data: dict[str, dict[str, list[float]]] = {}
+        key = getch_nonblocking()
+        if key == "q":
+            break
 
-            def represent_list(dumper: yaml.Dumper, data: list[Any]) -> yaml.nodes.SequenceNode:
-                return dumper.represent_sequence("tag:yaml.org,2002:seq", data, flow_style=True)
+    print(f"[INFO] Total samples: {offset_sampled}, saving offsets to {save_path}.")
+    save_data: dict[str, dict[str, list[float]]] = {}
 
-            yaml.add_representer(list, represent_list)
-            for name, offset in link_offsets.items():
-                save_data[name] = {
-                    "pos": offset["pos"].tolist(),
-                    "quat": offset["quat"].tolist(),
-                }
-            with open(save_path, "w") as f:
-                yaml.dump(save_data, f, sort_keys=False)
-            print(f"[INFO] {offset_sampled} frames sampled. Offsets saved to {save_path}.")
+    def represent_list(dumper: yaml.Dumper, data: list[Any]) -> yaml.nodes.SequenceNode:
+        return dumper.represent_sequence("tag:yaml.org,2002:seq", data, flow_style=True)
+
+    yaml.add_representer(list, represent_list)
+    for name, offset in link_offsets.items():
+        save_data[name] = {
+            "pos": offset["pos"].tolist(),
+            "quat": offset["quat"].tolist(),
+        }
+    with open(save_path, "w") as f:
+        yaml.dump(save_data, f, sort_keys=False)
 
 
 if __name__ == "__main__":
