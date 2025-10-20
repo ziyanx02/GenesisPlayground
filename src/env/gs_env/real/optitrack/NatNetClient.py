@@ -2605,7 +2605,7 @@ class NatNetClient:
         if self.data_thread is not None and self.data_thread.is_alive():
             self.data_thread.join()
 
-    def get_frame(self) -> dict[str, list[np.typing.NDArray[np.float64]]]:
+    def get_frame(self) -> dict[str, list[np.typing.NDArray[np.float32]]]:
         # get frame from queue
         mocap_data = self.data_queue.get(block=True)
 
