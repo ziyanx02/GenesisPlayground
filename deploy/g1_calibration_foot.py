@@ -111,9 +111,8 @@ def main(args: argparse.Namespace) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--load_config", type=str, default="default"
-    )  # when calibrating foot, should always use zero offsets
+    parser.add_argument("--load_config", type=str, default="default")
+    # when calibrating foot, should always use zero offsets
     parser.add_argument("--save_config", type=str, default="foot")
     args = parser.parse_args()
     main(args)
