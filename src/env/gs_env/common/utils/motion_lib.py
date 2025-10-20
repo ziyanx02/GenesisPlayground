@@ -201,6 +201,8 @@ class MotionLib:
         self._motion_root_pos = torch.cat(motion_root_pos, dim=0)
         self._motion_root_pos_delta = torch.stack(motion_root_pos_delta, dim=0)
         self._motion_root_rot = torch.cat(motion_root_rot, dim=0)
+        motion_root_rot = torch.cat(motion_root_rot, dim=0)
+        self._motion_root_rot = torch.cat([motion_root_rot[:, 3:], motion_root_rot[:, :3]], dim=1)
         self._motion_root_lin_vel = torch.cat(motion_root_lin_vel, dim=0)
         self._motion_root_ang_vel = torch.cat(motion_root_ang_vel, dim=0)
         self._motion_dof_pos = torch.zeros(

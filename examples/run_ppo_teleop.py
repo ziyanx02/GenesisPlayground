@@ -470,12 +470,10 @@ def test(env_args: Any) -> None:
     def run() -> None:
         nonlocal env
         while True:
-            env.scene.scene.step()
+            env.scene.scene.step(refresh_visualizer=False)
             time.sleep(0.1)
-            # env._update_buffers()
-            base_quat = env.base_quat
-            print("base_quat", base_quat)
-            print("base_quat_local", env.global_to_local(base_quat))
+            # env._update_ref_motion()
+            env.reset_idx(torch.IntTensor([0]))
 
     try:
         if platform.system() == "Darwin" and show_viewer:
