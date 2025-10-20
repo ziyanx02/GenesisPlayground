@@ -2,15 +2,6 @@ G1_HEIGHT = [0, 0, 0.793]
 G1_CB1_POS = [-2.0, 0.0, 0.793]
 G1_CB1_QUAT = [1.0, 0.0, 0.0, 0.0]
 
-G1_TRACKED_LINK_NAMES = [
-    "pelvis_contour_link",
-    "torso_link",
-    "left_rubber_hand",
-    "right_rubber_hand",
-    "left_ankle_roll_link",
-    "right_ankle_roll_link",
-]
-
 G1_CB1_LINK_NAMES = [
     "left_ankle_roll_link",
     "right_ankle_roll_link",
@@ -21,7 +12,6 @@ G1_CB2_LINK_NAMES = [
     "torso_link",
     "left_rubber_hand",
     "right_rubber_hand",
-    # "right_ankle_roll_link",
 ]
 
 G1_FK_TABLES = {
