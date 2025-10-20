@@ -167,7 +167,7 @@ class MotionEnv(LeggedRobotEnv):
     # ---------- Overrides ----------
     def reset_idx(self, envs_idx: torch.IntTensor) -> None:
         # set reference motion first
-        self._reset_ref_motion(envs_idx=envs_idx)
+        # self._reset_ref_motion(envs_idx=envs_idx)
 
         # initialize robot state close to reference at reset
         default_pos = self.ref_root_pos[envs_idx]

@@ -456,7 +456,7 @@ def train_policy(
 
 def test(env_args: Any) -> None:
     """Test the policy."""
-    show_viewer = True
+    show_viewer = False
     # Create environment for evaluation
     env = create_gs_env(
         show_viewer=show_viewer,
@@ -469,9 +469,12 @@ def test(env_args: Any) -> None:
 
     def run() -> None:
         nonlocal env
+        t = 0.0
         while True:
             env.scene.scene.step(refresh_visualizer=False)
-            time.sleep(0.1)
+            # env._motion_time_offsets[0] = t
+            t += 0.02
+            time.sleep(0.3)
             # env._update_ref_motion()
             env.reset_idx(torch.IntTensor([0]))
 
