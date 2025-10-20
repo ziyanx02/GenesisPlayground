@@ -1,6 +1,8 @@
 from typing import Literal
 
+import numpy as np
 import torch
+from genesis.utils import geom as gu
 
 
 @torch.jit.script
@@ -471,3 +473,35 @@ def compute_pose_error(
         raise ValueError(
             f"Unsupported orientation error type: {rot_error_type}. Valid: 'quat', 'axis_angle'."
         )
+
+
+def transform_RT_by(
+    R1: np.typing.NDArray[np.float32],
+    T1: np.typing.NDArray[np.float32],
+    R2: np.typing.NDArray[np.float32],
+    T2: np.typing.NDArray[np.float32],
+) -> tuple[np.typing.NDArray[np.float32], np.typing.NDArray[np.float32]]:
+    """
+    Apply the offset (R2, T2) to the pose (R1, T1).
+    R = R2 * R1
+    T = R1 * T2 + T1
+    """
+    R_out = np.array(gu.transform_quat_by_quat(R1, R2))
+    T_out = np.array(gu.transform_by_quat(T2, R1) + T1)
+    return R_out, T_out
+
+
+def get_RT_between(
+    R1: np.typing.NDArray[np.float32],
+    T1: np.typing.NDArray[np.float32],
+    R2: np.typing.NDArray[np.float32],
+    T2: np.typing.NDArray[np.float32],
+) -> tuple[np.typing.NDArray[np.float32], np.typing.NDArray[np.float32]]:
+    """
+    Get the offset from (R1, T1) to (R2, T2).
+    R = R2 * R1^T
+    T = R1^T * (T2 - T1)
+    """
+    R_out = np.array(gu.transform_quat_by_quat(gu.inv_quat(R1), R2))
+    T_out = np.array(gu.transform_by_quat(T2 - T1, gu.inv_quat(R1)))
+    return R_out, T_out

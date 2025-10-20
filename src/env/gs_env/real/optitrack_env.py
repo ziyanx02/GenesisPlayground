@@ -1,9 +1,12 @@
+import threading
+from typing import Any
+
 import numpy as np
 import torch
 import yaml
-from genesis.utils import geom as gu
 
 from gs_env.common.bases.base_env import BaseEnv
+from gs_env.common.utils.math_utils import transform_RT_by
 from gs_env.real.config.schema import OptitrackEnvArgs
 
 from .optitrack.NatNetClient import setup_optitrack
@@ -11,7 +14,7 @@ from .optitrack.NatNetClient import setup_optitrack
 _DEFAULT_DEVICE = torch.device("cpu")
 
 
-class Real2SimEnv(BaseEnv):
+class OptitrackEnv(BaseEnv):
     def __init__(
         self,
         num_envs: int,
@@ -32,6 +35,12 @@ class Real2SimEnv(BaseEnv):
             client_address=self._args.client_ip,
             use_multicast=self._args.use_multicast,
         )
+        thread = threading.Thread(target=self._client.run)
+        thread.start()
+        if not self._client:
+            print("Failed to setup OptiTrack client")
+            exit(1)
+        self._client.get_frame()  # eventually this will stuck, so we put it at the beginning
 
         self.robot_link_offsets = {}
         with open(self._args.offset_config) as f:
@@ -42,8 +51,6 @@ class Real2SimEnv(BaseEnv):
                 "quat": np.array(data["quat"], dtype=np.float32),
             }
 
-        self._device = device
-
     def _calculate_tracked_link_by_name(
         self, name: str, pos: np.typing.NDArray[np.float32], quat: np.typing.NDArray[np.float32]
     ) -> tuple[np.typing.NDArray[np.float32], np.typing.NDArray[np.float32]]:
@@ -52,7 +59,7 @@ class Real2SimEnv(BaseEnv):
         """
         if name not in self.robot_link_offsets:
             raise ValueError(f"Tracked link {name} not found!")
-        aligned_quat, aligned_pos = self._transform_RT_by(
+        aligned_quat, aligned_pos = transform_RT_by(
             quat,
             pos,
             self.robot_link_offsets[name]["quat"],
@@ -75,34 +82,30 @@ class Real2SimEnv(BaseEnv):
                 aligned_poses[name] = (new_pos, new_quat)
         return aligned_poses
 
-    def _transform_RT_by(
-        self,
-        R1: np.typing.NDArray[np.float32],
-        T1: np.typing.NDArray[np.float32],
-        R2: np.typing.NDArray[np.float32],
-        T2: np.typing.NDArray[np.float32],
-    ) -> tuple[np.typing.NDArray[np.float32], np.typing.NDArray[np.float32]]:
-        """
-        Apply the offset (R2, T2) to the pose (R1, T1).
-        R = R2 * R1
-        T = R1 * T2 + T1
-        """
-        R_out = np.array(gu.transform_quat_by_quat(R1, R2))
-        T_out = np.array(gu.transform_by_quat(T2, R1) + T1)
-        return R_out, T_out
+    # all the abstract methods below should not be used in real envs
+    def reset_idx(self, envs_idx: torch.IntTensor) -> None:
+        pass
 
-    def _get_RT_between(
-        self,
-        R1: np.typing.NDArray[np.float32],
-        T1: np.typing.NDArray[np.float32],
-        R2: np.typing.NDArray[np.float32],
-        T2: np.typing.NDArray[np.float32],
-    ) -> tuple[np.typing.NDArray[np.float32], np.typing.NDArray[np.float32]]:
-        """
-        Get the offset from (R1, T1) to (R2, T2).
-        R = R2 * R1^T
-        T = R1^T * (T2 - T1)
-        """
-        R_out = np.array(gu.transform_quat_by_quat(gu.inv_quat(R1), R2))
-        T_out = np.array(gu.transform_by_quat(T2 - T1, gu.inv_quat(R1)))
-        return R_out, T_out
+    def apply_action(self, action: torch.Tensor) -> None:
+        pass
+
+    def get_observations(self) -> tuple[torch.Tensor, torch.Tensor]:
+        return torch.zeros((self._num_envs, 0), device=self._device), torch.zeros(
+            (self._num_envs, 0), device=self._device
+        )
+
+    def get_extra_infos(self) -> dict[str, Any]:
+        return {}
+
+    def get_terminated(self) -> torch.Tensor:
+        return torch.zeros((self._num_envs,), device=self._device)
+
+    def get_truncated(self) -> torch.Tensor:
+        return torch.zeros((self._num_envs,), device=self._device)
+
+    def get_reward(self) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+        return torch.zeros((self._num_envs,), device=self._device), {}
+
+    @property
+    def num_envs(self) -> int:
+        return self._num_envs
