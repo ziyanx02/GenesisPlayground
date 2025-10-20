@@ -192,6 +192,11 @@ class LeggedRobotEnv(BaseEnv):
             self._random_push_time,
         )
 
+    def _reset_buffers(self, envs_idx: torch.IntTensor) -> None:
+        self.time_since_reset[envs_idx] = 0.0
+        self.last_action[envs_idx] *= 0
+        self.last_last_action[envs_idx] *= 0
+
     def reset_idx(self, envs_idx: torch.IntTensor) -> None:
         default_pos = self._robot.default_pos[None, :].repeat(len(envs_idx), 1)
         default_quat = self._robot.default_quat[None, :].repeat(len(envs_idx), 1)
@@ -207,8 +212,8 @@ class LeggedRobotEnv(BaseEnv):
         quat = quat_from_euler(random_euler)
         quat = quat_mul(quat, default_quat)
         dof_pos = default_dof_pos + random_dof_pos
-        self.time_since_reset[envs_idx] = 0.0
         self._robot.set_state(pos=default_pos, quat=quat, dof_pos=dof_pos, envs_idx=envs_idx)
+        self._reset_buffers(envs_idx)
 
     def get_terminated(self) -> torch.Tensor:
         reset_buf = self.get_truncated()
@@ -436,6 +441,28 @@ class LeggedRobotEnv(BaseEnv):
         assert self.num_envs == 1, "Only support single environment for setting dof pos"
         assert dof_pos.shape == (self._robot.dof_dim,), "Dof pos must match the number of joints"
         self._robot.set_state(dof_pos=dof_pos)
+
+    def global_to_local(self, vec_global: torch.Tensor) -> torch.Tensor:
+        vec_shape = vec_global.shape
+        vec_global = vec_global.reshape(-1, vec_shape[-1])
+        if vec_shape[-1] == 3:
+            vec_local = quat_apply(quat_inv(self.base_quat), vec_global)
+        elif vec_shape[-1] == 4:
+            vec_local = quat_mul(quat_inv(self.base_quat), vec_global)
+        else:
+            raise ValueError(f"Vector must be (..., 3) or (..., 4), but got {vec_shape}")
+        return vec_local.reshape(vec_shape)
+
+    def local_to_global(self, vec_local: torch.Tensor) -> torch.Tensor:
+        vec_shape = vec_local.shape
+        vec_local = vec_local.reshape(-1, vec_shape[-1])
+        if vec_shape[-1] == 3:
+            vec_global = quat_apply(self.base_quat, vec_local)
+        elif vec_shape[-1] == 4:
+            vec_global = quat_mul(self.base_quat, vec_local)
+        else:
+            raise ValueError(f"Vector must be (..., 3) or (..., 4), but got {vec_shape}")
+        return vec_global.reshape(vec_shape)
 
     @property
     def scene(self) -> FlatScene:

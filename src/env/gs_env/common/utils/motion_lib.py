@@ -6,7 +6,7 @@ import torch
 import yaml
 from tqdm import tqdm
 
-from gs_env.common.utils.math_utils import quat_diff, quat_to_exp_map, slerp
+from gs_env.common.utils.math_utils import quat_diff, quat_to_angle_axis, slerp
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +27,72 @@ def smooth(x: torch.Tensor, box_pts: int, device: torch.device) -> torch.Tensor:
 class MotionLib:
     def __init__(self, motion_file: str, device: torch.device) -> None:
         self._device = device
+
+        gsplayground_order = [
+            # Left Lower body 0:6
+            "left_hip_roll_joint",
+            "left_hip_pitch_joint",
+            "left_hip_yaw_joint",
+            "left_knee_joint",
+            "left_ankle_roll_joint",
+            "left_ankle_pitch_joint",
+            # Right Lower body 6:12
+            "right_hip_roll_joint",
+            "right_hip_pitch_joint",
+            "right_hip_yaw_joint",
+            "right_knee_joint",
+            "right_ankle_roll_joint",
+            "right_ankle_pitch_joint",
+            # Waist 12:15
+            "waist_roll_joint",
+            "waist_pitch_joint",
+            "waist_yaw_joint",
+            # Left Upper body 12:19
+            "left_shoulder_roll_joint",
+            "left_shoulder_pitch_joint",
+            "left_shoulder_yaw_joint",
+            "left_elbow_joint",
+            "left_wrist_roll_joint",
+            "left_wrist_pitch_joint",
+            "left_wrist_yaw_joint",
+            # Right Upper body 19:26
+            "right_shoulder_roll_joint",
+            "right_shoulder_pitch_joint",
+            "right_shoulder_yaw_joint",
+            "right_elbow_joint",
+            "right_wrist_roll_joint",
+            "right_wrist_pitch_joint",
+            "right_wrist_yaw_joint",
+        ]
+        twist_order = [
+            "left_hip_pitch_joint",
+            "left_hip_roll_joint",
+            "left_hip_yaw_joint",
+            "left_knee_joint",
+            "left_ankle_pitch_joint",
+            "left_ankle_roll_joint",
+            "right_hip_pitch_joint",
+            "right_hip_roll_joint",
+            "right_hip_yaw_joint",
+            "right_knee_joint",
+            "right_ankle_pitch_joint",
+            "right_ankle_roll_joint",
+            "waist_yaw_joint",
+            "waist_roll_joint",
+            "waist_pitch_joint",
+            "left_shoulder_pitch_joint",
+            "left_shoulder_roll_joint",
+            "left_shoulder_yaw_joint",
+            "left_elbow_joint",
+            "right_shoulder_pitch_joint",
+            "right_shoulder_roll_joint",
+            "right_shoulder_yaw_joint",
+            "right_elbow_joint",
+        ]
+        self._dof_index = []
+        for dof_name in twist_order:
+            self._dof_index.append(gsplayground_order.index(dof_name))
+
         self._load_motions(motion_file)
 
     def _load_motions(self, motion_file: str) -> None:
@@ -83,7 +149,7 @@ class MotionLib:
 
                     root_ang_vel = torch.zeros_like(root_pos)  # (num_frames, 3)
                     root_drot = quat_diff(root_rot[:-1], root_rot[1:])
-                    root_ang_vel[:-1, :] = fps * quat_to_exp_map(root_drot)
+                    root_ang_vel[:-1, :] = fps * quat_to_angle_axis(root_drot)
                     root_ang_vel[-1, :] = root_ang_vel[-2, :]
                     root_ang_vel = smooth(root_ang_vel, 19, device=self._device)
 
@@ -137,8 +203,14 @@ class MotionLib:
         self._motion_root_rot = torch.cat(motion_root_rot, dim=0)
         self._motion_root_lin_vel = torch.cat(motion_root_lin_vel, dim=0)
         self._motion_root_ang_vel = torch.cat(motion_root_ang_vel, dim=0)
-        self._motion_dof_pos = torch.cat(motion_dof_pos, dim=0)
-        self._motion_dof_vel = torch.cat(motion_dof_vel, dim=0)
+        self._motion_dof_pos = torch.zeros(
+            torch.cat(motion_dof_pos, dim=0).shape[0], 29, device=self._device
+        )
+        self._motion_dof_pos[:, self._dof_index] = torch.cat(motion_dof_pos, dim=0)
+        self._motion_dof_vel = torch.zeros(
+            torch.cat(motion_dof_vel, dim=0).shape[0], 29, device=self._device
+        )
+        self._motion_dof_vel[:, self._dof_index] = torch.cat(motion_dof_vel, dim=0)
 
         self._motion_local_body_pos = torch.cat(motion_local_body_pos, dim=0)
 

@@ -303,37 +303,6 @@ def quat_error_magnitude(q1: torch.Tensor, q2: torch.Tensor) -> torch.Tensor:
 
 
 @torch.jit.script
-def angle_axis_to_exp_map(angle: torch.Tensor, axis: torch.Tensor) -> torch.Tensor:
-    """
-    Compute exponential map from axis-angle.
-
-    Args:
-        angle: The angle in radians. Shape is (...,).
-        axis: The axis of rotation. Shape is (..., 3).
-
-    Returns:
-        The exponential map. Shape is (..., 3).
-    """
-    angle_expand = angle.unsqueeze(-1)
-    return angle_expand * axis
-
-
-@torch.jit.script
-def quat_to_exp_map(q: torch.Tensor) -> torch.Tensor:
-    """
-    Compute exponential map from quaternion.
-
-    Args:
-        q: The quaternion in (w, x, y, z). Shape is (..., 4).
-
-    Returns:
-        The exponential map. Shape is (..., 3).
-    """
-    angle, axis = quat_to_angle_axis(q)
-    return angle_axis_to_exp_map(angle, axis)
-
-
-@torch.jit.script
 def slerp(q1: torch.Tensor, q2: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
     """
     Spherical linear interpolation between two quaternions.

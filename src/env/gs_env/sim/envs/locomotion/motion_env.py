@@ -131,7 +131,7 @@ class MotionEnv(LeggedRobotEnv):
         self.ref_dof_pos[envs_idx] = dof_pos
         self.ref_dof_vel[envs_idx] = dof_vel
         # convert local body pos to global using ref root pose
-        self.ref_body_pos[envs_idx] = self._local_to_global(root_pos, root_rot, body_pos_local)
+        # self.ref_body_pos[envs_idx] = self._local_to_global(root_pos, root_rot, body_pos_local)
 
     def _get_motion_times(self, envs_idx: torch.Tensor | None = None) -> torch.Tensor:
         if envs_idx is None:
@@ -151,7 +151,7 @@ class MotionEnv(LeggedRobotEnv):
         self.ref_root_ang_vel[:] = root_ang_vel
         self.ref_dof_pos[:] = dof_pos
         self.ref_dof_vel[:] = dof_vel
-        self.ref_body_pos[:] = self._local_to_global(root_pos, root_rot, body_pos_local)
+        # self.ref_body_pos[:] = self._local_to_global(root_pos, root_rot, body_pos_local)
 
     @staticmethod
     def _local_to_global(

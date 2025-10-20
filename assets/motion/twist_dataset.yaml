@@ -1,0 +1,5 @@
+root_path: assets/motion
+motions:
+  - file: 0.pkl
+    weight: 100.0
+    description: general movement

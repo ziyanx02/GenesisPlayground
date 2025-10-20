@@ -2,6 +2,7 @@ from gs_env.sim.envs.config.schema import (
     EnvArgs,
     GenesisInitArgs,
     LeggedRobotEnvArgs,
+    MotionEnvArgs,
     WalkingEnvArgs,
 )
 from gs_env.sim.objects.config.registry import ObjectArgsRegistry
@@ -148,6 +149,48 @@ EnvArgsRegistry["g1_walk"] = WalkingEnvArgs(
         (0.0, 0.0),  # Left/Right
         (-1.0, 1.0),  # Turn
     ),
+)
+
+
+EnvArgsRegistry["g1_motion"] = MotionEnvArgs(
+    env_name="MotionEnv",
+    gs_init_args=GenesisInitArgsRegistry["default"],
+    scene_args=SceneArgsRegistry["flat_scene_legged"],
+    robot_args=RobotArgsRegistry["g1_default"],
+    objects_args=[],
+    sensors_args=[],
+    reward_term="g1",
+    reward_args={},
+    img_resolution=(480, 270),
+    action_latency=1,
+    obs_history_len=1,
+    obs_scales={
+        "dof_vel": 0.1,
+        "base_ang_vel": 0.5,
+        "feet_contact_force": 0.001,
+    },
+    obs_noises={
+        "dof_pos": 0.01,
+        "dof_vel": 0.2,
+        "projected_gravity": 0.05,
+        "base_ang_vel": 0.2,
+    },
+    actor_obs_terms=[
+        "last_action",
+        "dof_pos",
+        "dof_vel",
+        "projected_gravity",
+        "base_ang_vel",
+    ],
+    critic_obs_terms=[
+        "last_action",
+        "dof_pos",
+        "dof_vel",
+        "projected_gravity",
+        "base_lin_vel",
+        "base_ang_vel",
+    ],
+    motion_file="assets/motion/twist_dataset.yaml",
 )
 
 

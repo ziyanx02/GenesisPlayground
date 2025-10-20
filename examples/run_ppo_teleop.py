@@ -33,7 +33,7 @@ def create_gs_env(
     device: str = "cuda",
     args: Any = None,
     eval_mode: bool = False,
-) -> gs_envs.WalkingEnv:
+) -> gs_envs.MotionEnv:
     """Create gym environment wrapper with optional config overrides."""
     if torch.cuda.is_available() and device == "cuda":
         device_tensor = torch.device("cuda")
@@ -53,7 +53,7 @@ def create_gs_env(
 
 
 def create_ppo_runner_from_registry(
-    env: gs_envs.WalkingEnv,
+    env: gs_envs.MotionEnv,
     exp_name: str | None = None,
     algo_cfg: Any = None,
     runner_args: Any = None,
@@ -454,6 +454,41 @@ def train_policy(
         pass
 
 
+def test(env_args: Any) -> None:
+    """Test the policy."""
+    show_viewer = True
+    # Create environment for evaluation
+    env = create_gs_env(
+        show_viewer=show_viewer,
+        num_envs=1,
+        device="cpu",
+        args=env_args,
+        eval_mode=True,
+    )
+    import time
+
+    def run() -> None:
+        nonlocal env
+        while True:
+            env.scene.scene.step()
+            time.sleep(0.1)
+            # env._update_buffers()
+            base_quat = env.base_quat
+            print("base_quat", base_quat)
+            print("base_quat_local", env.global_to_local(base_quat))
+
+    try:
+        if platform.system() == "Darwin" and show_viewer:
+            import threading
+
+            threading.Thread(target=run).start()
+            env.scene.scene.viewer.run()  # type: ignore
+        else:
+            run()
+    except KeyboardInterrupt:
+        pass
+
+
 def main(
     num_envs: int = 4096,
     show_viewer: bool = False,
@@ -462,7 +497,7 @@ def main(
     exp_name: str | None = None,
     num_ckpt: int | None = None,
     use_wandb: bool = True,
-    env_name: str = "g1_walk",
+    env_name: str = "g1_motion",
     **cfg_overrides: Any,
 ) -> None:
     """Entry point.
@@ -495,6 +530,9 @@ def main(
     runner_args = apply_overrides_generic(
         RUNNER_WALKING_MLP, runner_overrides, prefixes=("cfgs.", "runner.")
     )
+
+    test(env_args)
+    input()
 
     if eval:
         # Evaluation mode - don't create runner to avoid creating empty log dir
