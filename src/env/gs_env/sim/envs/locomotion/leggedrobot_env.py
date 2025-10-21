@@ -256,6 +256,36 @@ class LeggedRobotEnv(BaseEnv):
         critic_obs = torch.cat(obs_components, dim=-1)
         return actor_obs, critic_obs
 
+    def step(
+        self, action: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, dict[str, Any]]:
+        # apply action
+        self.apply_action(action)
+        # get terminated
+        terminated = self.get_terminated()
+        if terminated.dim() == 1:
+            terminated = terminated.unsqueeze(-1)
+        # get truncated
+        truncated = self.get_truncated()
+        if truncated.dim() == 1:
+            truncated = truncated.unsqueeze(-1)
+        # get reward
+        reward, reward_terms = self.get_reward()
+        if reward.dim() == 1:
+            reward = reward.unsqueeze(-1)
+        # update history
+        self.update_history()
+        # get extra infos
+        extra_infos = self.get_extra_infos()
+        extra_infos["reward_terms"] = reward_terms
+        # reset if terminated or truncated
+        done_idx = terminated.nonzero(as_tuple=True)[0]
+        if len(done_idx) > 0:
+            self.reset_idx(done_idx)
+        # get observations
+        next_obs, _ = self.get_observations()
+        return next_obs, reward, terminated, truncated, extra_infos
+
     def apply_action(self, action: torch.Tensor) -> None:
         action = action.detach().to(self._device)
         self._action = action
@@ -463,6 +493,44 @@ class LeggedRobotEnv(BaseEnv):
         else:
             raise ValueError(f"Vector must be (..., 3) or (..., 4), but got {vec_shape}")
         return vec_global.reshape(vec_shape)
+
+    @staticmethod
+    def batched_local_to_global(
+        base_pos: torch.Tensor, base_quat: torch.Tensor, local_vec: torch.Tensor
+    ) -> torch.Tensor:
+        assert base_pos.shape[0] == base_quat.shape[0] == local_vec.shape[0]
+        B, L, _ = local_vec.shape
+        local_flat = local_vec.reshape(B * L, 3)
+        quat_rep = base_quat[:, None, :].repeat(1, L, 1).reshape(B * L, 4)
+        pos_rep = base_pos[:, None, :].repeat(1, L, 1).reshape(B * L, 3)
+        if local_flat.shape[-1] == 3:
+            global_flat = pos_rep + quat_apply(quat_rep, local_flat)
+        elif local_flat.shape[-1] == 4:
+            global_flat = quat_mul(quat_rep, local_flat)
+        else:
+            raise ValueError(
+                f"Local vector shape must be (B, L, 3) or (B, L, 4), but got {local_flat.shape}"
+            )
+        return global_flat.reshape(B, L, local_vec.shape[-1])
+
+    @staticmethod
+    def batched_global_to_local(
+        base_pos: torch.Tensor, base_quat: torch.Tensor, global_vec: torch.Tensor
+    ) -> torch.Tensor:
+        assert base_pos.shape[0] == base_quat.shape[0] == global_vec.shape[0]
+        B, L, _ = global_vec.shape
+        global_flat = global_vec.reshape(B * L, 3)
+        quat_rep = base_quat[:, None, :].repeat(1, L, 1).reshape(B * L, 4)
+        pos_rep = base_pos[:, None, :].repeat(1, L, 1).reshape(B * L, 3)
+        if global_flat.shape[-1] == 3:
+            local_flat = global_flat - pos_rep
+        elif global_flat.shape[-1] == 4:
+            local_flat = quat_mul(quat_inv(quat_rep), global_flat)
+        else:
+            raise ValueError(
+                f"Global vector shape must be (B, L, 3) or (B, L, 4), but got {global_flat.shape}"
+            )
+        return local_flat.reshape(B, L, global_vec.shape[-1])
 
     @property
     def scene(self) -> FlatScene:

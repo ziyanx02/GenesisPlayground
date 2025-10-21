@@ -454,7 +454,7 @@ def train_policy(
         pass
 
 
-def test(env_args: Any) -> None:
+def view_motion(env_args: Any) -> None:
     """Test the policy."""
     show_viewer = False
     # Create environment for evaluation
@@ -469,14 +469,18 @@ def test(env_args: Any) -> None:
 
     def run() -> None:
         nonlocal env
-        t = 0.0
+        motion_id = 0
         while True:
-            env.scene.scene.step(refresh_visualizer=False)
-            # env._motion_time_offsets[0] = t
-            t += 0.02
-            time.sleep(0.3)
-            # env._update_ref_motion()
-            env.reset_idx(torch.IntTensor([0]))
+            env.hard_reset_motion(torch.IntTensor([0]), motion_id)
+            last_update_time = time.time()
+            while env.motion_times[0] < env.motion_lib.get_motion_length(motion_id):
+                env.scene.scene.step(refresh_visualizer=False)
+                env.time_since_reset[0] += 0.1
+                env.hard_sync_motion(torch.IntTensor([0]))
+                while time.time() - last_update_time < 0.1:
+                    time.sleep(0.01)
+                last_update_time = time.time()
+            motion_id = (motion_id + 1) % env.motion_lib.num_motions
 
     try:
         if platform.system() == "Darwin" and show_viewer:
@@ -495,6 +499,7 @@ def main(
     show_viewer: bool = False,
     device: str = "cuda",
     eval: bool = False,
+    view: bool = False,
     exp_name: str | None = None,
     num_ckpt: int | None = None,
     use_wandb: bool = True,
@@ -532,9 +537,6 @@ def main(
         RUNNER_WALKING_MLP, runner_overrides, prefixes=("cfgs.", "runner.")
     )
 
-    test(env_args)
-    input()
-
     if eval:
         # Evaluation mode - don't create runner to avoid creating empty log dir
         num_envs = 1
@@ -547,6 +549,8 @@ def main(
             env_args=env_args,
             algo_cfg=algo_cfg,
         )
+    elif view:
+        view_motion(env_args)
     else:
         # Training mode
         print("Training mode: Starting policy training")
