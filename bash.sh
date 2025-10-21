@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH -J GSPlayground          # Job name
-#SBATCH -p gpu           # Partition
+#SBATCH -p gpu-preempt           # Partition
 #SBATCH -G 1                     # Request 1 GPU
 #SBATCH -c 8                     # Request 8 CPUs
 #SBATCH --mem=20G                # Memory
@@ -18,12 +18,13 @@ cd /scratch4/workspace/junyunhuang_umass_edu-myworkspace/GenesisPlayground
 export WANDB_ENTITY="h975894552"
 export WANDB_PROJECT="genesis"
 
-exp_name=${1:-setting4-No_noise_DR}
+exp_name=${1:-setting2-CommandSandStill-StandStill20-StandStillAction0.01-StandStillFeetContact}
 python /scratch4/workspace/junyunhuang_umass_edu-myworkspace/GenesisPlayground/examples/run_ppo_walking.py \
     --exp_name $exp_name \
+    --reward_args.StandStillActionRatePenalty 0.01 \
+    --reward_args.StandStillReward 20 \
+    --reward_args.StandStillFeetContactPenalty 1e-5 \
     # --reward_args.StandStillPenalty 100 \
-    # --reward_args.StandStillReward 400 \
-    # --reward_args.StandStillActionRatePenalty 15 \
     # --reward_args.StandStillFeetContactPenalty 0.1 \
     # --reward_args.LinVelXYReward 1 \
     # --reward_args.AngVelZReward 1 \

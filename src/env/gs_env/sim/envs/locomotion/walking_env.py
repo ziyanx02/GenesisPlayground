@@ -135,3 +135,6 @@ class WalkingEnv(LeggedRobotEnv):
                 * (self.commands_range[i][1] - self.commands_range[i][0])
                 + self.commands_range[i][0]
             )
+            self.commands[envs_idx, i] *= torch.abs(self.commands[envs_idx, 0]) > 0.1
+            # if_stand = torch.rand((len(envs_idx), 1), device=self.device) < 0.2
+            # self.commands[envs_idx] *= ~if_stand

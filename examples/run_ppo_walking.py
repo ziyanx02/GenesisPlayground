@@ -253,7 +253,7 @@ def evaluate_policy(
             else:
                 wrapped_env.env.commands[:, 0] = 1.0
                 wrapped_env.env.commands[:, 2] = 0.0
-            wrapped_env.env.commands[:] = 0.0
+            # wrapped_env.env.commands[:] = 0.0
 
             # Get action from policy
             with torch.no_grad():
