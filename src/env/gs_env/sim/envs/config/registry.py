@@ -126,7 +126,7 @@ EnvArgsRegistry["g1_walk"] = WalkingEnvArgs(
     },
     obs_noises={
         "dof_pos": 0.01,
-        "dof_vel": 0.2,
+        "dof_vel": 0.05,
         "projected_gravity": 0.05,
         "base_ang_vel": 0.2,
     },
@@ -149,7 +149,13 @@ EnvArgsRegistry["g1_walk"] = WalkingEnvArgs(
         "feet_height",
         "feet_contact_force",
     ],
+    stand_prob=0.1,
     command_resample_time=10.0,
+    commands_clip={
+        "lin_vel_x": 0.1,
+        "lin_vel_y": 0.1,
+        "ang_vel_z": 0.1,
+    },
     commands_range=(
         (-1.0, 1.0),  # Forward/Backward
         (0.0, 0.0),  # Left/Right

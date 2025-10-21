@@ -79,6 +79,8 @@ class WalkingEnv(LeggedRobotEnv):
 
         # Additional buffers for walking environment
         self.commands_range = self._args.commands_range
+        self.commands_clip = self._args.commands_clip
+        self.stand_prob = self._args.stand_prob
         self.commands = torch.zeros(
             (self.num_envs, len(self.commands_range)), device=self._device, dtype=torch.float32
         )
@@ -135,6 +137,14 @@ class WalkingEnv(LeggedRobotEnv):
                 * (self.commands_range[i][1] - self.commands_range[i][0])
                 + self.commands_range[i][0]
             )
-        self.commands[envs_idx, i] *= torch.abs(self.commands[envs_idx, 0]) > 0.1
-        # if_stand = torch.rand((len(envs_idx), 1), device=self.device) < 0.2
-        # self.commands[envs_idx] *= ~if_stand
+        self.commands[envs_idx, 0] *= (
+            torch.abs(self.commands[envs_idx, 0]) > self.commands_clip["lin_vel_x"]
+        )
+        self.commands[envs_idx, 1] *= (
+            torch.abs(self.commands[envs_idx, 1]) > self.commands_clip["lin_vel_y"]
+        )
+        self.commands[envs_idx, 2] *= (
+            torch.abs(self.commands[envs_idx, 2]) > self.commands_clip["ang_vel_z"]
+        )
+        if_stand = torch.rand((len(envs_idx), 1), device=self.device) < self.stand_prob
+        self.commands[envs_idx] *= ~if_stand

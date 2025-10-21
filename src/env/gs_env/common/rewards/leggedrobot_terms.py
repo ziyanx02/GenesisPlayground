@@ -314,7 +314,8 @@ class StandStillReward(RewardTerm):
     Reward standing still by low joint torques.
 
     Args:
-        torque: Joint torque tensor of shape (B, D) where B is the batch size and D is the number of joints.
+        default_dof_pos: default_dof_pos tensor of shape (B, D) where B is the batch size and D is the number of DoFs.
+        dof_pos: dof_pos tensor of shape (B, D) where B is the batch size and D is the number of DoFs.
         commands: Commands tensor of shape (B, 3) where B is the batch size.
     """
 
@@ -327,22 +328,3 @@ class StandStillReward(RewardTerm):
         rew = torch.exp(-dof_error * 2)
         rew[commands.norm(dim=1) > 0.1] = 0.0
         return rew
-
-
-class StandStillPenalty(RewardTerm):
-    """
-    Penalize standing still by low joint torques.
-
-    Args:
-        torque: Joint torque tensor of shape (B, D) where B is the batch size and D is the number of joints.
-        commands: Commands tensor of shape (B, 3) where B is the batch size.
-    """
-
-    required_keys = ("default_dof_pos", "dof_pos", "commands")
-
-    def _compute(
-        self, default_pos: torch.Tensor, dof_pos: torch.Tensor, commands: torch.Tensor
-    ) -> torch.Tensor:  # type: ignore
-        return -torch.sum(torch.abs(dof_pos - default_pos), dim=1) * (
-            torch.norm(commands, dim=1) < 0.1
-        )
