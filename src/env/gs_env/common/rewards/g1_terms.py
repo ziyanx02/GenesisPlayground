@@ -18,6 +18,7 @@ from .leggedrobot_terms import (
     OrientationPenalty,  # noqa
     StandStillActionRatePenalty,  # noqa
     StandStillFeetContactPenalty,  # noqa
+    StandStillReward,  # noqa
     TorquePenalty,  # noqa
 )
 from .reward_terms import RewardTerm
@@ -25,7 +26,7 @@ from .reward_terms import RewardTerm
 
 ### ---- Reward Terms ---- ###
 class G1BaseHeightPenalty(BaseHeightPenalty):
-    target_height = 1
+    target_height = 0.75
 
 
 class UpperBodyDofPenalty(RewardTerm):
@@ -100,6 +101,34 @@ class HipRollPenalty(RewardTerm):
         return -torch.sum(torch.square(dof_pos[:, [0, 6]]), dim=-1)
 
 
+class HipYawVelPenalty(RewardTerm):
+    """
+    Penalize the hip yaw DoF velocity.
+
+    Args:
+        dof_vel: DoF velocity tensor of shape (B, D) where B is the batch size and D is the number of DoFs.
+    """
+
+    required_keys = ("dof_vel",)
+
+    def _compute(self, dof_vel: torch.Tensor) -> torch.Tensor:  # type: ignore
+        return -torch.sum(torch.square(dof_vel[:, [2, 8]]), dim=-1)
+
+
+class HipRollVelPenalty(RewardTerm):
+    """
+    Penalize the hip roll DoF velocity.
+
+    Args:
+        dof_vel: DoF velocity tensor of shape (B, D) where B is the batch size and D is the number of DoFs.
+    """
+
+    required_keys = ("dof_vel",)
+
+    def _compute(self, dof_vel: torch.Tensor) -> torch.Tensor:  # type: ignore
+        return -torch.sum(torch.square(dof_vel[:, [0, 6]]), dim=-1)
+
+
 class HipPositionPenalty(RewardTerm):
     """
     Penalize the hip position deviation from origin.
@@ -112,6 +141,20 @@ class HipPositionPenalty(RewardTerm):
 
     def _compute(self, dof_pos: torch.Tensor) -> torch.Tensor:  # type: ignore
         return -torch.sum(torch.square(dof_pos[:, [0, 1, 2, 6, 7, 8]]), dim=-1)
+
+
+class HipTorquePenalty(RewardTerm):
+    """
+    Penalize the hip torque.
+
+    Args:
+        torque: Torque tensor of shape (B, D) where B is the batch size and D is the number of DoFs.
+    """
+
+    required_keys = ("torque",)
+
+    def _compute(self, torque: torch.Tensor) -> torch.Tensor:  # type: ignore
+        return -torch.sum(torch.square(torque[:, [0, 1, 2, 6, 7, 8]]), dim=-1)
 
 
 class AnkleTorquePenalty(RewardTerm):

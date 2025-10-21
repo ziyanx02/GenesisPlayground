@@ -90,6 +90,21 @@ class BaseHeightPenalty(RewardTerm):
         return -torch.square(base_pos[:, 2] - self.target_height)
 
 
+class BaseLateralPenalty(RewardTerm):
+    """
+    Penalize the deviation of the base position in the Y direction from a target position.
+
+    Args:
+        base_pos: Base position tensor of shape (B, 3) where B is the batch size.
+    """
+
+    required_keys = ("base_pos",)
+    target_y: float = 0.0
+
+    def _compute(self, base_pos: torch.Tensor) -> torch.Tensor:  # type: ignore
+        return -torch.square(base_pos[:, 1] - self.target_y)
+
+
 class ActionRatePenalty(RewardTerm):
     """
     Penalize the action rate by its squared L2 norm.
@@ -276,7 +291,7 @@ class FeetContactForceLimitPenalty(RewardTerm):
     contact_force_limit: float = 0.0
 
     def _compute(self, feet_contact_force: torch.Tensor) -> torch.Tensor:  # type: ignore
-        out_of_limits = (feet_contact_force - self.contact_force_limit).clip(min=0.0)
+        out_of_limits = (feet_contact_force - self.contact_force_limit).clip(min=0.0).square()
         return -torch.sum(out_of_limits, dim=1)
 
 
@@ -292,3 +307,42 @@ class DofVelPenalty(RewardTerm):
 
     def _compute(self, dof_vel: torch.Tensor) -> torch.Tensor:  # type: ignore
         return -torch.sum(torch.square(dof_vel), dim=-1)
+
+
+class StandStillReward(RewardTerm):
+    """
+    Reward standing still by low joint torques.
+
+    Args:
+        torque: Joint torque tensor of shape (B, D) where B is the batch size and D is the number of joints.
+        commands: Commands tensor of shape (B, 3) where B is the batch size.
+    """
+
+    required_keys = ("default_dof_pos", "dof_pos", "commands")
+
+    def _compute(
+        self, default_dof_pos: torch.Tensor, dof_pos: torch.Tensor, commands: torch.Tensor
+    ) -> torch.Tensor:  # type: ignore
+        dof_error = torch.norm(dof_pos - default_dof_pos, dim=1)
+        rew = torch.exp(-dof_error * 2)
+        rew[commands.norm(dim=1) > 0.1] = 0.0
+        return rew
+
+
+class StandStillPenalty(RewardTerm):
+    """
+    Penalize standing still by low joint torques.
+
+    Args:
+        torque: Joint torque tensor of shape (B, D) where B is the batch size and D is the number of joints.
+        commands: Commands tensor of shape (B, 3) where B is the batch size.
+    """
+
+    required_keys = ("default_dof_pos", "dof_pos", "commands")
+
+    def _compute(
+        self, default_pos: torch.Tensor, dof_pos: torch.Tensor, commands: torch.Tensor
+    ) -> torch.Tensor:  # type: ignore
+        return -torch.sum(torch.abs(dof_pos - default_pos), dim=1) * (
+            torch.norm(commands, dim=1) < 0.1
+        )
