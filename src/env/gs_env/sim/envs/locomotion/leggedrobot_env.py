@@ -511,6 +511,8 @@ class LeggedRobotEnv(BaseEnv):
         base_pos: torch.Tensor, base_quat: torch.Tensor, local_vec: torch.Tensor
     ) -> torch.Tensor:
         assert base_pos.shape[0] == base_quat.shape[0] == local_vec.shape[0]
+        local_vec_shape = local_vec.shape
+        local_vec = local_vec.reshape(local_vec_shape[0], -1, local_vec_shape[-1])
         B, L, _ = local_vec.shape
         local_flat = local_vec.reshape(B * L, 3)
         quat_rep = base_quat[:, None, :].repeat(1, L, 1).reshape(B * L, 4)
@@ -523,13 +525,15 @@ class LeggedRobotEnv(BaseEnv):
             raise ValueError(
                 f"Local vector shape must be (B, L, 3) or (B, L, 4), but got {local_flat.shape}"
             )
-        return global_flat.reshape(B, L, local_vec.shape[-1])
+        return global_flat.reshape(local_vec_shape)
 
     @staticmethod
     def batched_global_to_local(
         base_pos: torch.Tensor, base_quat: torch.Tensor, global_vec: torch.Tensor
     ) -> torch.Tensor:
         assert base_pos.shape[0] == base_quat.shape[0] == global_vec.shape[0]
+        global_vec_shape = global_vec.shape
+        global_vec = global_vec.reshape(global_vec_shape[0], -1, global_vec_shape[-1])
         B, L, _ = global_vec.shape
         global_flat = global_vec.reshape(B * L, 3)
         quat_rep = base_quat[:, None, :].repeat(1, L, 1).reshape(B * L, 4)
@@ -542,7 +546,7 @@ class LeggedRobotEnv(BaseEnv):
             raise ValueError(
                 f"Global vector shape must be (B, L, 3) or (B, L, 4), but got {global_flat.shape}"
             )
-        return local_flat.reshape(B, L, global_vec.shape[-1])
+        return local_flat.reshape(global_vec_shape)
 
     @property
     def scene(self) -> FlatScene:

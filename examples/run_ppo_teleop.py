@@ -561,8 +561,8 @@ def main(
 
     if eval:
         # Evaluation mode - don't create runner to avoid creating empty log dir
-        num_envs = 1
         print("Evaluation mode: Loading trained policy")
+        assert exp_name is not None, "exp_name is required for evaluation"
         evaluate_policy(
             exp_name=exp_name,
             show_viewer=show_viewer,

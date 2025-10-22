@@ -197,29 +197,51 @@ EnvArgsRegistry["g1_motion"] = MotionEnvArgs(
     obs_history_len=1,
     obs_scales={
         "dof_vel": 0.1,
-        "base_ang_vel": 0.5,
+        "base_ang_vel_local": 0.5,
         "feet_contact_force": 0.001,
     },
     obs_noises={
         "dof_pos": 0.01,
         "dof_vel": 0.2,
         "projected_gravity": 0.05,
-        "base_ang_vel": 0.2,
+        "base_ang_vel_local": 0.2,
     },
     actor_obs_terms=[
         "last_action",
+        # Proprioception
         "dof_pos",
         "dof_vel",
+        "base_euler",
+        "base_ang_vel_local",
+        "base_rotation_6D",
         "projected_gravity",
-        "base_ang_vel",
+        # Reference
+        "ref_dof_pos",
+        "ref_dof_vel",
+        "ref_base_euler",
+        "ref_base_lin_vel_local",
+        "ref_base_ang_vel_local",
+        "ref_base_rotation_6D",
     ],
     critic_obs_terms=[
         "last_action",
+        # Proprioception
         "dof_pos",
         "dof_vel",
+        "base_euler",
+        "base_lin_vel_local",
+        "base_ang_vel_local",
+        "base_rotation_6D",
         "projected_gravity",
-        "base_lin_vel",
-        "base_ang_vel",
+        # Reference
+        "ref_dof_pos",
+        "ref_dof_vel",
+        "ref_base_euler",
+        "ref_base_lin_vel_local",
+        "ref_base_ang_vel_local",
+        "ref_base_rotation_6D",
+        # Privilleged
+        "feet_contact_force",
     ],
     terminate_after_collision_on=[
         "pelvis",

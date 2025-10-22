@@ -10,9 +10,9 @@ from gs_env.common.utils.math_utils import (
     quat_apply,
     quat_diff,
     quat_inv,
-    quat_mul,
     quat_to_angle_axis,
     quat_to_euler,
+    quat_to_rotation_6D,
     slerp,
 )
 from gs_env.sim.envs.config.schema import MotionEnvArgs
@@ -50,8 +50,6 @@ class MotionEnv(LeggedRobotEnv):
     ) -> None:
         # Initialize base legged-robot environment
         self._args = args
-        # motion-related placeholders (populated in _init)
-        self._motion_lib: MotionLib | None = None
         super().__init__(
             args=args,
             num_envs=num_envs,
@@ -82,6 +80,36 @@ class MotionEnv(LeggedRobotEnv):
             device=self._device,
             dtype=torch.float32,
         )
+        self.base_height = torch.zeros(self.num_envs, device=self._device, dtype=torch.float32)
+        self.base_rotation_6D = torch.zeros(
+            self.num_envs, 6, device=self._device, dtype=torch.float32
+        )
+        self.base_lin_vel_local = torch.zeros(self.num_envs, 3, device=self._device)
+        self.base_ang_vel_local = torch.zeros(self.num_envs, 3, device=self._device)
+        self.link_positions_local = torch.zeros(
+            self.num_envs, self._robot.n_links, 3, device=self._device
+        )
+
+        # reference trajectories (current frame)
+        self.ref_base_pos = torch.zeros(self.num_envs, 3, device=self._device)
+        self.ref_base_quat = torch.zeros(self.num_envs, 4, device=self._device)
+        self.ref_base_height = torch.zeros(self.num_envs, device=self._device, dtype=torch.float32)
+        self.ref_base_rotation_6D = torch.zeros(
+            self.num_envs, 6, device=self._device, dtype=torch.float32
+        )
+        self.ref_base_euler = torch.zeros(
+            self.num_envs, 3, device=self._device, dtype=torch.float32
+        )
+        self.ref_base_lin_vel = torch.zeros(self.num_envs, 3, device=self._device)
+        self.ref_base_ang_vel = torch.zeros(self.num_envs, 3, device=self._device)
+        self.ref_base_lin_vel_local = torch.zeros(self.num_envs, 3, device=self._device)
+        self.ref_base_ang_vel_local = torch.zeros(self.num_envs, 3, device=self._device)
+        self.ref_dof_pos = torch.zeros(self.num_envs, self._robot.dof_dim, device=self._device)
+        self.ref_dof_vel = torch.zeros(self.num_envs, self._robot.dof_dim, device=self._device)
+        self.ref_body_pos = torch.zeros(self.num_envs, self._robot.n_links, 3, device=self._device)
+        self.ref_body_pos_local = torch.zeros(
+            self.num_envs, self._robot.n_links, 3, device=self._device
+        )
 
         # Let base class set up common buffers, spaces, and rendering
         super()._init()
@@ -94,19 +122,6 @@ class MotionEnv(LeggedRobotEnv):
         self._motion_time_offsets = torch.zeros(
             self.num_envs, device=self._device, dtype=torch.float32
         )
-
-        # reference trajectories (current frame)
-        self.ref_base_pos = torch.zeros(self.num_envs, 3, device=self._device)
-        self.ref_base_quat = torch.zeros(self.num_envs, 4, device=self._device)
-        self.ref_base_lin_vel = torch.zeros(self.num_envs, 3, device=self._device)
-        self.ref_base_ang_vel = torch.zeros(self.num_envs, 3, device=self._device)
-        self.ref_dof_pos = torch.zeros(self.num_envs, self._robot.dof_dim, device=self._device)
-        self.ref_dof_vel = torch.zeros(self.num_envs, self._robot.dof_dim, device=self._device)
-        self.ref_body_pos = torch.zeros(self.num_envs, self._robot.n_links, 3, device=self._device)
-
-        # compact imitation observation (current frame only by default)
-        # shape will be (B, 3 + 2 + 3 + 1 + D) = (B, 9 + D)
-        self.mimic_obs = torch.zeros(self.num_envs, 9 + self._robot.dof_dim, device=self._device)
 
         # initialize once
         self.reset_idx(torch.arange(self.num_envs, device=self._device, dtype=torch.long))
@@ -157,36 +172,26 @@ class MotionEnv(LeggedRobotEnv):
     def _update_buffers(self) -> None:
         self.base_pos[:] = self._robot.base_pos
         self.base_quat[:] = self._robot.base_quat
-        base_quat_rel = quat_mul(self._robot.base_quat, quat_inv(self.base_default_quat))
-        self.base_euler[:] = quat_to_euler(base_quat_rel)
+        self.base_height[:] = self.base_pos[:, 2]
+        self.base_rotation_6D[:] = quat_to_rotation_6D(self.base_quat)
+        self.base_euler[:] = quat_to_euler(self.base_quat)
         self.projected_gravity[:] = quat_apply(quat_inv(self.base_quat), self.global_gravity)
         self.base_lin_vel[:] = self._robot.get_vel()
         self.base_ang_vel[:] = self._robot.get_ang()
+        self.base_lin_vel_local[:] = self.global_to_local(self.base_lin_vel)
+        self.base_ang_vel_local[:] = self.global_to_local(self.base_ang_vel)
 
         self.link_contact_forces[:] = self._robot.link_contact_forces
         self.link_positions[:] = self._robot.link_positions
+        self.link_positions_local[:] = self.batched_global_to_local(
+            self.base_pos, self.base_quat, self.link_positions
+        )
         self.link_quaternions[:] = self._robot.link_quaternions
         self.link_velocities[:] = self._robot.link_velocities
 
         # contacts
         self.feet_contact_force[:] = self.link_contact_forces[:, self._robot.foot_links_idx, 2]
         self.feet_contact[:] = self.feet_contact_force > 1.0
-        # build a compact mimic observation (current frame)
-        # roll and pitch from current base_quat and ref yaw rate proxy
-        # project gravity to get roll/pitch-like signal
-        roll_pitch = self.projected_gravity[:, :2]
-        # use only yaw component of ref ang vel
-        ref_yaw_rate = self.ref_base_ang_vel[:, 2:3]
-        self.mimic_obs[:] = torch.cat(
-            [
-                self.ref_base_pos[:, :3],
-                roll_pitch,
-                self.ref_base_lin_vel[:, :3],
-                ref_yaw_rate,
-                self.ref_dof_pos,
-            ],
-            dim=-1,
-        )
 
     def update_history(self) -> None:
         super().update_history()
@@ -225,12 +230,22 @@ class MotionEnv(LeggedRobotEnv):
         )
         self.ref_base_pos[envs_idx] = base_pos
         self.ref_base_quat[envs_idx] = base_quat
+        self.ref_base_height[envs_idx] = self.ref_base_pos[envs_idx, 2]
+        self.ref_base_rotation_6D[envs_idx] = quat_to_rotation_6D(base_quat)
+        self.ref_base_euler[envs_idx] = quat_to_euler(base_quat)
         self.ref_base_lin_vel[envs_idx] = base_lin_vel
         self.ref_base_ang_vel[envs_idx] = base_ang_vel
+        self.ref_base_lin_vel_local[envs_idx] = self.batched_global_to_local(
+            self.ref_base_pos[envs_idx], self.ref_base_quat[envs_idx], base_lin_vel
+        )
+        self.ref_base_ang_vel_local[envs_idx] = self.batched_global_to_local(
+            self.ref_base_pos[envs_idx], self.ref_base_quat[envs_idx], base_ang_vel
+        )
         self.ref_dof_pos[envs_idx] = dof_pos
         self.ref_dof_vel[envs_idx] = dof_vel
-        # self.ref_body_pos[envs_idx] = self._local_to_global(base_pos, base_quat, body_pos_local)
-        _ = body_pos_local  # placeholder so linters don't complain
+        # self.ref_body_pos[envs_idx] = body_pos_local
+        # self.ref_body_pos_local[envs_idx] = self.batched_global_to_local(self.ref_base_pos[envs_idx], self.ref_base_quat[envs_idx], body_pos_local)
+        _ = body_pos_local
 
     def hard_sync_motion(self, envs_idx: torch.Tensor) -> None:
         self._update_ref_motion()

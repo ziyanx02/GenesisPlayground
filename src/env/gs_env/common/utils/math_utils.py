@@ -57,6 +57,30 @@ def quat_to_rotmat(q: torch.Tensor) -> torch.Tensor:
 
 
 @torch.jit.script
+def rotmat_to_rotation_6D(rot: torch.Tensor) -> torch.Tensor:
+    """
+    Converts rotation matrix/matrices to the 6D rotation representation.
+    Input:
+        rot: Tensor of shape [..., 3, 3] rotation matrix.
+    Output:
+        Rotation 6D tensor of shape [..., 6], formed by concatenating the first two columns.
+    """
+    return torch.cat([rot[..., :, 0], rot[..., :, 1]], dim=-1)
+
+
+@torch.jit.script
+def quat_to_rotation_6D(q: torch.Tensor) -> torch.Tensor:
+    """
+    Converts quaternions to rotation 6D representation.
+    Input:
+        q: Tensor of shape [..., 4] where the quaternion is in (w, x, y, z) format.
+    Output:
+        Rotation 6D representation of shape [..., 6].
+    """
+    return rotmat_to_rotation_6D(quat_to_rotmat(q))
+
+
+@torch.jit.script
 def quat_to_euler(q: torch.Tensor) -> torch.Tensor:  # xyz
     """Convert quaternions to Euler angles (roll, pitch, yaw).
     Args:
