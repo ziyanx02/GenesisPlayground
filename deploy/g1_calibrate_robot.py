@@ -32,7 +32,7 @@ def getch() -> str:
 
 def main(args: argparse.Namespace) -> None:
     # Create viewer env
-    viewer_env_args = sim_env_registry["custom_scene_g1_links_tracking"]
+    viewer_env_args = sim_env_registry["custom_g1_mocap"]
     assert isinstance(viewer_env_args, LeggedRobotEnvArgs)
     viewer_env = CustomEnv(
         args=viewer_env_args,

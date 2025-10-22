@@ -1,13 +1,11 @@
 import argparse
-import sys
-import termios
-import tty
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import torch
 import yaml
+from g1_r2s_config import G1_CB1_LINK_NAMES, G1_CB1_POS, G1_CB1_QUAT
 from gs_env.common.utils.math_utils import get_RT_between, transform_RT_by
 from gs_env.real.config.registry import EnvArgsRegistry as real_env_registry
 from gs_env.real.config.schema import OptitrackEnvArgs
@@ -15,24 +13,6 @@ from gs_env.real.optitrack_env import OptitrackEnv
 from gs_env.sim.envs.config.registry import EnvArgsRegistry as sim_env_registry
 from gs_env.sim.envs.config.schema import LeggedRobotEnvArgs
 from gs_env.sim.envs.locomotion.custom_env import CustomEnv
-
-from .g1_r2s_config import G1_CB1_LINK_NAMES, G1_CB1_POS, G1_CB1_QUAT
-
-
-def getch_nonblocking() -> str | None:
-    """Try reading one key without blocking."""
-    import select
-
-    fd = sys.stdin.fileno()
-    old_settings = termios.tcgetattr(fd)
-    try:
-        tty.setcbreak(fd)
-        if select.select([sys.stdin], [], [], 0)[0]:
-            return sys.stdin.read(1)
-        else:
-            return None
-    finally:
-        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
 
 def main(args: argparse.Namespace) -> None:
@@ -47,13 +27,14 @@ def main(args: argparse.Namespace) -> None:
     optitrack_env = OptitrackEnv(num_envs=1, args=optitrack_env_args)
 
     # Create viewer env
-    viewer_env_args = sim_env_registry["custom_scene_g1_links_tracking"]
+    viewer_env_args = sim_env_registry["custom_g1_mocap"]
     assert isinstance(viewer_env_args, LeggedRobotEnvArgs)
     viewer_env = CustomEnv(
         args=viewer_env_args,
         num_envs=1,
         show_viewer=True,
     )
+    viewer_env.set_dof_pos(torch.zeros((viewer_env.robot.dof_dim), device=viewer_env.device))
 
     # Parse save path
     save_path = (
@@ -63,7 +44,7 @@ def main(args: argparse.Namespace) -> None:
         / (args.save_config + ".yaml")
     )
 
-    print("[INFO] Starting calibration... press 'q' to quit and save.")
+    print("[INFO] Starting calibration... press 'ctrl-c' to quit and save.")
 
     # Set robot to initial pose
     pelvis_idx_local = viewer_env.robot.get_link_idx_local_by_name("pelvis")
@@ -80,41 +61,43 @@ def main(args: argparse.Namespace) -> None:
         }
     offset_sampled: int = 0
 
-    while True:
-        offset_sampled += 1
-        frame = optitrack_env.get_tracked_links()
-        for link_name in G1_CB1_LINK_NAMES:
-            # Calculcation
-            R_m, T_m = frame[link_name][1], frame[link_name][0]
-            idx_local = viewer_env.robot.get_link_idx_local_by_name(link_name)
-            Pose_s = viewer_env.get_link_pose(idx_local)
-            R_s, T_s = Pose_s[1].cpu().numpy(), Pose_s[0].cpu().numpy()
-            R_o, T_o = get_RT_between(R_m, T_m, R_s, T_s)
-            m = 1 - 1 / offset_sampled
-            link_offsets[link_name]["pos"] = (
-                m * link_offsets[link_name]["pos"] + (1 - m) * T_o
-            ).astype(np.float32)
-            link_offsets[link_name]["quat"] = (
-                m * link_offsets[link_name]["quat"] + (1 - m) * R_o
-            ).astype(np.float32)
+    try:
+        while True:
+            offset_sampled += 1
+            frame = optitrack_env.get_tracked_links()
+            for link_name in G1_CB1_LINK_NAMES:
+                # Calculcation
+                R_m, T_m = frame[link_name][1], frame[link_name][0]
+                idx_local = viewer_env.robot.get_link_idx_local_by_name(link_name)
+                Pose_s = viewer_env.get_link_pose(idx_local)
+                R_s, T_s = Pose_s[1].cpu().numpy(), Pose_s[0].cpu().numpy()
+                R_o, T_o = get_RT_between(R_m, T_m, R_s, T_s)
+                m = 1 - 1 / offset_sampled
+                link_offsets[link_name]["pos"] = (
+                    m * link_offsets[link_name]["pos"] + (1 - m) * T_o
+                ).astype(np.float32)
+                link_offsets[link_name]["quat"] = (
+                    m * link_offsets[link_name]["quat"] + (1 - m) * R_o
+                ).astype(np.float32)
 
-            # Visualization
-            current_quat, current_pos = transform_RT_by(
-                R_m,
-                T_m,
-                link_offsets[link_name]["quat"],
-                link_offsets[link_name]["pos"],
-            )
-            viewer_env.scene.set_obj_pose(
-                name=link_name,
-                pos=torch.tensor(current_pos).unsqueeze(0),
-                quat=torch.tensor(current_quat).unsqueeze(0),
-            )
-        viewer_env.step_visualizer()
+                # Visualization
+                current_quat, current_pos = transform_RT_by(
+                    R_m,
+                    T_m,
+                    link_offsets[link_name]["quat"],
+                    link_offsets[link_name]["pos"],
+                )
+                viewer_env.scene.set_obj_pose(
+                    name=link_name,
+                    pos=torch.tensor(current_pos).unsqueeze(0),
+                    quat=torch.tensor(current_quat).unsqueeze(0),
+                )
+                viewer_env.step_visualizer()
 
-        key = getch_nonblocking()
-        if key == "q":
-            break
+            if offset_sampled % 100 == 0:
+                print(f"[INFO] {offset_sampled} samples collected...")
+    except KeyboardInterrupt:
+        pass
 
     print(f"[INFO] Total samples: {offset_sampled}, saving offsets to {save_path}.")
     save_data: dict[str, dict[str, list[float]]] = {}

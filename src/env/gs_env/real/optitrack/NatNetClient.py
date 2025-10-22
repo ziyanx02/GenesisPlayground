@@ -2242,7 +2242,8 @@ class NatNetClient:
                 if stop():
                     # print("ERROR: command socket access error occurred:\n  %s" %msg)
                     # return 1
-                    print("shutting down")
+                    # print("shutting down")
+                    pass
 
             if len(buffer_list[buffer_list_in_use_index]) > 0:
                 # peek ahead at message_id
@@ -2289,8 +2290,10 @@ class NatNetClient:
                 # return 3
             except TimeoutError:
                 # if self.use_multicast:
-                print("ERROR: data socket access timeout occurred. Server not responding")
+                # print("ERROR: data socket access timeout occurred. Server not responding")
                 # return 4
+                # periodic wake up to check for shutting down
+                continue
             except OSError as msg:
                 if not stop():
                     print(f"ERROR: data socket access error occurred:\n  {msg}")
@@ -2539,6 +2542,7 @@ class NatNetClient:
         if self.data_socket is None:
             print("Could not open data channel")
             return False
+        self.data_socket.settimeout(1.0)
 
         # Create the command socket
         self.command_socket = self.__create_command_socket()

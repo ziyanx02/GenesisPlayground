@@ -52,6 +52,9 @@ class OptitrackEnv(BaseEnv):
                 "quat": np.array(data.get("quat", [1.0, 0.0, 0.0, 0.0]), dtype=np.float32),
             }
 
+    def __del__(self) -> None:
+        self._client.shutdown()
+
     def _calculate_tracked_link_by_name(
         self, name: str, pos: np.typing.NDArray[np.float32], quat: np.typing.NDArray[np.float32]
     ) -> tuple[np.typing.NDArray[np.float32], np.typing.NDArray[np.float32]]:
@@ -66,7 +69,7 @@ class OptitrackEnv(BaseEnv):
             self.robot_link_offsets[name]["quat"],
             self.robot_link_offsets[name]["pos"],
         )
-        return aligned_quat, aligned_pos
+        return aligned_pos, aligned_quat
 
     def get_tracked_links(
         self,
@@ -74,6 +77,9 @@ class OptitrackEnv(BaseEnv):
     ) -> dict[str, tuple[np.typing.NDArray[np.float32], np.typing.NDArray[np.float32]]]:
         """
         Get all tracked links.
+        Force refresh will force to get a new frame from OptiTrack,
+        only if you haven't requested a frame for a long time.
+        Return a dictionary of link name to (position, quaternion).
         """
         aligned_poses = {}
         frame = self._client.get_frame()
