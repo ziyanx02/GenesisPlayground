@@ -196,19 +196,17 @@ class FeetAirTimePenalty(RewardTerm):
     Args:
         feet_air_time: Feet air time tensor of shape (B, 2) where B is the batch size.
         feet_first_contact: Feet first contact tensor of shape (B, 2) where B is the batch size.
-        commands: Commands tensor of shape (B, 3) where B is the batch size.
     """
 
-    required_keys = ("feet_first_contact", "feet_air_time", "commands")
+    required_keys = ("feet_first_contact", "feet_air_time")
     target_feet_air_time = 0.4
 
     def _compute(
-        self, feet_first_contact: torch.Tensor, feet_air_time: torch.Tensor, commands: torch.Tensor
+        self, feet_first_contact: torch.Tensor, feet_air_time: torch.Tensor
     ) -> torch.Tensor:  # type: ignore
         pen_air_time = torch.sum(
             torch.abs(feet_air_time - self.target_feet_air_time) * feet_first_contact, dim=1
         )
-        pen_air_time *= torch.norm(commands, dim=1) > 0.1
         return -pen_air_time
 
 

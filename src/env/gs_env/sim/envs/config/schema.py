@@ -43,6 +43,7 @@ class LeggedRobotEnvArgs(EnvArgs):
     obs_noises: dict[str, float]
     actor_obs_terms: list[str]
     critic_obs_terms: list[str]
+    terminate_after_collision_on: list[str]
 
 
 class WalkingEnvArgs(LeggedRobotEnvArgs):

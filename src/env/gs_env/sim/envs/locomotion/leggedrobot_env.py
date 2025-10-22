@@ -179,6 +179,11 @@ class LeggedRobotEnv(BaseEnv):
         self._info_space = gym.spaces.Dict({})
         self._extra_info = {}
 
+        # terminate after collision on these links
+        self._terminate_link_idx_local = []
+        for name in self._args.terminate_after_collision_on:
+            self._terminate_link_idx_local.append(self._robot.get_link_idx_local_by_name(name))
+
         # rendering
         self._rendered_images = []
         self._rendering = False
@@ -224,10 +229,17 @@ class LeggedRobotEnv(BaseEnv):
         height_mask = self.base_pos[:, 2] < 0.5
         reset_buf |= tilt_mask
         reset_buf |= height_mask
+        contact_force_mask = torch.any(
+            torch.norm(self.link_contact_forces[:, self._terminate_link_idx_local, :], dim=-1)
+            > 1.0,
+            dim=-1,
+        )
+        reset_buf |= contact_force_mask
         self.reset_buf[:] = reset_buf
         termination_dict = {}
         termination_dict["tilt"] = tilt_mask.clone()
         termination_dict["base_height"] = height_mask.clone()
+        termination_dict["contact_force"] = contact_force_mask.clone()
         termination_dict["any"] = reset_buf.clone()
         self._extra_info["termination"] = termination_dict
         return reset_buf

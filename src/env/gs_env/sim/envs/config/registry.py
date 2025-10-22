@@ -143,6 +143,18 @@ EnvArgsRegistry["g1_walk"] = WalkingEnvArgs(
         "feet_height",
         "feet_contact_force",
     ],
+    terminate_after_collision_on=[
+        "pelvis",
+        "torso_link",
+        "left_hip_yaw_link",
+        "right_hip_yaw_link",
+        "left_knee_link",
+        "right_knee_link",
+        "left_shoulder_yaw_link",
+        "right_shoulder_yaw_link",
+        "left_elbow_link",
+        "right_elbow_link",
+    ],
     command_resample_time=10.0,
     commands_range=(
         (-1.0, 1.0),  # Forward/Backward
@@ -160,7 +172,26 @@ EnvArgsRegistry["g1_motion"] = MotionEnvArgs(
     objects_args=[],
     sensors_args=[],
     reward_term="g1",
-    reward_args={},
+    reward_args={
+        ### Motion Tracking ###
+        "DofPosReward": 1.0,
+        "DofVelReward": 1.0,
+        "BaseHeightReward": 1.0,
+        # "BasePosReward": 1.0,
+        "BaseQuatReward": 1.0,
+        "BaseLinVelReward": 1.0,
+        "BaseAngVelReward": 1.0,
+        # "KeyBodyPosReward": 10.0,
+        ### Regularization ###
+        "TorquePenalty": 0.00001,
+        "ActionRatePenalty": 0.3,
+        "DofPosLimitPenalty": 10.0,
+        "ActionLimitPenalty": 0.1,
+        "AnkleTorquePenalty": 0.001,
+        "AngVelXYPenalty": 1.0,
+        "G1FeetContactForceLimitPenalty": 1e-4,
+        "FeetAirTimePenalty": 500.0,
+    },
     img_resolution=(480, 270),
     action_latency=1,
     obs_history_len=1,
@@ -190,6 +221,18 @@ EnvArgsRegistry["g1_motion"] = MotionEnvArgs(
         "base_lin_vel",
         "base_ang_vel",
     ],
+    terminate_after_collision_on=[
+        "pelvis",
+        "torso_link",
+        "left_hip_yaw_link",
+        "right_hip_yaw_link",
+        "left_knee_link",
+        "right_knee_link",
+        "left_shoulder_yaw_link",
+        "right_shoulder_yaw_link",
+        "left_elbow_link",
+        "right_elbow_link",
+    ],
     motion_file="assets/motion/twist_dataset.yaml",
 )
 
@@ -210,6 +253,18 @@ EnvArgsRegistry["g1_fixed"] = LeggedRobotEnvArgs(
     obs_noises={},
     actor_obs_terms=[],
     critic_obs_terms=[],
+    terminate_after_collision_on=[
+        "pelvis",
+        "torso_link",
+        "left_hip_yaw_link",
+        "right_hip_yaw_link",
+        "left_knee_link",
+        "right_knee_link",
+        "left_shoulder_yaw_link",
+        "right_shoulder_yaw_link",
+        "left_elbow_link",
+        "right_elbow_link",
+    ],
 )
 
 
@@ -229,4 +284,16 @@ EnvArgsRegistry["custom_g1_mocap"] = LeggedRobotEnvArgs(
     obs_noises={},
     actor_obs_terms=[],
     critic_obs_terms=[],
+    terminate_after_collision_on=[
+        "pelvis",
+        "torso_link",
+        "left_hip_yaw_link",
+        "right_hip_yaw_link",
+        "left_knee_link",
+        "right_knee_link",
+        "left_shoulder_yaw_link",
+        "right_shoulder_yaw_link",
+        "left_elbow_link",
+        "right_elbow_link",
+    ],
 )

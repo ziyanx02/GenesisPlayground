@@ -7,8 +7,12 @@ from tqdm import tqdm
 
 #
 from gs_env.common.utils.math_utils import (
+    quat_apply,
     quat_diff,
+    quat_inv,
+    quat_mul,
     quat_to_angle_axis,
+    quat_to_euler,
     slerp,
 )
 from gs_env.sim.envs.config.schema import MotionEnvArgs
@@ -107,6 +111,89 @@ class MotionEnv(LeggedRobotEnv):
         # initialize once
         self.reset_idx(torch.arange(self.num_envs, device=self._device, dtype=torch.long))
 
+    def _reset_buffers(self, envs_idx: torch.IntTensor) -> None:
+        super()._reset_buffers(envs_idx=envs_idx)
+        self.feet_air_time[envs_idx] = 0.0
+
+    def reset_idx(self, envs_idx: torch.IntTensor) -> None:
+        # set reference motion first
+        self._reset_ref_motion(envs_idx=envs_idx)
+        self.hard_sync_motion(envs_idx=envs_idx)
+
+        self._reset_buffers(envs_idx=envs_idx)
+
+    def get_terminated(self) -> torch.Tensor:
+        reset_buf = self.get_truncated()
+        tilt_mask = torch.logical_or(
+            torch.abs(self.base_euler[:, 0]) > 0.5,
+            torch.abs(self.base_euler[:, 1]) > 1.0,
+        )
+        height_mask = self.base_pos[:, 2] < 0.5
+        reset_buf |= tilt_mask
+        reset_buf |= height_mask
+        contact_force_mask = torch.any(
+            torch.norm(self.link_contact_forces[:, self._terminate_link_idx_local, :], dim=-1)
+            > 1.0,
+            dim=-1,
+        )
+        reset_buf |= contact_force_mask
+        self.reset_buf[:] = reset_buf
+        termination_dict = {}
+        termination_dict["tilt"] = tilt_mask.clone()
+        termination_dict["base_height"] = height_mask.clone()
+        termination_dict["contact_force"] = contact_force_mask.clone()
+        termination_dict["any"] = reset_buf.clone()
+        self._extra_info["termination"] = termination_dict
+        return reset_buf
+
+    def apply_action(self, action: torch.Tensor) -> None:
+        super().apply_action(action=action)
+        self.feet_first_contact[:] = (self.feet_air_time > 0.0) * self.feet_contact
+        self.feet_air_time += self.dt
+
+    def _pre_step(self) -> None:
+        super()._pre_step()
+
+    def _update_buffers(self) -> None:
+        self.base_pos[:] = self._robot.base_pos
+        self.base_quat[:] = self._robot.base_quat
+        base_quat_rel = quat_mul(self._robot.base_quat, quat_inv(self.base_default_quat))
+        self.base_euler[:] = quat_to_euler(base_quat_rel)
+        self.projected_gravity[:] = quat_apply(quat_inv(self.base_quat), self.global_gravity)
+        self.base_lin_vel[:] = self._robot.get_vel()
+        self.base_ang_vel[:] = self._robot.get_ang()
+
+        self.link_contact_forces[:] = self._robot.link_contact_forces
+        self.link_positions[:] = self._robot.link_positions
+        self.link_quaternions[:] = self._robot.link_quaternions
+        self.link_velocities[:] = self._robot.link_velocities
+
+        # contacts
+        self.feet_contact_force[:] = self.link_contact_forces[:, self._robot.foot_links_idx, 2]
+        self.feet_contact[:] = self.feet_contact_force > 1.0
+        # build a compact mimic observation (current frame)
+        # roll and pitch from current base_quat and ref yaw rate proxy
+        # project gravity to get roll/pitch-like signal
+        roll_pitch = self.projected_gravity[:, :2]
+        # use only yaw component of ref ang vel
+        ref_yaw_rate = self.ref_base_ang_vel[:, 2:3]
+        self.mimic_obs[:] = torch.cat(
+            [
+                self.ref_base_pos[:, :3],
+                roll_pitch,
+                self.ref_base_lin_vel[:, :3],
+                ref_yaw_rate,
+                self.ref_dof_pos,
+            ],
+            dim=-1,
+        )
+
+    def update_history(self) -> None:
+        super().update_history()
+        self.feet_air_time *= 1 - self.feet_contact
+        # update reference motion after calculating rewards
+        self._update_ref_motion()
+
     # ---------- Motion utilities ----------
     def _reset_ref_motion(self, envs_idx: torch.Tensor) -> None:
         assert self._motion_lib is not None
@@ -145,18 +232,6 @@ class MotionEnv(LeggedRobotEnv):
         # self.ref_body_pos[envs_idx] = self._local_to_global(base_pos, base_quat, body_pos_local)
         _ = body_pos_local  # placeholder so linters don't complain
 
-    # ---------- Overrides ----------
-    def _reset_buffers(self, envs_idx: torch.IntTensor) -> None:
-        super()._reset_buffers(envs_idx=envs_idx)
-        self.feet_air_time[envs_idx] = 0.0
-
-    def reset_idx(self, envs_idx: torch.IntTensor) -> None:
-        # set reference motion first
-        self._reset_ref_motion(envs_idx=envs_idx)
-        self.hard_sync_motion(envs_idx=envs_idx)
-
-        self._reset_buffers(envs_idx=envs_idx)
-
     def hard_sync_motion(self, envs_idx: torch.Tensor) -> None:
         self._update_ref_motion()
         self._robot.set_state(
@@ -179,42 +254,6 @@ class MotionEnv(LeggedRobotEnv):
         self._motion_ids[envs_idx] = motion_id
         self._motion_time_offsets[envs_idx] = 0.0
         self.hard_sync_motion(envs_idx=envs_idx)
-
-    def apply_action(self, action: torch.Tensor) -> None:
-        super().apply_action(action=action)
-        self.feet_first_contact[:] = (self.feet_air_time > 0.0) * self.feet_contact
-        self.feet_air_time += self.dt
-
-    def _pre_step(self) -> None:
-        super()._pre_step()
-
-    def update_history(self) -> None:
-        super().update_history()
-        self.feet_air_time *= 1 - self.feet_contact
-        # update reference motion after calculating rewards
-        self._update_ref_motion()
-
-    def _update_buffers(self) -> None:
-        super()._update_buffers()
-        # contacts
-        self.feet_contact_force[:] = self.link_contact_forces[:, self._robot.foot_links_idx, 2]
-        self.feet_contact[:] = self.feet_contact_force > 1.0
-        # build a compact mimic observation (current frame)
-        # roll and pitch from current base_quat and ref yaw rate proxy
-        # project gravity to get roll/pitch-like signal
-        roll_pitch = self.projected_gravity[:, :2]
-        # use only yaw component of ref ang vel
-        ref_yaw_rate = self.ref_base_ang_vel[:, 2:3]
-        self.mimic_obs[:] = torch.cat(
-            [
-                self.ref_base_pos[:, :3],
-                roll_pitch,
-                self.ref_base_lin_vel[:, :3],
-                ref_yaw_rate,
-                self.ref_dof_pos,
-            ],
-            dim=-1,
-        )
 
     @property
     def motion_lib(self) -> MotionLib:
