@@ -252,7 +252,7 @@ class LeggedRobotEnv(BaseEnv):
         return time_out_buf
 
     def get_observations(self) -> tuple[torch.Tensor, torch.Tensor]:
-        self._update_buffers()
+        self.update_buffers()
         obs_components = []
         for key in self._args.actor_obs_terms:
             obs_gt = getattr(self, key) * self._args.obs_scales.get(key, 1.0)
@@ -315,7 +315,7 @@ class LeggedRobotEnv(BaseEnv):
             self._scene.scene.step(refresh_visualizer=self._refresh_visualizer)
             self.torque = torch.max(self.torque, torch.abs(self._robot.torque))
 
-        self._update_buffers()
+        self.update_buffers()
 
         # Render if rendering is enabled
         self._render_headless()
@@ -337,7 +337,7 @@ class LeggedRobotEnv(BaseEnv):
         self.time_since_random_push[push_env_ids] = 0.0
 
     def get_extra_infos(self) -> dict[str, Any]:
-        self._update_buffers()
+        self.update_buffers()
         obs_components = []
         for key in self._args.critic_obs_terms:
             obs_gt = getattr(self, key) * self._args.obs_scales.get(key, 1.0)
@@ -347,7 +347,7 @@ class LeggedRobotEnv(BaseEnv):
         self._extra_info["time_outs"] = self.time_out_buf.clone()[:, None]
         return self._extra_info
 
-    def _update_buffers(self) -> None:
+    def update_buffers(self) -> None:
         self.base_pos[:] = self._robot.base_pos
         self.base_quat[:] = self._robot.base_quat
         base_quat_rel = quat_mul(self._robot.base_quat, quat_inv(self.base_default_quat))
@@ -467,14 +467,14 @@ class LeggedRobotEnv(BaseEnv):
         assert self.num_envs == 1, "Only support single environment for setting link pose"
         if quat is not None:
             assert quat.shape == (4,), "Quaternion must be a 4D vector"
-            self._update_buffers()
+            self.update_buffers()
             link_quat = self.link_quaternions[0][link_idx_local]
             rotation_quat = quat_mul(quat, quat_inv(link_quat))
             base_quat = quat_mul(rotation_quat, self.base_quat[0])
             self._robot.set_state(quat=base_quat)
         if pos is not None:
             assert pos.shape == (3,), "Position must be a 3D vector"
-            self._update_buffers()
+            self.update_buffers()
             link_pos = self.link_positions[0][link_idx_local]
             base_pos = self.base_pos[0] + pos - link_pos
             self._robot.set_state(pos=base_pos)

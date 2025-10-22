@@ -169,7 +169,7 @@ class MotionEnv(LeggedRobotEnv):
     def _pre_step(self) -> None:
         super()._pre_step()
 
-    def _update_buffers(self) -> None:
+    def update_buffers(self) -> None:
         self.base_pos[:] = self._robot.base_pos
         self.base_quat[:] = self._robot.base_quat
         self.base_height[:] = self.base_pos[:, 2]

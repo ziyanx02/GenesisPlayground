@@ -13,18 +13,16 @@ import matplotlib
 
 matplotlib.use("Agg")  # Use non-interactive backend to prevent windows from showing
 import gs_env.sim.envs as gs_envs
-import matplotlib.pyplot as plt
-import numpy as np
 import torch
-from gs_agent.algos.config.registry import PPO_WALKING_MLP
+from gs_agent.algos.config.registry import PPO_TELEOP_MLP
 from gs_agent.algos.ppo import PPO
-from gs_agent.runners.config.registry import RUNNER_WALKING_MLP
+from gs_agent.runners.config.registry import RUNNER_TELEOP_MLP
 from gs_agent.runners.onpolicy_runner import OnPolicyRunner
 from gs_agent.utils.logger import configure as logger_configure
 from gs_agent.utils.policy_loader import load_latest_model
 from gs_agent.wrappers.gs_env_wrapper import GenesisEnvWrapper
 from gs_env.sim.envs.config.registry import EnvArgsRegistry
-from utils import apply_overrides_generic, config_to_yaml, plot_metric_on_axis
+from utils import apply_overrides_generic, config_to_yaml
 
 
 def create_gs_env(
@@ -178,25 +176,19 @@ def evaluate_policy(
     print("Starting evaluation...")
 
     def evaluate() -> None:
-        nonlocal wrapped_env, inference_policy, gif_path, show_viewer, num_ckpt, exp_name, env_args
+        nonlocal \
+            wrapped_env, \
+            inference_policy, \
+            gif_path, \
+            show_viewer, \
+            num_ckpt, \
+            exp_name, \
+            env_args, \
+            env
         if show_viewer:
             print("Running endlessly (press Ctrl+C to stop)")
         else:
             print("Running until all environments are done")
-
-        step_count = 0
-        total_reward = 0.0
-
-        # For tracking action changes
-        upper_body_action_diffs_mean = []
-        upper_body_action_diffs_max = []
-        lower_body_action_diffs_mean = []
-        lower_body_action_diffs_max = []
-        upper_body_action_rates_mean = []
-        upper_body_action_rates_max = []
-        lower_body_action_rates_mean = []
-        lower_body_action_rates_max = []
-        last_action = None
 
         # Reset environment
         obs, _ = wrapped_env.get_observations()
@@ -232,140 +224,64 @@ def evaluate_policy(
         config_to_yaml(env_args, env_args_path)
         print(f"Environment args saved to: {env_args_path}")
 
+        motion_id = 0
+        step_count = 0
+
         while True:
-            if step_count < 100:
-                wrapped_env.env.commands[:] = 0.0
-            elif step_count < 200:
-                wrapped_env.env.commands[:, 0] = 0.0
-                wrapped_env.env.commands[:, 2] = 1.0
-            else:
-                wrapped_env.env.commands[:, 0] = 1.0
-                wrapped_env.env.commands[:, 2] = 0.0
-            # wrapped_env.env.commands[:] = 0.0
+            env.hard_reset_motion(torch.IntTensor([0]), motion_id)
+            obs, _ = wrapped_env.get_observations()
+            while env.motion_times[0] < env.motion_lib.get_motion_length(motion_id):
+                # Get action from policy
+                with torch.no_grad():
+                    action = inference_policy(obs)  # type: ignore[misc]
 
-            # Get action from policy
-            with torch.no_grad():
-                action = inference_policy(obs)  # type: ignore[misc]
+                # Step environment
+                env.apply_action(action)
+                terminated = env.get_terminated()
+                terminated_idx = terminated.nonzero(as_tuple=True)[0]
+                if len(terminated_idx) > 0:
+                    env.hard_sync_motion(terminated_idx)
+                env.update_buffers()
+                env.update_history()
+                obs, _ = wrapped_env.get_observations()
 
-            action_np = action[0].cpu().numpy()
-            # Track action changes for first 500 steps
-            if step_count < 500 and step_count > 0:
-                dof_pos = wrapped_env.env.dof_pos[0] - wrapped_env.env.robot.default_dof_pos
-                scaled_dof_pos = dof_pos.cpu().numpy() / env_args.robot_args.action_scale
-                action_diff = np.abs(action_np - scaled_dof_pos) * env_args.robot_args.action_scale
-                upper_body_action_diffs_mean.append(np.mean(action_diff[:12]))
-                upper_body_action_diffs_max.append(np.max(action_diff[:12]))
-                lower_body_action_diffs_mean.append(np.mean(action_diff[12:]))
-                lower_body_action_diffs_max.append(np.max(action_diff[12:]))
+                step_count += 1
 
-                action_rate = np.abs(action_np - last_action) * env_args.robot_args.action_scale
-                upper_body_action_rates_mean.append(np.mean(action_rate[:12]))
-                upper_body_action_rates_max.append(np.max(action_rate[:12]))
-                lower_body_action_rates_mean.append(np.mean(action_rate[12:]))
-                lower_body_action_rates_max.append(np.max(action_rate[12:]))
-            elif step_count == 500:
-                print("Plotting action differences...")
-                steps = np.arange(1, len(upper_body_action_rates_mean) + 1)
+                # Print progress
+                if step_count % 50 == 0:
+                    print(f"Step {step_count}")
 
-                # Create figure with 4 subplots in one column
-                fig, axes = plt.subplots(4, 1, figsize=(12, 12))
+                # Stop rendering and save GIF if recording
+                if not show_viewer and gif_path is not None and step_count >= 500:
+                    print("Stopping rendering and saving GIF...")
+                    env.stop_rendering(save_gif=True, gif_path=str(gif_path))  # type: ignore
+                    print(f"GIF saved to: {gif_path}")
+                    exit()
 
-                # Upper body action rate
-                plot_metric_on_axis(
-                    axes[0],
-                    steps,
-                    [upper_body_action_rates_mean, upper_body_action_rates_max],
-                    ["Mean", "Max"],
-                    "Action Rate (log)",
-                    "Upper Body Action Rate",
-                    yscale="log",
+            env.time_since_reset[0] = 0.0
+            if platform.system() == "Darwin":
+                motion_id = (motion_id + 1) % env.motion_lib.num_motions
+                continue
+            while True:
+                action = input(
+                    "Enter n to play next motion, q to quit, r to replay current motion, p to play previous motion, id to play specific motion"
                 )
-
-                # Lower body action rate
-                plot_metric_on_axis(
-                    axes[1],
-                    steps,
-                    [lower_body_action_rates_mean, lower_body_action_rates_max],
-                    ["Mean", "Max"],
-                    "Action Rate (log)",
-                    "Lower Body Action Rate",
-                    yscale="log",
-                )
-
-                # Upper body action diff
-                plot_metric_on_axis(
-                    axes[2],
-                    steps,
-                    [upper_body_action_diffs_mean, upper_body_action_diffs_max],
-                    ["Mean", "Max"],
-                    "Action Diff (log)",
-                    "Upper Body Action Diff",
-                    yscale="log",
-                )
-
-                # Lower body action diff
-                plot_metric_on_axis(
-                    axes[3],
-                    steps,
-                    [lower_body_action_diffs_mean, lower_body_action_diffs_max],
-                    ["Mean", "Max"],
-                    "Action Diff (log)",
-                    "Lower Body Action Diff",
-                    yscale="log",
-                    xlabel="Step",
-                )
-
-                # Save plot
-                plot_dir = Path("./gif") / exp_name if exp_name else Path("./gif") / "latest"
-                plot_dir.mkdir(parents=True, exist_ok=True)
-
-                if num_ckpt is not None:
-                    ckpt_num = num_ckpt
-                else:
-                    ckpt_filename = ckpt_path.stem
-                    ckpt_num = ckpt_filename.split("_")[-1] if "_" in ckpt_filename else "latest"
-
-                plot_path = plot_dir / f"{ckpt_num}_action_log.png"
-                plt.tight_layout()
-                plt.savefig(plot_path, dpi=150)
-                plt.close(fig)
-                print(f"Action difference plot saved to: {plot_path}")
-            last_action = action_np.copy()
-
-            # Step environment
-            obs, reward, terminated, truncated, _ = wrapped_env.step(action)
-            # print(wrapped_env.env.feet_contact_force[0].cpu().numpy())
-
-            # Accumulate reward
-            total_reward += reward.item()
-            step_count += 1
-
-            # Print progress
-            if step_count % 50 == 0:
-                print(f"Step {step_count}, Total reward: {total_reward:.2f}")
-
-            # Check if all environments are done (for non-viewer mode)
-            if not show_viewer:
-                if terminated.item() or truncated.item() or step_count > 500:
-                    print(f"Episode ended at step {step_count}, Total reward: {total_reward:.2f}")
+                if action == "n":
+                    motion_id = (motion_id + 1) % env.motion_lib.num_motions
                     break
-            else:
-                # For viewer mode, check termination conditions
-                if terminated.item() or truncated.item():
-                    print(f"Episode ended at step {step_count}, Total reward: {total_reward:.2f}")
-                    obs, _ = wrapped_env.get_observations()
-                    total_reward = 0.0
-
-        # Stop rendering and save GIF if recording
-        if not show_viewer and gif_path is not None:
-            print("Stopping rendering and saving GIF...")
-            env.stop_rendering(save_gif=True, gif_path=str(gif_path))  # type: ignore
-            print(f"GIF saved to: {gif_path}")
-
-        print(f"Evaluation of checkpoint {ckpt_path} completed successfully!")
-        print("Final evaluation results:")
-        print(f"Total steps: {step_count}")
-        print(f"Final reward: {total_reward:.2f}")
+                elif action == "q":
+                    return
+                elif action == "r":
+                    break
+                elif action == "p":
+                    motion_id = (motion_id - 1) % env.motion_lib.num_motions
+                    break
+                elif action.isdigit():
+                    motion_id = int(action)
+                    break
+                else:
+                    print("Invalid action")
+                    return
 
     try:
         if platform.system() == "Darwin" and show_viewer:
@@ -554,9 +470,9 @@ def main(
 
     env_args = EnvArgsRegistry[env_name]
     env_args = apply_overrides_generic(env_args, env_overrides, prefixes=("cfgs.", "env."))
-    algo_cfg = apply_overrides_generic(PPO_WALKING_MLP, algo_overrides, prefixes=("cfgs.", "algo."))
+    algo_cfg = apply_overrides_generic(PPO_TELEOP_MLP, algo_overrides, prefixes=("cfgs.", "algo."))
     runner_args = apply_overrides_generic(
-        RUNNER_WALKING_MLP, runner_overrides, prefixes=("cfgs.", "runner.")
+        RUNNER_TELEOP_MLP, runner_overrides, prefixes=("cfgs.", "runner.")
     )
 
     if eval:

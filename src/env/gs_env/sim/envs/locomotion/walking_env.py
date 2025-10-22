@@ -116,8 +116,8 @@ class WalkingEnv(LeggedRobotEnv):
         self._resample_commands(envs_idx=resample_env_ids)
         self.time_since_resample[resample_env_ids] = 0.0
 
-    def _update_buffers(self) -> None:
-        super()._update_buffers()
+    def update_buffers(self) -> None:
+        super().update_buffers()
         self.feet_contact_force[:] = self.link_contact_forces[:, self._robot.foot_links_idx, 2]
         self.feet_contact[:] = self.feet_contact_force > 1.0
         self.feet_position[:] = self.link_positions[:, self._robot.foot_links_idx]
