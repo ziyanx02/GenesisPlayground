@@ -1,4 +1,5 @@
 import argparse
+import pickle
 import sys
 import termios
 import tty
@@ -30,16 +31,6 @@ def getch() -> str:
 
 
 def main(args: argparse.Namespace) -> None:
-    # Create OptiTrack env with zero offsets
-    load_config_path = (
-        Path(__file__).resolve().parent.parent / "config" / "optitrack_offset" / "default.yaml"
-    )
-    optitrack_env_args = real_env_registry["g1_links_tracking"].model_copy(
-        update={"offset_config": load_config_path},
-    )
-    assert isinstance(optitrack_env_args, OptitrackEnvArgs)
-    optitrack_env = OptitrackEnv(num_envs=1, args=optitrack_env_args)
-
     # Create viewer env
     viewer_env_args = sim_env_registry["custom_scene_g1_links_tracking"]
     assert isinstance(viewer_env_args, LeggedRobotEnvArgs)
@@ -49,11 +40,6 @@ def main(args: argparse.Namespace) -> None:
         show_viewer=True,
     )
 
-    # Create low state handler
-    real_env_args = sim_env_registry["g1_walk"]
-    assert isinstance(real_env_args, LeggedRobotEnvArgs)
-    real_env = UnitreeLeggedEnv(args=real_env_args, interactive=False)
-
     # Parse save path
     save_path = (
         Path(__file__).resolve().parent.parent
@@ -62,23 +48,55 @@ def main(args: argparse.Namespace) -> None:
         / (args.save_config + ".yaml")
     )
 
-    print("[INFO] Starting collection... press 'c' to capture a sample, 'q' to quit and calibrate.")
-    collected_data: list[dict[str, Any]] = []
-    while True:
-        key = getch()
-        if key == "c":
-            link_poses = optitrack_env.get_tracked_links(force_refresh=True)
-            qpos = real_env.dof_pos[0].cpu().numpy().astype(np.float32)
-            data = {
-                "link_poses": link_poses,
-                "qpos": qpos,
-            }
-            collected_data.append(data)
-            print(f"[INFO] Sample #{len(collected_data)} collected.")
-        elif key == "q":
-            break
+    # Parse presample data path
+    data_path = (
+        Path(__file__).resolve().parent.parent / "config" / "robot_offset" / "collected_data.pkl"
+    )
 
-    print(f"[INFO] Total samples: {len(collected_data)}, starting calibration...")
+    collected_data: list[dict[str, Any]] = []
+    if not args.presample:
+        # Create OptiTrack env with zero offsets
+        load_config_path = (
+            Path(__file__).resolve().parent.parent / "config" / "optitrack_offset" / "default.yaml"
+        )
+        optitrack_env_args = real_env_registry["g1_links_tracking"].model_copy(
+            update={"offset_config": load_config_path},
+        )
+        assert isinstance(optitrack_env_args, OptitrackEnvArgs)
+        optitrack_env = OptitrackEnv(num_envs=1, args=optitrack_env_args)
+
+        # Create low state handler
+        real_env_args = sim_env_registry["g1_walk"]
+        assert isinstance(real_env_args, LeggedRobotEnvArgs)
+        real_env = UnitreeLeggedEnv(args=real_env_args, interactive=False)
+
+        print(
+            "[INFO] Starting collection... press 'c' to capture a sample, 'q' to stop and calibrate,"
+        )
+        print("       's' to save collected data and exit.")
+        while True:
+            key = getch()
+            if key == "c":
+                link_poses = optitrack_env.get_tracked_links(force_refresh=True)
+                qpos = real_env.dof_pos[0].cpu().numpy().astype(np.float32)
+                data = {
+                    "link_poses": link_poses,
+                    "qpos": qpos,
+                }
+                collected_data.append(data)
+                print(f"[INFO] Sample #{len(collected_data)} collected.")
+            elif key == "q":
+                print(f"[INFO] Total samples: {len(collected_data)}, starting calibration...")
+                break
+            elif key == "s":
+                print(f"[INFO] Saving {len(collected_data)} samples to {save_path} and exiting...")
+                with open(data_path, "wb") as f:
+                    pickle.dump(collected_data, f)
+                return
+    else:
+        with open(data_path, "rb") as f:
+            collected_data = pickle.load(f)
+        print(f"[INFO] Loaded {len(collected_data)} samples, starting calibration...")
 
     # Saved for pre-commit, TODO
     def _touch(*args, **kwargs) -> None:
@@ -91,6 +109,7 @@ def main(args: argparse.Namespace) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--save_config", type=str, default="calibrated")
+    parser.add_argument("--presample", action="store_true", default=False)
     # robot qpos calibration is irrelevant to mocap offsets
     # save to robot offset folder
     args = parser.parse_args()

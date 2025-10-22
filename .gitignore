@@ -6,3 +6,5 @@ logs
 cyclonedds
 
 unitree_sdk2_python
+
+config/**/*.pkl
