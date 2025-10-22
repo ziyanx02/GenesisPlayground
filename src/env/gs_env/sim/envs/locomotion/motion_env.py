@@ -158,6 +158,7 @@ class MotionEnv(LeggedRobotEnv):
         self._reset_buffers(envs_idx=envs_idx)
 
     def hard_sync_motion(self, envs_idx: torch.Tensor) -> None:
+        self._update_ref_motion()
         self._robot.set_state(
             pos=self.ref_base_pos[envs_idx],
             quat=self.ref_base_quat[envs_idx],
@@ -177,7 +178,6 @@ class MotionEnv(LeggedRobotEnv):
         print(f"Hard resetting motion to {self.motion_lib.motion_names[motion_id]}")
         self._motion_ids[envs_idx] = motion_id
         self._motion_time_offsets[envs_idx] = 0.0
-        self._update_ref_motion()
         self.hard_sync_motion(envs_idx=envs_idx)
 
     def apply_action(self, action: torch.Tensor) -> None:

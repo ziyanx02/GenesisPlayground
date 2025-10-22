@@ -454,9 +454,8 @@ def train_policy(
         pass
 
 
-def view_motion(env_args: Any) -> None:
+def view_motion(env_args: Any, show_viewer: bool = False) -> None:
     """Test the policy."""
-    show_viewer = False
     # Create environment for evaluation
     env = create_gs_env(
         show_viewer=show_viewer,
@@ -472,15 +471,38 @@ def view_motion(env_args: Any) -> None:
         motion_id = 0
         while True:
             env.hard_reset_motion(torch.IntTensor([0]), motion_id)
-            last_update_time = time.time()
+            last_update_time = time.time()  # noqa: F841
             while env.motion_times[0] < env.motion_lib.get_motion_length(motion_id):
                 env.scene.scene.step(refresh_visualizer=False)
                 env.time_since_reset[0] += 0.1
                 env.hard_sync_motion(torch.IntTensor([0]))
-                while time.time() - last_update_time < 0.1:
-                    time.sleep(0.01)
-                last_update_time = time.time()
-            motion_id = (motion_id + 1) % env.motion_lib.num_motions
+                # while time.time() - last_update_time < 0.1:
+                #     time.sleep(0.01)
+                # last_update_time = time.time()
+            env.time_since_reset[0] = 0.0
+            if platform.system() == "Darwin":
+                motion_id = (motion_id + 1) % env.motion_lib.num_motions
+                continue
+            while True:
+                action = input(
+                    "Enter n to play next motion, q to quit, r to replay current motion, p to play previous motion, id to play specific motion"
+                )
+                if action == "n":
+                    motion_id = (motion_id + 1) % env.motion_lib.num_motions
+                    break
+                elif action == "q":
+                    return
+                elif action == "r":
+                    break
+                elif action == "p":
+                    motion_id = (motion_id - 1) % env.motion_lib.num_motions
+                    break
+                elif action.isdigit():
+                    motion_id = int(action)
+                    break
+                else:
+                    print("Invalid action")
+                    return
 
     try:
         if platform.system() == "Darwin" and show_viewer:
@@ -550,7 +572,7 @@ def main(
             algo_cfg=algo_cfg,
         )
     elif view:
-        view_motion(env_args)
+        view_motion(env_args, show_viewer=show_viewer)
     else:
         # Training mode
         print("Training mode: Starting policy training")
