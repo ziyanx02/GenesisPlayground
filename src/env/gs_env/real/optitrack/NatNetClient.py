@@ -2595,7 +2595,7 @@ class NatNetClient:
         return True
 
     def shutdown(self) -> None:
-        print("shutdown called")
+        print("optitrack socket/threads shutdown called")
         self.stop_threads = True
         # closing sockets causes blocking recvfrom to throw
         # an exception and break the loop

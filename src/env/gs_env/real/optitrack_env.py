@@ -24,7 +24,7 @@ class OptitrackEnv(BaseEnv):
         super().__init__(device=device)
 
         if num_envs != 1:
-            raise ValueError("Real2SimEnv only supports num_envs=1")
+            raise ValueError("OptitrackEnv only supports num_envs=1")
 
         self._num_envs = num_envs
         self._args = args
@@ -78,7 +78,7 @@ class OptitrackEnv(BaseEnv):
         """
         Get all tracked links.
         Force refresh will force to get a new frame from OptiTrack,
-        only if you haven't requested a frame for a long time.
+        only if your requesting frequency is lower than the OptiTrack update rate.
         Return a dictionary of link name to (position, quaternion).
         """
         aligned_poses = {}

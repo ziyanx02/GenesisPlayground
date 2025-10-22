@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from g1_r2s_config import G1_FK_TABLES
 from gs_env.real.config.registry import EnvArgsRegistry as real_env_registry
 from gs_env.real.config.schema import OptitrackEnvArgs
 from gs_env.real.leggedrobot_env import UnitreeLeggedEnv
@@ -14,8 +15,6 @@ from gs_env.real.optitrack_env import OptitrackEnv
 from gs_env.sim.envs.config.registry import EnvArgsRegistry as sim_env_registry
 from gs_env.sim.envs.config.schema import LeggedRobotEnvArgs
 from gs_env.sim.envs.locomotion.custom_env import CustomEnv
-
-from .g1_r2s_config import G1_FK_TABLES
 
 
 def getch() -> str:
@@ -31,15 +30,6 @@ def getch() -> str:
 
 
 def main(args: argparse.Namespace) -> None:
-    # Create viewer env
-    viewer_env_args = sim_env_registry["custom_g1_mocap"]
-    assert isinstance(viewer_env_args, LeggedRobotEnvArgs)
-    viewer_env = CustomEnv(
-        args=viewer_env_args,
-        num_envs=1,
-        show_viewer=True,
-    )
-
     # Parse save path
     save_path = (
         Path(__file__).resolve().parent.parent
@@ -70,9 +60,8 @@ def main(args: argparse.Namespace) -> None:
         assert isinstance(real_env_args, LeggedRobotEnvArgs)
         real_env = UnitreeLeggedEnv(args=real_env_args, interactive=False)
 
-        print(
-            "[INFO] Starting collection... press 'c' to capture a sample, 'q' to stop and calibrate,"
-        )
+        print("[INFO] Starting collection...")
+        print("       'c' to capture a sample, 'q' to stop and calibrate,")
         print("       's' to save collected data and exit.")
         while True:
             key = getch()
@@ -89,7 +78,7 @@ def main(args: argparse.Namespace) -> None:
                 print(f"[INFO] Total samples: {len(collected_data)}, starting calibration...")
                 break
             elif key == "s":
-                print(f"[INFO] Saving {len(collected_data)} samples to {save_path} and exiting...")
+                print(f"[INFO] Saving {len(collected_data)} samples to {data_path} and exiting...")
                 with open(data_path, "wb") as f:
                     pickle.dump(collected_data, f)
                 return
@@ -97,6 +86,16 @@ def main(args: argparse.Namespace) -> None:
         with open(data_path, "rb") as f:
             collected_data = pickle.load(f)
         print(f"[INFO] Loaded {len(collected_data)} samples, starting calibration...")
+        print(collected_data)
+
+    # Create viewer env
+    viewer_env_args = sim_env_registry["custom_g1_mocap"]
+    assert isinstance(viewer_env_args, LeggedRobotEnvArgs)
+    viewer_env = CustomEnv(
+        args=viewer_env_args,
+        num_envs=1,
+        show_viewer=True,
+    )
 
     # Saved for pre-commit, TODO
     def _touch(*args, **kwargs) -> None:
