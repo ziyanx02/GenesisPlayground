@@ -570,14 +570,14 @@ class MotionEnv(LeggedRobotEnv):
         terminate_by_error &= base_pos_mask | base_height_mask | base_quat_mask | dof_pos_mask
         reset_buf |= terminate_by_error
 
-        if base_pos_mask[0]:
-            print("terminate by base_pos_error")
-        if base_height_mask[0]:
-            print("terminate by base_height_error")
-        if base_quat_mask[0]:
-            print("terminate by base_quat_error")
-        if dof_pos_mask[0]:
-            print("terminate by dof_pos_error")
+        # if base_pos_mask[0]:
+        #     print("terminate by base_pos_error")
+        # if base_height_mask[0]:
+        #     print("terminate by base_height_error")
+        # if base_quat_mask[0]:
+        #     print("terminate by base_quat_error")
+        # if dof_pos_mask[0]:
+        #     print("terminate by dof_pos_error")
 
         self.reset_buf[:] = reset_buf
 
