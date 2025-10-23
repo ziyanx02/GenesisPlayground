@@ -1,4 +1,5 @@
 import genesis as gs
+import numpy as np
 from gs_schemas.base_types import genesis_pydantic_config
 from pydantic import BaseModel
 
@@ -43,6 +44,10 @@ class LeggedRobotEnvArgs(EnvArgs):
     obs_noises: dict[str, float]
     actor_obs_terms: list[str]
     critic_obs_terms: list[str]
+    reset_roll_range: tuple[float, float] = (-0.15, 0.15)
+    reset_pitch_range: tuple[float, float] = (-0.15, 0.15)
+    reset_yaw_range: tuple[float, float] = (-np.pi, np.pi)
+    reset_dof_pos_range: tuple[float, float] = (-0.15, 0.15)
     terminate_after_collision_on: list[str]
 
 

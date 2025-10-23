@@ -141,7 +141,7 @@ def evaluate_policy(
     # Create environment for evaluation
     env = create_gs_env(
         show_viewer=show_viewer,
-        num_envs=1,
+        num_envs=2,
         device=device,
         args=env_args,
         eval_mode=True,
@@ -228,7 +228,7 @@ def evaluate_policy(
         step_count = 0
 
         while True:
-            env.hard_reset_motion(torch.IntTensor([0]), motion_id)
+            env.hard_reset_motion(torch.IntTensor([0, 1]), motion_id)
             obs, _ = wrapped_env.get_observations()
             while env.motion_times[0] < env.motion_lib.get_motion_length(motion_id):
                 # Get action from policy
@@ -237,12 +237,14 @@ def evaluate_policy(
 
                 # Step environment
                 env.apply_action(action)
+                env.hard_sync_motion(torch.IntTensor([1]))
                 terminated = env.get_terminated()
                 terminated_idx = terminated.nonzero(as_tuple=True)[0]
                 if len(terminated_idx) > 0:
                     env.hard_sync_motion(terminated_idx)
                 env.update_buffers()
                 env.update_history()
+                env.get_reward()
                 obs, _ = wrapped_env.get_observations()
 
                 step_count += 1
@@ -387,14 +389,15 @@ def view_motion(env_args: Any, show_viewer: bool = False) -> None:
         motion_id = 0
         while True:
             env.hard_reset_motion(torch.IntTensor([0]), motion_id)
-            last_update_time = time.time()  # noqa: F841
+            last_update_time = time.time()
             while env.motion_times[0] < env.motion_lib.get_motion_length(motion_id):
                 env.scene.scene.step(refresh_visualizer=False)
                 env.time_since_reset[0] += 0.1
                 env.hard_sync_motion(torch.IntTensor([0]))
-                # while time.time() - last_update_time < 0.1:
-                #     time.sleep(0.01)
-                # last_update_time = time.time()
+                env.update_buffers()
+                while time.time() - last_update_time < 0.1:
+                    time.sleep(0.01)
+                last_update_time = time.time()
             env.time_since_reset[0] = 0.0
             if platform.system() == "Darwin":
                 motion_id = (motion_id + 1) % env.motion_lib.num_motions

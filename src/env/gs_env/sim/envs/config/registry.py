@@ -174,13 +174,13 @@ EnvArgsRegistry["g1_motion"] = MotionEnvArgs(
     reward_term="g1",
     reward_args={
         ### Motion Tracking ###
-        "DofPosReward": 1.0,
-        "DofVelReward": 1.0,
+        "DofPosReward": 10.0,
+        "DofVelReward": 2.0,
         # "BaseHeightReward": 1.0,
-        "BasePosReward": 1.0,
-        "BaseQuatReward": 1.0,
-        "BaseLinVelReward": 1.0,
-        "BaseAngVelReward": 1.0,
+        "BasePosReward": 10.0,
+        "BaseQuatReward": 10.0,
+        "BaseLinVelReward": 20.0,
+        "BaseAngVelReward": 20.0,
         # "KeyBodyPosReward": 10.0,
         ### Regularization ###
         "TorquePenalty": 0.00001,

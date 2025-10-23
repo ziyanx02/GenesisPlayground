@@ -207,10 +207,26 @@ class LeggedRobotEnv(BaseEnv):
         default_quat = self._robot.default_quat[None, :].repeat(len(envs_idx), 1)
         default_dof_pos = self._robot.default_dof_pos[None, :].repeat(len(envs_idx), 1)
         random_euler = torch.zeros((len(envs_idx), 3), device=self._device)
-        random_euler[:, :2] = (torch.rand(len(envs_idx), 2, device=self._device) - 0.5) * 0.3
-        random_euler[:, 2] = torch.rand(len(envs_idx), device=self._device) * 2 * np.pi - np.pi
-        random_dof_pos = torch.rand(len(envs_idx), self._robot.dof_dim, device=self._device) - 0.5
-        random_dof_pos *= 0.3
+        random_euler[:, 0] = (
+            torch.rand(len(envs_idx), device=self._device)
+            * (self._args.reset_pitch_range[1] - self._args.reset_pitch_range[0])
+            + self._args.reset_pitch_range[0]
+        )
+        random_euler[:, 1] = (
+            torch.rand(len(envs_idx), device=self._device)
+            * (self._args.reset_roll_range[1] - self._args.reset_roll_range[0])
+            + self._args.reset_roll_range[0]
+        )
+        random_euler[:, 2] = (
+            torch.rand(len(envs_idx), device=self._device)
+            * (self._args.reset_yaw_range[1] - self._args.reset_yaw_range[0])
+            + self._args.reset_yaw_range[0]
+        )
+        random_dof_pos = (
+            torch.rand(len(envs_idx), self._robot.dof_dim, device=self._device)
+            * (self._args.reset_dof_pos_range[1] - self._args.reset_dof_pos_range[0])
+            + self._args.reset_dof_pos_range[0]
+        )
         if self._eval_mode:
             random_euler *= 0
             random_dof_pos *= 0
@@ -369,8 +385,6 @@ class LeggedRobotEnv(BaseEnv):
         reward_total_pos = torch.zeros(self.num_envs, device=self._device)
         reward_total_neg = torch.zeros(self.num_envs, device=self._device)
         reward_dict = {}
-        if self._eval_mode:
-            return reward_total, reward_dict
 
         state_dict = {key: getattr(self, key) for key in self.reward_required_keys}
         for key, func in self._reward_functions.items():
