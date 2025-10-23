@@ -23,6 +23,7 @@ class WalkingEnv(LeggedRobotEnv):
         show_viewer: bool = False,
         device: torch.device = _DEFAULT_DEVICE,
         eval_mode: bool = False,
+        debug: bool = False,
     ) -> None:
         # Initialize base legged-robot environment
         self._args = args
@@ -32,6 +33,7 @@ class WalkingEnv(LeggedRobotEnv):
             show_viewer=show_viewer,
             device=device,
             eval_mode=eval_mode,
+            debug=debug,
         )
 
     def _init(self) -> None:

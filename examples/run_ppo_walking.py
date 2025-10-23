@@ -33,6 +33,7 @@ def create_gs_env(
     device: str = "cuda",
     args: Any = None,
     eval_mode: bool = False,
+    debug: bool = False,
 ) -> gs_envs.WalkingEnv:
     """Create gym environment wrapper with optional config overrides."""
     if torch.cuda.is_available() and device == "cuda":
@@ -49,6 +50,7 @@ def create_gs_env(
         show_viewer=show_viewer,
         device=device_tensor,  # type: ignore
         eval_mode=eval_mode,
+        debug=debug,
     )
 
 
@@ -100,6 +102,7 @@ def evaluate_policy(
     device: str = "cuda",
     env_args: Any = None,
     algo_cfg: Any = None,
+    debug: bool = False,
 ) -> None:
     """Evaluate the policy."""
     print("=" * 80)
@@ -159,6 +162,7 @@ def evaluate_policy(
         device=device,
         args=env_args,
         eval_mode=True,
+        debug=debug,
     )
 
     wrapped_env = GenesisEnvWrapper(env, device=env.device)
@@ -400,6 +404,7 @@ def train_policy(
     env_args: Any = None,
     algo_cfg: Any = None,
     runner_args: Any = None,
+    debug: bool = False,
 ) -> None:
     """Train the policy using PPO."""
 
@@ -409,6 +414,7 @@ def train_policy(
         num_envs=num_envs,
         device=device,
         args=env_args,
+        debug=debug,
     )
 
     # Get configuration and runner from registry
@@ -481,6 +487,7 @@ def main(
     num_ckpt: int | None = None,
     use_wandb: bool = True,
     env_name: str = "g1_walk",
+    debug: bool = False,
     **cfg_overrides: Any,
 ) -> None:
     """Entry point.
@@ -523,6 +530,7 @@ def main(
             device=device,
             env_args=env_args,
             algo_cfg=algo_cfg,
+            debug=debug,
         )
     else:
         # Training mode
@@ -536,6 +544,7 @@ def main(
             env_args=env_args,
             algo_cfg=algo_cfg,
             runner_args=runner_args,
+            debug=debug,
         )
 
 
