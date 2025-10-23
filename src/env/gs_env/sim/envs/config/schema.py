@@ -58,3 +58,8 @@ class WalkingEnvArgs(LeggedRobotEnvArgs):
 
 class MotionEnvArgs(LeggedRobotEnvArgs):
     motion_file: str
+    no_terminate_before_motion_time: float = 1.0
+    terminate_after_base_pos_error: float = 0.5
+    terminate_after_base_height_error: float = 0.15
+    terminate_after_base_rot_error: float = 0.3
+    terminate_after_dof_pos_error: float = 8.0

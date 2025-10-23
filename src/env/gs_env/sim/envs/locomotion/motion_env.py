@@ -9,6 +9,7 @@ from tqdm import tqdm
 from gs_env.common.utils.math_utils import (
     quat_apply,
     quat_diff,
+    quat_error_magnitude,
     quat_from_euler,
     quat_inv,
     quat_mul,
@@ -540,26 +541,49 @@ class MotionEnv(LeggedRobotEnv):
 
     def get_terminated(self) -> torch.Tensor:
         reset_buf = self.get_truncated()
+
         tilt_mask = torch.logical_or(
             torch.abs(self.base_euler[:, 0]) > 0.5,
             torch.abs(self.base_euler[:, 1]) > 1.0,
         )
-        height_mask = self.base_pos[:, 2] < 0.5
         reset_buf |= tilt_mask
+
+        height_mask = self.base_pos[:, 2] < 0.5
         reset_buf |= height_mask
+
         contact_force_mask = torch.any(
             torch.norm(self.link_contact_forces[:, self._terminate_link_idx_local, :], dim=-1)
             > 1.0,
             dim=-1,
         )
         reset_buf |= contact_force_mask
+
+        terminate_by_error = self.motion_times > self._args.no_terminate_before_motion_time
+        base_pos_error = torch.norm(self.base_pos - self.ref_base_pos, dim=-1)
+        base_height_error = torch.abs(self.base_height - self.ref_base_height)
+        base_quat_error = quat_error_magnitude(self.base_quat, self.ref_base_quat)
+        dof_pos_error = torch.sum(torch.abs(self.dof_pos - self.ref_dof_pos), dim=-1)
+        base_pos_mask = base_pos_error > self._args.terminate_after_base_pos_error
+        base_height_mask = base_height_error > self._args.terminate_after_base_height_error
+        base_quat_mask = base_quat_error > self._args.terminate_after_base_rot_error
+        dof_pos_mask = dof_pos_error > self._args.terminate_after_dof_pos_error
+        terminate_by_error &= base_pos_mask | base_height_mask | base_quat_mask | dof_pos_mask
+        reset_buf |= terminate_by_error
+
         self.reset_buf[:] = reset_buf
+
         termination_dict = {}
         termination_dict["tilt"] = tilt_mask.clone()
-        termination_dict["base_height"] = height_mask.clone()
+        termination_dict["height"] = height_mask.clone()
+        termination_dict["ref_base_pos"] = base_pos_mask.clone()
+        termination_dict["ref_base_height"] = base_height_mask.clone()
+        termination_dict["ref_base_quat"] = base_quat_mask.clone()
+        termination_dict["ref_dof_pos"] = dof_pos_mask.clone()
+        termination_dict["terminate_by_error"] = terminate_by_error.clone()
         termination_dict["contact_force"] = contact_force_mask.clone()
         termination_dict["any"] = reset_buf.clone()
         self._extra_info["termination"] = termination_dict
+
         return reset_buf
 
     def apply_action(self, action: torch.Tensor) -> None:

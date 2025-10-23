@@ -317,6 +317,7 @@ def train_policy(
         args=env_args,
     )
 
+    print(algo_cfg)
     # Get configuration and runner from registry
     runner = create_ppo_runner_from_registry(
         env,
