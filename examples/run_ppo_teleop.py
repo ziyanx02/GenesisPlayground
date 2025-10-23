@@ -239,9 +239,8 @@ def evaluate_policy(
                 env.apply_action(action)
                 env.hard_sync_motion(torch.IntTensor([1]))
                 terminated = env.get_terminated()
-                terminated_idx = terminated.nonzero(as_tuple=True)[0]
-                if len(terminated_idx) > 0:
-                    env.hard_sync_motion(terminated_idx)
+                if terminated[0]:
+                    env.hard_sync_motion(torch.IntTensor([0]))
                 env.update_buffers()
                 env.update_history()
                 env.get_reward()

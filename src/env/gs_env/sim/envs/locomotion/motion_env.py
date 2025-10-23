@@ -542,14 +542,14 @@ class MotionEnv(LeggedRobotEnv):
     def get_terminated(self) -> torch.Tensor:
         reset_buf = self.get_truncated()
 
-        tilt_mask = torch.logical_or(
-            torch.abs(self.base_euler[:, 0]) > 0.5,
-            torch.abs(self.base_euler[:, 1]) > 1.0,
-        )
-        reset_buf |= tilt_mask
+        # tilt_mask = torch.logical_or(
+        #     torch.abs(self.base_euler[:, 0]) > 0.5,
+        #     torch.abs(self.base_euler[:, 1]) > 1.0,
+        # )
+        # reset_buf |= tilt_mask
 
-        height_mask = self.base_pos[:, 2] < 0.5
-        reset_buf |= height_mask
+        # height_mask = self.base_pos[:, 2] < 0.3
+        # reset_buf |= height_mask
 
         contact_force_mask = torch.any(
             torch.norm(self.link_contact_forces[:, self._terminate_link_idx_local, :], dim=-1)
@@ -570,11 +570,20 @@ class MotionEnv(LeggedRobotEnv):
         terminate_by_error &= base_pos_mask | base_height_mask | base_quat_mask | dof_pos_mask
         reset_buf |= terminate_by_error
 
+        if base_pos_mask[0]:
+            print("terminate by base_pos_error")
+        if base_height_mask[0]:
+            print("terminate by base_height_error")
+        if base_quat_mask[0]:
+            print("terminate by base_quat_error")
+        if dof_pos_mask[0]:
+            print("terminate by dof_pos_error")
+
         self.reset_buf[:] = reset_buf
 
         termination_dict = {}
-        termination_dict["tilt"] = tilt_mask.clone()
-        termination_dict["height"] = height_mask.clone()
+        # termination_dict["tilt"] = tilt_mask.clone()
+        # termination_dict["height"] = height_mask.clone()
         termination_dict["ref_base_pos"] = base_pos_mask.clone()
         termination_dict["ref_base_height"] = base_height_mask.clone()
         termination_dict["ref_base_quat"] = base_quat_mask.clone()
