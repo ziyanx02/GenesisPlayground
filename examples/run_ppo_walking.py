@@ -16,7 +16,7 @@ import gs_env.sim.envs as gs_envs
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-from gs_agent.algos.config.registry import PPO_WALKING_MLP
+from gs_agent.algos.config.registry import PPO_WALKING_MLP, PPOArgs
 from gs_agent.algos.ppo import PPO
 from gs_agent.runners.config.registry import RUNNER_WALKING_MLP
 from gs_agent.runners.onpolicy_runner import OnPolicyRunner
@@ -24,7 +24,8 @@ from gs_agent.utils.logger import configure as logger_configure
 from gs_agent.utils.policy_loader import load_latest_model
 from gs_agent.wrappers.gs_env_wrapper import GenesisEnvWrapper
 from gs_env.sim.envs.config.registry import EnvArgsRegistry
-from utils import apply_overrides_generic, config_to_yaml, plot_metric_on_axis
+from gs_env.sim.envs.config.schema import WalkingEnvArgs
+from utils import apply_overrides_generic, config_to_yaml, plot_metric_on_axis, yaml_to_config
 
 
 def create_gs_env(
@@ -94,6 +95,32 @@ def evaluate_policy(
     print("EVALUATION MODE: Disabling domain randomization, observation noise, and random push")
     print("=" * 80)
 
+    # Find the experiment directory without creating a new runner
+    log_pattern = f"logs/{exp_name}/*"
+    log_dirs = glob.glob(log_pattern)
+    if not log_dirs:
+        raise FileNotFoundError(f"No experiment directories found matching pattern: {log_pattern}")
+
+    log_dirs.sort(key=lambda x: os.path.getmtime(x), reverse=True)
+    exp_dir = log_dirs[0]
+    print(f"Loading policy from experiment: {exp_dir}")
+
+    # Load checkpoint - either specific one or latest
+    if num_ckpt is not None:
+        ckpt_path = Path(exp_dir) / "checkpoints" / f"checkpoint_{num_ckpt:04d}.pt"
+        if not ckpt_path.exists():
+            raise FileNotFoundError(f"Checkpoint {ckpt_path} not found")
+    else:
+        ckpt_path = load_latest_model(Path(exp_dir))
+        num_ckpt = int(ckpt_path.stem.split("_")[-1])
+
+    print(f"Loading checkpoint: {ckpt_path}")
+
+    print(f"Loading configs from experiment: {exp_dir}")
+
+    env_args = yaml_to_config(Path(exp_dir) / "configs" / "env_args.yaml", WalkingEnvArgs)
+    algo_cfg = yaml_to_config(Path(exp_dir) / "configs" / "algo_cfg.yaml", PPOArgs)
+
     # Disable domain randomization, obs noise, and random push for evaluation
     # Create a copy of env_args with disabled randomization
     env_args = env_args.model_copy(
@@ -118,27 +145,6 @@ def evaluate_policy(
         }
     )
     env_args = env_args.model_copy(update={"robot_args": robot_args})
-
-    # Find the experiment directory without creating a new runner
-    log_pattern = f"logs/{exp_name}/*"
-    log_dirs = glob.glob(log_pattern)
-    if not log_dirs:
-        raise FileNotFoundError(f"No experiment directories found matching pattern: {log_pattern}")
-
-    log_dirs.sort(key=lambda x: os.path.getmtime(x), reverse=True)
-    exp_dir = log_dirs[0]
-    print(f"Loading policy from experiment: {exp_dir}")
-
-    # Load checkpoint - either specific one or latest
-    if num_ckpt is not None:
-        ckpt_path = Path(exp_dir) / "checkpoints" / f"checkpoint_{num_ckpt:04d}.pt"
-        if not ckpt_path.exists():
-            raise FileNotFoundError(f"Checkpoint {ckpt_path} not found")
-    else:
-        ckpt_path = load_latest_model(Path(exp_dir))
-        num_ckpt = int(ckpt_path.stem.split("_")[-1])
-
-    print(f"Loading checkpoint: {ckpt_path}")
 
     # Create environment for evaluation
     env = create_gs_env(
