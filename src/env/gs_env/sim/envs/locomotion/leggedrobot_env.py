@@ -280,7 +280,7 @@ class LeggedRobotEnv(BaseEnv):
         self.time_since_random_push += self._scene.scene.dt
 
     def update_history(self) -> None:
-        if not self._show_viewer and self.debug:
+        if self.debug:
             self._draw_debug_vis()
         # save for reward computation
         self.last_last_action = self.last_action.clone()
@@ -301,7 +301,7 @@ class LeggedRobotEnv(BaseEnv):
         solver = self.scene.rigid_solver
         com = solver.get_links_root_COM(links_idx=self._robot.body_link_idx).squeeze(0).squeeze(0)
 
-        self.scene.draw_debug_sphere(pos=com, radius=0.02, color=(0, 0, 1, 0.7))
+        self.scene.draw_debug_sphere(pos=com, radius=0.05, color=(0, 0, 1, 0.7))
 
     def get_extra_infos(self) -> dict[str, Any]:
         self._update_buffers()
