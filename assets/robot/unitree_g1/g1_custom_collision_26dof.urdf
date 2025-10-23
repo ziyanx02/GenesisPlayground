@@ -256,13 +256,13 @@
         <sphere radius="0.005"/>
       </geometry>
     </collision> -->
-    <collision name="l_foot_1">
+    <collision>
       <origin rpy="0 1.5708 0" xyz="0.05 0.02 -0.02" />
       <geometry>
           <cylinder length="0.15" radius="0.02" />
       </geometry>
     </collision>
-    <collision name="l_foot_2">
+    <collision>
       <origin rpy="0 1.5708 0" xyz="0.05 -0.02 -0.02" />
       <geometry>
           <cylinder length="0.15" radius="0.02" />
@@ -484,13 +484,13 @@
         <sphere radius="0.005"/>
       </geometry>
     </collision> -->
-    <collision name="r_foot_1">
+    <collision>
       <origin rpy="0 1.5708 0" xyz="0.05 0.02 -0.02" />
       <geometry>
           <cylinder length="0.15" radius="0.02" />
       </geometry>
     </collision>
-    <collision name="r_foot_2">
+    <collision>
       <origin rpy="0 1.5708 0" xyz="0.05 -0.02 -0.02" />
       <geometry>
           <cylinder length="0.15" radius="0.02" />
