@@ -18,11 +18,12 @@ cd /scratch4/workspace/junyunhuang_umass_edu-myworkspace/GenesisPlayground
 export WANDB_ENTITY="h975894552"
 export WANDB_PROJECT="genesis"
 
-exp_name=${1:-setting3}
+exp_name=${1:-setting3-latency1}
 python /scratch4/workspace/junyunhuang_umass_edu-myworkspace/GenesisPlayground/examples/run_ppo_walking.py \
     --exp_name $exp_name \
-    --reward_args.UpperBodyDofPenalty 1 \
-    --reward_args.TorquePenalty 0.0005 \
+    -- env.action_latency 1 \
+    # --reward_args.UpperBodyDofPenalty 1 \
+    # --reward_args.TorquePenalty 0.0005 \
     # --reward_args.StandStillActionRatePenalty 0.1 \
     # --reward_args.LinVelXYReward 1 \
     # --reward_args.AngVelZReward 1 \

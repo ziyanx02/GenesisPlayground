@@ -86,7 +86,7 @@ EnvArgsRegistry["g1_walk"] = WalkingEnvArgs(
         ### Pose Tracking ###
         "OrientationPenalty": 100.0,
         ### Regularization ###
-        "TorquePenalty": 0.00001,
+        "TorquePenalty": 0.0005,
         "ActionRatePenalty": 0.3,
         "DofPosLimitPenalty": 100.0,
         "DofVelPenalty": 0.05,
@@ -101,7 +101,7 @@ EnvArgsRegistry["g1_walk"] = WalkingEnvArgs(
         # "HipRollVelPenalty": 0.05,
         # "HipTorquePenalty": 0.001,
         # "HipPositionPenalty": 10.0,
-        "UpperBodyDofPenalty": 0.05,
+        "UpperBodyDofPenalty": 1,
         "UpperBodyActionPenalty": 0.5,
         "WaistDofPenalty": 300.0,
         # "FeetAirTimeReward": 200.0,
