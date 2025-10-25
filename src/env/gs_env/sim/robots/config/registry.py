@@ -152,10 +152,10 @@ DRArgsRegistry: dict[str, DRArgs] = {}
 
 
 DRArgsRegistry["default"] = DomainRandomizationArgs(
-    kp_range=(0.8, 1.2),
-    kd_range=(0.8, 1.2),
-    motor_strength_range=(0.8, 1.2),
-    motor_offset_range=(-0.05, 0.05),
+    kp_range=(0.9, 1.1),
+    kd_range=(0.9, 1.1),
+    motor_strength_range=(0.9, 1.1),
+    motor_offset_range=(0.0, 0.0),
     friction_range=(0.5, 1.5),
     mass_range=(-5.0, 5.0),
     com_displacement_range=(-0.1, 0.1),
