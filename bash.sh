@@ -18,10 +18,15 @@ cd /scratch4/workspace/junyunhuang_umass_edu-myworkspace/GenesisPlayground
 export WANDB_ENTITY="h975894552"
 export WANDB_PROJECT="genesis"
 
-exp_name=${1:-setting3-latency1}
+exp_name=${1:-setting3-dof_vel0.02-motor_strength-offset-kp_kd(0.9-1.1)}
 python /scratch4/workspace/junyunhuang_umass_edu-myworkspace/GenesisPlayground/examples/run_ppo_walking.py \
     --exp_name $exp_name \
-    -- env.action_latency 1 \
+    --env.obs_noises['dof_vel']=0.02 \
+    --env.robot_args.dr_args.motor_strength_range=\(0.9,1.1\) \
+    --env.robot_args.dr_args.motor_offset_range=\(0.0,0.0\) \
+    --env.robot_args.dr_args.kp_range=\(0.9,1.1\) \
+    --env.robot_args.dr_args.kd_range=\(0.9,1.1\) \
+    # -- env.action_latency 1 \
     # --reward_args.UpperBodyDofPenalty 1 \
     # --reward_args.TorquePenalty 0.0005 \
     # --reward_args.StandStillActionRatePenalty 0.1 \
