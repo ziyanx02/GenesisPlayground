@@ -1,5 +1,7 @@
 import torch
 
+from gs_env.common.utils.math_utils import quat_diff, quat_to_angle_axis
+
 from .leggedrobot_terms import (
     ActionLimitPenalty,  # noqa
     ActionRatePenalty,  # noqa
@@ -101,62 +103,6 @@ class HipRollPenalty(RewardTerm):
         return -torch.sum(torch.square(dof_pos[:, [0, 6]]), dim=-1)
 
 
-class HipYawVelPenalty(RewardTerm):
-    """
-    Penalize the hip yaw DoF velocity.
-
-    Args:
-        dof_vel: DoF velocity tensor of shape (B, D) where B is the batch size and D is the number of DoFs.
-    """
-
-    required_keys = ("dof_vel",)
-
-    def _compute(self, dof_vel: torch.Tensor) -> torch.Tensor:  # type: ignore
-        return -torch.sum(torch.square(dof_vel[:, [2, 8]]), dim=-1)
-
-
-class HipRollVelPenalty(RewardTerm):
-    """
-    Penalize the hip roll DoF velocity.
-
-    Args:
-        dof_vel: DoF velocity tensor of shape (B, D) where B is the batch size and D is the number of DoFs.
-    """
-
-    required_keys = ("dof_vel",)
-
-    def _compute(self, dof_vel: torch.Tensor) -> torch.Tensor:  # type: ignore
-        return -torch.sum(torch.square(dof_vel[:, [0, 6]]), dim=-1)
-
-
-class HipPositionPenalty(RewardTerm):
-    """
-    Penalize the hip position deviation from origin.
-
-    Args:
-        dof_pos: DoF position tensor of shape (B, D) where B is the batch size and D is the number of DoFs.
-    """
-
-    required_keys = ("dof_pos",)
-
-    def _compute(self, dof_pos: torch.Tensor) -> torch.Tensor:  # type: ignore
-        return -torch.sum(torch.square(dof_pos[:, [0, 1, 2, 6, 7, 8]]), dim=-1)
-
-
-class HipTorquePenalty(RewardTerm):
-    """
-    Penalize the hip torque.
-
-    Args:
-        torque: Torque tensor of shape (B, D) where B is the batch size and D is the number of DoFs.
-    """
-
-    required_keys = ("torque",)
-
-    def _compute(self, torque: torch.Tensor) -> torch.Tensor:  # type: ignore
-        return -torch.sum(torch.square(torque[:, [0, 1, 2, 6, 7, 8]]), dim=-1)
-
-
 class AnkleTorquePenalty(RewardTerm):
     """
     Penalize the ankle torque.
@@ -238,3 +184,123 @@ class LinVelYPenalty(RewardTerm):
 
     def _compute(self, base_lin_vel: torch.Tensor) -> torch.Tensor:  # type: ignore
         return -torch.square(base_lin_vel[:, 1])
+
+
+class DofPosReward(RewardTerm):
+    """
+    Reward the DoF position.
+
+    Args:
+        dof_pos: DoF position tensor of shape (B, D) where B is the batch size and D is the number of DoFs.
+        ref_dof_pos: Reference DoF position tensor of shape (B, D) where B is the batch size and D is the number of DoFs.
+    """
+
+    required_keys = ("dof_pos", "ref_dof_pos")
+
+    def _compute(self, dof_pos: torch.Tensor, ref_dof_pos: torch.Tensor) -> torch.Tensor:  # type: ignore
+        # dof pos err weights
+        dof_pos_error = torch.square(dof_pos - ref_dof_pos).sum(dim=-1)
+        # print("dof_pos_error", dof_pos_error, torch.exp(-dof_pos_error * 0.15))
+        return torch.exp(-dof_pos_error * 0.15)
+
+
+class DofVelReward(RewardTerm):
+    """
+    Reward the DoF velocity.
+
+    Args:
+        dof_vel: DoF velocity tensor of shape (B, D) where B is the batch size and D is the number of DoFs.
+        ref_dof_vel: Reference DoF velocity tensor of shape (B, D) where B is the batch size and D is the number of DoFs.
+    """
+
+    required_keys = ("dof_vel", "ref_dof_vel")
+
+    def _compute(self, dof_vel: torch.Tensor, ref_dof_vel: torch.Tensor) -> torch.Tensor:  # type: ignore
+        # dof pos err weights
+        dof_vel_error = torch.square(dof_vel - ref_dof_vel).sum(dim=-1)
+        # print("dof_vel_error", dof_vel_error, torch.exp(-dof_vel_error * 0.01))
+        return torch.exp(-dof_vel_error * 0.01)
+
+
+class BaseHeightReward(RewardTerm):
+    """
+    Reward the base height.
+
+    Args:
+        base_height: Base height tensor of shape (B, 1) where B is the batch size.
+        ref_base_height: Reference base height tensor of shape (B, 1) where B is the batch size.
+    """
+
+    required_keys = ("base_pos", "ref_base_pos")
+
+    def _compute(self, base_pos: torch.Tensor, ref_base_pos: torch.Tensor) -> torch.Tensor:  # type: ignore
+        base_height_error = torch.square(base_pos[:, 2] - ref_base_pos[:, 2])
+        return torch.exp(-base_height_error * 10)
+
+
+class BasePosReward(RewardTerm):
+    """
+    Reward the base position.
+
+    Args:
+        base_pos: Base position tensor of shape (B, 3) where B is the batch size.
+        ref_base_pos: Reference base position tensor of shape (B, 3) where B is the batch size.
+    """
+
+    required_keys = ("base_pos", "ref_base_pos")
+
+    def _compute(self, base_pos: torch.Tensor, ref_base_pos: torch.Tensor) -> torch.Tensor:  # type: ignore
+        base_pos_error = torch.square(base_pos - ref_base_pos).sum(dim=-1)
+        # print("base_pos_error", base_pos_error, torch.exp(-base_pos_error * 5))
+        return torch.exp(-base_pos_error * 5)
+
+
+class BaseQuatReward(RewardTerm):
+    """
+    Reward the base quaternion.
+
+    Args:
+        base_quat: Base quaternion tensor of shape (B, 4) where B is the batch size.
+        ref_base_quat: Reference base quaternion tensor of shape (B, 4) where B is the batch size.
+    """
+
+    required_keys = ("base_quat", "ref_base_quat")
+
+    def _compute(self, base_quat: torch.Tensor, ref_base_quat: torch.Tensor) -> torch.Tensor:  # type: ignore
+        base_quat_error = quat_to_angle_axis(quat_diff(base_quat, ref_base_quat)).norm(dim=-1)
+        # print("base_quat_error", base_quat_error, torch.exp(-(base_quat_error**2) * 5))
+        return torch.exp(-(base_quat_error**2) * 5)
+
+
+class BaseLinVelReward(RewardTerm):
+    """
+    Reward the base linear velocity.
+
+    Args:
+        base_lin_vel: Base linear velocity tensor of shape (B, 3) where B is the batch size.
+        ref_base_lin_vel: Reference base linear velocity tensor of shape (B, 3) where B is the batch size.
+    """
+
+    required_keys = ("base_lin_vel", "ref_base_lin_vel")
+
+    def _compute(self, base_lin_vel: torch.Tensor, ref_base_lin_vel: torch.Tensor) -> torch.Tensor:  # type: ignore
+        base_lin_vel_error = torch.square(base_lin_vel - ref_base_lin_vel).sum(dim=-1)
+        # print("base_lin_vel_error", base_lin_vel_error, torch.exp(-base_lin_vel_error * 1))
+        return torch.exp(-base_lin_vel_error * 1)
+
+
+class BaseAngVelReward(RewardTerm):
+    """
+    Reward the base angular velocity.
+
+    Args:
+        base_ang_vel: Base angular velocity tensor of shape (B, 3) where B is the batch size.
+        ref_base_ang_vel: Reference base angular velocity tensor of shape (B, 3) where B is the batch size.
+    """
+
+    required_keys = ("base_ang_vel", "ref_base_ang_vel")
+
+    def _compute(self, base_ang_vel: torch.Tensor, ref_base_ang_vel: torch.Tensor) -> torch.Tensor:  # type: ignore
+        base_ang_vel_error = torch.square(base_ang_vel - ref_base_ang_vel).sum(dim=-1)
+        # print("base_ang_vel_error", base_ang_vel_error, torch.exp(-base_ang_vel_error * 1))
+        return torch.exp(-base_ang_vel_error * 1)

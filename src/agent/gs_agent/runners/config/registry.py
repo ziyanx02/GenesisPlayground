@@ -38,3 +38,10 @@ RUNNER_WALKING_MLP = RunnerArgs(
     save_interval=500,
     save_path=Path("./logs/ppo_gs_walking"),
 )
+
+RUNNER_TELEOP_MLP = RunnerArgs(
+    total_iterations=3001,
+    log_interval=5,
+    save_interval=500,
+    save_path=Path("./logs/ppo_gs_teleop"),
+)

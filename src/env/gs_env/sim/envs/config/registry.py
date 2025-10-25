@@ -2,6 +2,7 @@ from gs_env.sim.envs.config.schema import (
     EnvArgs,
     GenesisInitArgs,
     LeggedRobotEnvArgs,
+    MotionEnvArgs,
     WalkingEnvArgs,
 )
 from gs_env.sim.objects.config.registry import ObjectArgsRegistry
@@ -96,7 +97,6 @@ EnvArgsRegistry["g1_walk"] = WalkingEnvArgs(
         "AnkleTorquePenalty": 0.001,
         "HipYawPenalty": 100.0,
         "HipRollPenalty": 100.0,
-        # "BaseLateralPenalty": 50.0,
         # "HipYawVelPenalty": 0.05,
         # "HipRollVelPenalty": 0.05,
         # "HipTorquePenalty": 0.001,
@@ -126,7 +126,7 @@ EnvArgsRegistry["g1_walk"] = WalkingEnvArgs(
     },
     obs_noises={
         "dof_pos": 0.01,
-        "dof_vel": 0.15,
+        "dof_vel": 0.02,
         "projected_gravity": 0.05,
         "base_ang_vel": 0.2,
     },
@@ -149,7 +149,18 @@ EnvArgsRegistry["g1_walk"] = WalkingEnvArgs(
         "feet_height",
         "feet_contact_force",
     ],
-    stand_prob=0.1,
+    terminate_after_collision_on=[
+        "pelvis",
+        "torso_link",
+        "left_hip_yaw_link",
+        "right_hip_yaw_link",
+        "left_knee_link",
+        "right_knee_link",
+        "left_shoulder_yaw_link",
+        "right_shoulder_yaw_link",
+        "left_elbow_link",
+        "right_elbow_link",
+    ],
     command_resample_time=10.0,
     commands_clip={
         "lin_vel_x": 0.15,
@@ -161,6 +172,101 @@ EnvArgsRegistry["g1_walk"] = WalkingEnvArgs(
         (0.0, 0.0),  # Left/Right
         (-1.0, 1.0),  # Turn
     ),
+)
+
+
+EnvArgsRegistry["g1_motion"] = MotionEnvArgs(
+    env_name="MotionEnv",
+    gs_init_args=GenesisInitArgsRegistry["default"],
+    scene_args=SceneArgsRegistry["flat_scene_legged"],
+    robot_args=RobotArgsRegistry["g1_default"],
+    objects_args=[],
+    sensors_args=[],
+    reward_term="g1",
+    reward_args={
+        ### Motion Tracking ###
+        "DofPosReward": 10.0,
+        "DofVelReward": 2.0,
+        # "BaseHeightReward": 1.0,
+        "BasePosReward": 10.0,
+        "BaseQuatReward": 10.0,
+        "BaseLinVelReward": 20.0,
+        "BaseAngVelReward": 20.0,
+        # "KeyBodyPosReward": 10.0,
+        ### Regularization ###
+        "TorquePenalty": 0.00001,
+        "ActionRatePenalty": 0.3,
+        "DofPosLimitPenalty": 10.0,
+        "ActionLimitPenalty": 0.1,
+        "AnkleTorquePenalty": 0.001,
+        "AngVelXYPenalty": 1.0,
+        "G1FeetContactForceLimitPenalty": 1e-4,
+        "FeetAirTimePenalty": 100.0,
+    },
+    img_resolution=(480, 270),
+    action_latency=1,
+    obs_history_len=1,
+    obs_scales={
+        "dof_vel": 0.1,
+        "base_ang_vel_local": 0.5,
+        "feet_contact_force": 0.001,
+    },
+    obs_noises={
+        "dof_pos": 0.01,
+        "dof_vel": 0.2,
+        "projected_gravity": 0.05,
+        "base_ang_vel_local": 0.2,
+    },
+    actor_obs_terms=[
+        "last_action",
+        # Proprioception
+        "dof_pos",
+        "dof_vel",
+        "base_euler",
+        "base_ang_vel_local",
+        "base_rotation_6D",
+        "projected_gravity",
+        # Reference
+        "ref_dof_pos",
+        "ref_dof_vel",
+        "ref_base_euler",
+        "ref_base_lin_vel_local",
+        "ref_base_ang_vel_local",
+        "ref_base_rotation_6D",
+    ],
+    critic_obs_terms=[
+        "last_action",
+        # Proprioception
+        "dof_pos",
+        "dof_vel",
+        "base_euler",
+        "base_lin_vel_local",
+        "base_ang_vel_local",
+        "base_rotation_6D",
+        "projected_gravity",
+        # Reference
+        "ref_dof_pos",
+        "ref_dof_vel",
+        "ref_base_euler",
+        "ref_base_lin_vel_local",
+        "ref_base_ang_vel_local",
+        "ref_base_rotation_6D",
+        # Privilleged
+        "feet_contact_force",
+    ],
+    terminate_after_collision_on=[
+        "pelvis",
+        "torso_link",
+        "left_hip_yaw_link",
+        "right_hip_yaw_link",
+        "left_knee_link",
+        "right_knee_link",
+        "left_shoulder_yaw_link",
+        "right_shoulder_yaw_link",
+        "left_elbow_link",
+        "right_elbow_link",
+    ],
+    motion_file="assets/motion/twist_dataset.yaml",
 )
 
 
@@ -180,6 +286,18 @@ EnvArgsRegistry["g1_fixed"] = LeggedRobotEnvArgs(
     obs_noises={},
     actor_obs_terms=[],
     critic_obs_terms=[],
+    terminate_after_collision_on=[
+        "pelvis",
+        "torso_link",
+        "left_hip_yaw_link",
+        "right_hip_yaw_link",
+        "left_knee_link",
+        "right_knee_link",
+        "left_shoulder_yaw_link",
+        "right_shoulder_yaw_link",
+        "left_elbow_link",
+        "right_elbow_link",
+    ],
 )
 
 
@@ -199,4 +317,16 @@ EnvArgsRegistry["custom_g1_mocap"] = LeggedRobotEnvArgs(
     obs_noises={},
     actor_obs_terms=[],
     critic_obs_terms=[],
+    terminate_after_collision_on=[
+        "pelvis",
+        "torso_link",
+        "left_hip_yaw_link",
+        "right_hip_yaw_link",
+        "left_knee_link",
+        "right_knee_link",
+        "left_shoulder_yaw_link",
+        "right_shoulder_yaw_link",
+        "left_elbow_link",
+        "right_elbow_link",
+    ],
 )
