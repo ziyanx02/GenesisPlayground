@@ -318,6 +318,7 @@ def train_policy(
     env_args: Any = None,
     algo_cfg: Any = None,
     runner_args: Any = None,
+    video_log_freq: int | None = None,
 ) -> None:
     """Train the policy using PPO."""
 
@@ -337,6 +338,10 @@ def train_policy(
         runner_args=runner_args,
     )
 
+    # Enable video logging if requested
+    if video_log_freq is not None:
+        runner.algorithm.set_video_log_freq(video_log_freq, fps=20)
+
     # Set up logging with proper configuration
     if exp_name is not None:
         save_path = Path(f"./logs/{exp_name}")
@@ -345,8 +350,7 @@ def train_policy(
     logger_folder = save_path / datetime.now().strftime("%Y%m%d_%H%M%S")
     logger = logger_configure(
         folder=str(logger_folder),
-        format_strings=["stdout", "csv"],
-        # format_strings=["stdout", "csv", "wandb"],
+        format_strings=["stdout", "csv", "wandb"],
         entity=None,
         project=None,
         exp_name=exp_name,
@@ -394,6 +398,7 @@ def main(
     num_ckpt: int | None = None,
     use_wandb: bool = True,
     env_name: str = "wuji_inhand_rotation",
+    video_log_freq: int | None = 100,
     **cfg_overrides: Any,
 ) -> None:
     """Entry point.
@@ -403,6 +408,7 @@ def main(
     --reward_args.ActionRatePenalty=0.02
     --algo.lr=1e-3
     --runner.total_iterations=5000
+    --video_log_freq=100  # Log video every 100 iterations (set to None to disable)
     """
     # Bucket overrides into env / algo / runner
     env_overrides: dict[str, Any] = {}
@@ -451,6 +457,7 @@ def main(
             env_args=env_args,
             algo_cfg=algo_cfg,
             runner_args=runner_args,
+            video_log_freq=video_log_freq,
         )
 
 

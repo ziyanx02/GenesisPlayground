@@ -107,6 +107,27 @@ class OnPolicyRunner(BaseRunner):
             step: Current training step
             prefix: Optional prefix for metric names
         """
+        # Handle video frames separately if present
+        if "video_frames" in metrics and metrics["video_frames"] is not None:
+            from gs_agent.utils.logger import Video
+            video_frames = metrics["video_frames"]
+            # Log video to wandb only (exclude stdout, log, csv, json formats)
+            metric_logger.record(
+                "rollout/video",
+                Video(video_frames, fps=50.0),
+                exclude=("stdout", "log", "csv", "json")
+            )
+
+            # Also save GIF to local logs
+            if hasattr(self.algorithm.env, "env") and hasattr(self.algorithm.env.env, "save_gif"):
+                gif_dir = self.save_dir / "videos"
+                gif_dir.mkdir(parents=True, exist_ok=True)
+                gif_path = gif_dir / f"rollout_{step:04d}.gif"
+                self.algorithm.env.env.save_gif(str(gif_path))
+                print(f"Video saved to: {gif_path}")
+                # Clear the rendered images after saving
+                self.algorithm.env.env._rendered_images = []
+
         for key, value in metrics.items():
             metric_name = f"{prefix}{key}" if prefix else key
             if not isinstance(value, dict):

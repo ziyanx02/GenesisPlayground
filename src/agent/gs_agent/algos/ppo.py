@@ -51,6 +51,11 @@ class PPO(BaseAlgo):
         # Adaptive learning rate tracking
         self._current_lr = cfg.lr
 
+        # Video logging settings
+        self._video_log_freq = None  # Set by set_video_log_freq()
+        self._video_fps = 50  # Default FPS for video logging
+        self._video_frames = []  # Buffer for collecting frames
+
         #
         self._build_actor_critic()
         self._build_rollouts()
@@ -111,11 +116,17 @@ class PPO(BaseAlgo):
             for param_group in self._actor_optimizer.param_groups:
                 param_group["lr"] = self._current_lr
 
-    def _collect_rollouts(self, num_steps: int) -> dict[str, Any]:
+    def _collect_rollouts(self, num_steps: int, should_log_video: bool = False) -> dict[str, Any]:
         """Collect rollouts from the environment."""
         actor_obs, critic_obs = self.env.get_observations()
         termination_buffer = []
         reward_terms_buffer = []
+
+        # Start video recording if needed
+        if should_log_video and hasattr(self.env.env, "start_rendering"):
+            self.env.env.start_rendering()
+            self._video_frames = []
+
         with torch.inference_mode():
             # collect rollouts and compute returns & advantages
             for _step in range(num_steps):
@@ -189,11 +200,25 @@ class PPO(BaseAlgo):
                     [reward_term[key] for reward_term in reward_terms_buffer]
                 )
                 mean_reward_terms[key] = reward_terms.mean().item()
+
+        # Collect video frames if recording
+        video_frames = None
+        if should_log_video and hasattr(self.env.env, "stop_rendering"):
+            self.env.env.stop_rendering(save_gif=False)
+            if hasattr(self.env.env, "_rendered_images") and len(self.env.env._rendered_images) > 0:
+                # Convert list of numpy arrays to torch tensor (T, H, W, C)
+                import numpy as np
+                video_frames = torch.from_numpy(
+                    np.stack(self.env.env._rendered_images, axis=0)
+                ).float() / 255.0  # Normalize to [0, 1]
+                # Note: we don't clear frames here - will be cleared after saving GIF
+
         return {
             "mean_reward": mean_reward,
             "mean_ep_len": mean_ep_len,
             "termination": mean_termination,
             "reward_terms": mean_reward_terms,
+            "video_frames": video_frames,
         }
 
     def _train_one_batch(self, mini_batch: dict[GAEBufferKey, torch.Tensor]) -> dict[str, Any]:
@@ -276,9 +301,15 @@ class PPO(BaseAlgo):
 
     def train_one_iteration(self) -> dict[str, Any]:
         """Train one iteration."""
+        # Check if we should log video this iteration
+        should_log_video = (
+            self._video_log_freq is not None
+            and self.current_iter % self._video_log_freq == 0
+        )
+
         # collect rollouts
         t0 = time.time()
-        rollout_infos = self._collect_rollouts(num_steps=self._num_steps)
+        rollout_infos = self._collect_rollouts(num_steps=self._num_steps, should_log_video=should_log_video)
         t1 = time.time()
         rollouts_time = t1 - t0
         fps = (self._num_steps * self._num_envs / rollouts_time) if rollouts_time > 0 else 0
@@ -333,6 +364,14 @@ class PPO(BaseAlgo):
             "termination": rollout_infos["termination"],
             "reward_terms": rollout_infos["reward_terms"],
         }
+
+        # Add video frames if available
+        if rollout_infos.get("video_frames") is not None:
+            iteration_infos["video_frames"] = rollout_infos["video_frames"]
+
+        # Increment iteration counter
+        self.current_iter += 1
+
         return iteration_infos
 
     def save(self, path: Path) -> None:
@@ -369,3 +408,15 @@ class PPO(BaseAlgo):
             self._actor.to(device)
         policy = self._actor
         return policy
+
+    def set_video_log_freq(self, freq: int | None, fps: int = 50) -> None:
+        """Set the frequency for video logging during training.
+
+        Args:
+            freq: Log video every `freq` iterations. Set to None to disable.
+            fps: Frames per second for the video output.
+        """
+        self._video_log_freq = freq
+        self._video_fps = fps
+        if freq is not None:
+            print(f"Video logging enabled: will log every {freq} iterations at {fps} FPS")
