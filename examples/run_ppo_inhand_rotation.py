@@ -345,7 +345,8 @@ def train_policy(
     logger_folder = save_path / datetime.now().strftime("%Y%m%d_%H%M%S")
     logger = logger_configure(
         folder=str(logger_folder),
-        format_strings=["stdout", "csv", "wandb"],
+        format_strings=["stdout", "csv"],
+        # format_strings=["stdout", "csv", "wandb"],
         entity=None,
         project=None,
         exp_name=exp_name,

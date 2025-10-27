@@ -209,6 +209,8 @@ RobotArgsRegistry["franka_default"] = ManipulatorRobotArgs(
     soft_dof_pos_range=0.95,
     action_scale=0.05,
     decimation=4,
+    dof_kp={},
+    dof_kd={},
 )
 
 
@@ -241,6 +243,8 @@ RobotArgsRegistry["franka_teleop"] = ManipulatorRobotArgs(
     soft_dof_pos_range=0.95,
     action_scale=0.05,
     decimation=4,
+    dof_kp={},
+    dof_kd={},
 )
 
 # ------------------------------------------------------------
@@ -553,35 +557,49 @@ WUJI_default_dof_pos: dict[str, float] = {
 
 # PD gains for WUJI hand
 WUJI_kp_dict: dict[str, float] = {
-    # Thumb joints
     "finger1_joint1": 20.0,
     "finger1_joint2": 20.0,
     "finger1_joint3": 20.0,
     "finger1_joint4": 20.0,
-    # Index finger joints
-    "finger2_joint": 20.0,
-    # Middle finger joints
-    "finger3_joint": 20.0,
-    # Ring finger joints
-    "finger4_joint": 20.0,
-    # Pinky finger joints
-    "finger5_joint": 20.0,
+    "finger2_joint1": 20.0,
+    "finger2_joint2": 20.0,
+    "finger2_joint3": 20.0,
+    "finger2_joint4": 20.0,
+    "finger3_joint1": 20.0,
+    "finger3_joint2": 20.0,
+    "finger3_joint3": 20.0,
+    "finger3_joint4": 20.0,
+    "finger4_joint1": 20.0,
+    "finger4_joint2": 20.0,
+    "finger4_joint3": 20.0,
+    "finger4_joint4": 20.0,
+    "finger5_joint1": 20.0,
+    "finger5_joint2": 20.0,
+    "finger5_joint3": 20.0,
+    "finger5_joint4": 20.0,
 }
 
 WUJI_kd_dict: dict[str, float] = {
-    # Thumb joints
     "finger1_joint1": 1.0,
     "finger1_joint2": 1.0,
     "finger1_joint3": 1.0,
     "finger1_joint4": 1.0,
-    # Index finger joints
-    "finger2_joint": 1.0,
-    # Middle finger joints
-    "finger3_joint": 1.0,
-    # Ring finger joints
-    "finger4_joint": 1.0,
-    # Pinky finger joints
-    "finger5_joint": 1.0,
+    "finger2_joint1": 1.0,
+    "finger2_joint2": 1.0,
+    "finger2_joint3": 1.0,
+    "finger2_joint4": 1.0,
+    "finger3_joint1": 1.0,
+    "finger3_joint2": 1.0,
+    "finger3_joint3": 1.0,
+    "finger3_joint4": 1.0,
+    "finger4_joint1": 1.0,
+    "finger4_joint2": 1.0,
+    "finger4_joint3": 1.0,
+    "finger4_joint4": 1.0,
+    "finger5_joint1": 1.0,
+    "finger5_joint2": 1.0,
+    "finger5_joint3": 1.0,
+    "finger5_joint4": 1.0,
 }
 
 # Fingertip link names for contact sensing
@@ -609,4 +627,6 @@ RobotArgsRegistry["wuji_hand"] = ManipulatorRobotArgs(
     soft_dof_pos_range=0.95,  # Use 95% of joint range to avoid hitting limits
     action_scale=0.1,  # Scale factor for delta actions (10cm/rad per action unit)
     decimation=4,  # Run 4 physics steps per action (50Hz control @ 200Hz sim = 4)
+    dof_kp=WUJI_kp_dict,
+    dof_kd=WUJI_kd_dict,
 )

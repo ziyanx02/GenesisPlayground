@@ -254,3 +254,187 @@ class EnergyEfficiencyPenalty(RewardTerm):
         # Power = torque * velocity (approximated by action * velocity)
         power = torch.abs(latest_action * hand_dof_vel)
         return -torch.sum(power, dim=-1)
+
+
+### ---- Penspin-style Reward Terms ---- ###
+
+
+class RotateRewardClipped(RewardTerm):
+    """
+    Reward for rotation around a specific axis with clipping.
+    Similar to penspin's rotate_reward calculation.
+
+    Args:
+        cube_ang_vel: Cube angular velocity tensor of shape (B, 3).
+        rot_axis: Rotation axis tensor of shape (B, 3) indicating the target rotation axis.
+    """
+
+    required_keys = ("cube_ang_vel", "rot_axis")
+
+    def __init__(
+        self,
+        scale: float = 1.0,
+        angvel_clip_min: float = -4.0,
+        angvel_clip_max: float = 4.0,
+        name: str | None = None,
+    ):
+        super().__init__(scale, name)
+        self.angvel_clip_min = angvel_clip_min
+        self.angvel_clip_max = angvel_clip_max
+
+    def _compute(self, cube_ang_vel: torch.Tensor, rot_axis: torch.Tensor) -> torch.Tensor:  # type: ignore
+        # Compute dot product between angular velocity and rotation axis
+        vec_dot = torch.sum(cube_ang_vel * rot_axis, dim=-1)
+        # Clip the reward
+        rotate_reward = torch.clamp(vec_dot, min=self.angvel_clip_min, max=self.angvel_clip_max)
+        return rotate_reward
+
+
+class RotatePenaltyThreshold(RewardTerm):
+    """
+    Penalty for excessive rotation velocity beyond a threshold.
+    Similar to penspin's rotate_penalty calculation.
+
+    Args:
+        cube_ang_vel: Cube angular velocity tensor of shape (B, 3).
+        rot_axis: Rotation axis tensor of shape (B, 3).
+    """
+
+    required_keys = ("cube_ang_vel", "rot_axis")
+
+    def __init__(
+        self,
+        scale: float = 1.0,
+        angvel_penalty_threshold: float = 3.0,
+        name: str | None = None,
+    ):
+        super().__init__(scale, name)
+        self.angvel_penalty_threshold = angvel_penalty_threshold
+
+    def _compute(self, cube_ang_vel: torch.Tensor, rot_axis: torch.Tensor) -> torch.Tensor:  # type: ignore
+        vec_dot = torch.sum(cube_ang_vel * rot_axis, dim=-1)
+        # Penalize only when exceeding threshold
+        rotate_penalty = torch.where(
+            vec_dot > self.angvel_penalty_threshold,
+            vec_dot - self.angvel_penalty_threshold,
+            torch.zeros_like(vec_dot),
+        )
+        return -rotate_penalty
+
+
+class ObjectLinVelPenalty(RewardTerm):
+    """
+    Penalty for object linear velocity (L1 norm).
+    Similar to penspin's object_linvel_penalty.
+
+    Args:
+        cube_lin_vel: Cube linear velocity tensor of shape (B, 3).
+    """
+
+    required_keys = ("cube_lin_vel",)
+
+    def _compute(self, cube_lin_vel: torch.Tensor) -> torch.Tensor:  # type: ignore
+        # L1 norm of linear velocity
+        object_linvel_penalty = torch.norm(cube_lin_vel, p=1, dim=-1)
+        return -object_linvel_penalty
+
+
+class PoseDiffPenalty(RewardTerm):
+    """
+    Penalty for deviation from initial pose.
+    Similar to penspin's pose_diff_penalty.
+
+    Args:
+        hand_dof_pos: Current hand DOF positions of shape (B, D).
+        init_dof_pos: Initial hand DOF positions of shape (B, D).
+    """
+
+    required_keys = ("hand_dof_pos", "init_dof_pos")
+
+    def _compute(self, hand_dof_pos: torch.Tensor, init_dof_pos: torch.Tensor) -> torch.Tensor:  # type: ignore
+        pose_diff = hand_dof_pos - init_dof_pos
+        pose_diff_penalty = torch.sum(pose_diff**2, dim=-1)
+        return -pose_diff_penalty
+
+
+class TorquePenalty(RewardTerm):
+    """
+    Penalty for torque squared.
+    Similar to penspin's torque_penalty.
+
+    Args:
+        torques: Torque values of shape (B, D).
+    """
+
+    required_keys = ("torques",)
+
+    def _compute(self, torques: torch.Tensor) -> torch.Tensor:  # type: ignore
+        torque_penalty = torch.sum(torques**2, dim=-1)
+        return -torque_penalty
+
+
+class WorkPenalty(RewardTerm):
+    """
+    Penalty for mechanical work done (sum of |torque × velocity|)^2.
+    Similar to penspin's work_penalty.
+
+    Args:
+        torques: Torque values of shape (B, D).
+        hand_dof_vel: Hand DOF velocities of shape (B, D).
+    """
+
+    required_keys = ("torques", "hand_dof_vel")
+
+    def _compute(self, torques: torch.Tensor, hand_dof_vel: torch.Tensor) -> torch.Tensor:  # type: ignore
+        work = torch.sum(torch.abs(torques) * torch.abs(hand_dof_vel), dim=-1)
+        work_penalty = work**2
+        return -work_penalty
+
+
+class PositionPenalty(RewardTerm):
+    """
+    Penalty for object position deviation from target.
+    Similar to penspin's position_penalty.
+
+    Args:
+        cube_pos: Cube position tensor of shape (B, 3).
+        target_pos: Target position tensor of shape (B, 3) or (3,).
+    """
+
+    required_keys = ("cube_pos",)
+
+    def __init__(self, scale: float = 1.0, target_x: float = 0.0, target_y: float = 0.0, target_z: float = 0.61, name: str | None = None):
+        super().__init__(scale, name)
+        self.target_x = target_x
+        self.target_y = target_y
+        self.target_z = target_z
+
+    def _compute(self, cube_pos: torch.Tensor) -> torch.Tensor:  # type: ignore
+        position_penalty = (
+            (cube_pos[:, 0] - self.target_x) ** 2
+            + (cube_pos[:, 1] - self.target_y) ** 2
+            + (cube_pos[:, 2] - self.target_z) ** 2
+        )
+        return -position_penalty
+
+
+class FingerObjectDistancePenalty(RewardTerm):
+    """
+    Penalty for distance between fingertips and object.
+    Similar to penspin's finger_obj_penalty.
+
+    Args:
+        fingertip_pos: Fingertip positions of shape (B, N*3) where N is number of fingertips.
+        cube_pos: Cube position tensor of shape (B, 3).
+    """
+
+    required_keys = ("fingertip_pos", "cube_pos")
+
+    def _compute(self, fingertip_pos: torch.Tensor, cube_pos: torch.Tensor) -> torch.Tensor:  # type: ignore
+        # Auto-detect number of fingertips from shape
+        num_fingertips = fingertip_pos.shape[1] // 3
+        # Repeat cube position for each fingertip
+        cube_pos_repeated = cube_pos.repeat(1, num_fingertips)
+        # Compute squared distance
+        finger_obj_penalty = torch.sum((fingertip_pos - cube_pos_repeated) ** 2, dim=-1)
+        return -finger_obj_penalty

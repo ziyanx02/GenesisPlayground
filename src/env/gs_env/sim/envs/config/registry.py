@@ -334,21 +334,45 @@ EnvArgsRegistry["wuji_inhand_rotation"] = ManipulationEnvArgs(
     sensors_args=[],
     reward_term="manipulation",
     reward_args={
-        ### Main Task Reward ###
-        "CubeZRotationVelocityReward": 10.0,  # Reward for rotating cube around Z-axis
-        ### Regularization ###
-        "ActionRatePenalty": 0.01,  # Penalize large action changes
-        "ActionLimitPenalty": 0.1,  # Penalize actions near limits
-        "DofPosLimitPenalty": 1.0,  # Penalize joint positions near limits
+        ### Main Task Rewards (Penspin-style) ###
+        "RotateRewardClipped": {
+            "scale": 1.0,  # rotate_reward_scale from penspin
+            "angvel_clip_min": -0.5,  # angvelClipMin from penspin
+            "angvel_clip_max": 0.5,  # angvelClipMax from penspin
+        },
+        "RotatePenaltyThreshold": {
+            "scale": 0.03,  # rotate_penalty_scale from penspin (0.3)
+            "angvel_penalty_threshold": 1.0,  # angvelPenaltyThres from penspin
+        },
+        ### Regularization Penalties ###
+        "ObjectLinVelPenalty": {
+            "scale": 0.003,  # obj_linvel_penalty_scale from penspin (0.3)
+        },
+        "PoseDiffPenalty": {
+            "scale": 0.01,  # pose_diff_penalty_scale from penspin (0.1)
+        },
+        "TorquePenalty": {
+            "scale": 0.01,  # torque_penalty_scale from penspin (0.1)
+        },
+        "WorkPenalty": {
+            "scale": 0.001,  # work_penalty_scale from penspin (1.0)
+        },
+        "PositionPenalty": {
+            "scale": 0.01,  # position_penalty_scale from penspin (0.1)
+            "target_x": 0.0,  # target position from penspin (line 551-552)
+            "target_y": 0.0,
+            "target_z": 0.23,  # Adjusted for WUJI hand height (penspin uses reset_z_threshold + 0.01)
+        },
+        # Note: penspin also uses pencil_z_dist_penalty_scale: -1.0, but we use cube not pencil
+        # Note: penspin also tracks finger_obj_penalty but doesn't include it in reward
     },
     cube_args={
-        "size": 0.05,
-        "position": (0.0, 0.0, 0.2),
+        "size": 0.07,
+        "position": (0.0, 0.0, 0.22),
     },
     img_resolution=(480, 480),
     action_latency=1,
     obs_history_len=3,  # 3 timesteps of history
-    # TODO: determine all these scales
     obs_scales={
         "hand_dof_vel": 0.1,
         "cube_ang_vel": 0.5,

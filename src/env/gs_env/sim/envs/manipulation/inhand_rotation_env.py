@@ -104,7 +104,9 @@ class InHandRotationEnv(BaseEnv):
             reward_cls = getattr(module, key, None)
             if reward_cls is None:
                 raise ValueError(f"Reward {key} not found in rewards module.")
-            reward_instance = reward_cls(scale=args.reward_args[key] * dt)
+            scale = args.reward_args[key]["scale"] * dt
+            other_args = {k: v for k, v in args.reward_args[key].items() if k != "scale"}
+            reward_instance = reward_cls(scale=scale, **other_args)
             self._reward_functions[key] = reward_instance
             # Record declared inputs for this reward term
             if hasattr(reward_instance, "required_keys"):
@@ -168,6 +170,18 @@ class InHandRotationEnv(BaseEnv):
 
         # Action scale for delta control (from robot args)
         self._action_scale = self._args.robot_args.action_scale
+
+        # Data used for reward calculation
+        # Fingertip positions (flattened 15D: 5 fingertips × 3D each)
+        self.fingertip_pos = torch.zeros((self.num_envs, 15), device=self._device)
+        # Initial DOF positions (for pose difference penalty)
+        self.init_dof_pos = self._robot._default_dof_pos.repeat(self.num_envs, 1).to(self._device)
+        # Rotation axis buffer (for rotation rewards)
+        self.rot_axis = torch.zeros((self.num_envs, 3), device=self._device)
+        # Default to Z-axis rotation (like penspin with +z)
+        self.rot_axis[:, 2] = 1.0
+        # Torques buffer (for torque penalties) - approximated from actions
+        self.torques = torch.zeros((self.num_envs, self._action_dim), device=self._device)
 
         # Rendering buffers
         self._rendered_images = []
@@ -236,6 +250,8 @@ class InHandRotationEnv(BaseEnv):
         self._dof_pos_buf[envs_idx] = self._robot._default_dof_pos[None, :, None].repeat(
             len(envs_idx), 1, self._action_history_len + 1
         )
+        # Reset torques for penspin-style reward calculation
+        self.torques[envs_idx] = 0.0
 
     def get_terminated(self) -> torch.Tensor:
         """Check if episodes should terminate."""
@@ -279,11 +295,13 @@ class InHandRotationEnv(BaseEnv):
         self.cube_ang_vel[:] = self._cube.get_ang()
 
         # Update hand state (get joint positions and velocities)
-        self.hand_dof_pos[:] = self._robot.get_dofs_position(dofs_idx_local=self._robot._all_dof_idx_local)
-        self.hand_dof_vel[:] = self._robot.get_dofs_velocity(dofs_idx_local=self._robot._all_dof_idx_local)
+        self.hand_dof_pos[:] = self._robot.dof_pos
+        self.hand_dof_vel[:] = self._robot.dof_vel
 
         # Update hand palm position, which is just the root position
-        self.hand_palm_pos[:] = self._robot._robot_entity.get_pos()
+        self.hand_palm_pos[:] = self._robot.base_pos
+
+        self.fingertip_pos[:] = self._robot.fingertip_pos.reshape(self.num_envs, -1)
 
         # Update flattened history buffers for observations
         self.action_history_flat[:] = self._action_buf[:, :, -self._action_history_len:].transpose(1, 2).reshape(
@@ -335,20 +353,18 @@ class InHandRotationEnv(BaseEnv):
         # Scale the action
         exec_action *= self._action_scale
 
+        # Target position = current + scaled delta
+        target_dof_pos = self.hand_dof_pos + exec_action
+
         # Apply actions and simulate physics with decimation
         for _ in range(self._args.robot_args.decimation):
             self._pre_step()
 
-            # Target position = current + scaled delta
-            target_dof_pos = self.hand_dof_pos + exec_action
             self._robot.apply_action(action=target_dof_pos)
-
-            # Step simulation
             self._scene.scene.step()
-
-            # Update hand state after each substep
-            self.hand_dof_pos[:] = self._robot._robot_entity.get_dofs_position(dofs_idx_local=self._robot._all_dof_idx_local)
-            self.hand_dof_vel[:] = self._robot._robot_entity.get_dofs_velocity(dofs_idx_local=self._robot._all_dof_idx_local)
+            self.torques = torch.max(self.torques, torch.abs(self._robot.torque))
+        
+        self.update_buffers()
 
         # Update DOF position history buffer (after all substeps)
         self._dof_pos_buf[:] = torch.cat(
@@ -402,31 +418,21 @@ class InHandRotationEnv(BaseEnv):
         pass
 
     def get_reward(self) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
-        """Compute rewards using exponential penalty composition."""
+        """Compute rewards using additive composition (penspin-style)."""
         reward_total = torch.zeros(self.num_envs, device=self._device)
-        reward_total_pos = torch.zeros(self.num_envs, device=self._device)
-        reward_total_neg = torch.zeros(self.num_envs, device=self._device)
         reward_dict = {}
 
         # Prepare state dict for reward functions
         state_dict = {key: getattr(self, key) for key in self._reward_required_keys}
 
-        # Compute all configured rewards and separate positive/negative
+        # Compute all configured rewards and sum them
+        # Each reward term already has its scale applied in the RewardTerm class
         for key, func in self._reward_functions.items():
             reward = func(state_dict)
-            if reward.sum() >= 0:
-                reward_total_pos += reward
-            else:
-                reward_total_neg += reward
+            reward_total += reward
             reward_dict[f"{key}"] = reward.clone()
 
-        # Exponential composition: positive rewards * exp(negative rewards)
-        # This prevents negative rewards from canceling out positive ones
-        reward_total = reward_total_pos * torch.exp(reward_total_neg)
-
         reward_dict["Total"] = reward_total
-        reward_dict["TotalPositive"] = reward_total_pos
-        reward_dict["TotalNegative"] = reward_total_neg
 
         return reward_total, reward_dict
 

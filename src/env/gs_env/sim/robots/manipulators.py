@@ -92,26 +92,32 @@ class ManipulatorBase(BaseGymRobot):
             )  # number of gripper joints
         self._dof_dim = self._arm_dof_dim + self._gripper_dof_dim
 
-        # self._arm_dof_idx = torch.arange(self._arm_dof_dim, device=self._device)
-        # self._fingers_dof_idx = torch.arange(
-        #     self._arm_dof_dim,
-        #     self._arm_dof_dim + self._gripper_dof_dim,
-        #     device=self._device,
-        # )
+        all_dof_names = list(self._args.default_arm_dof.keys())
+        if self._args.default_gripper_dof is not None:
+            all_dof_names += list(self._args.default_gripper_dof.keys())
+        self._all_dof_names = all_dof_names
 
-        #
-        # self._ee_link: RigidLink = self._robot_entity.get_link(self._args.ee_link_name)
-        # self._left_finger_link: RigidLink = self._robot_entity.get_link(
-        #     self._args.gripper_link_names[0]
-        # )
-        # self._right_finger_link: RigidLink = self._robot_entity.get_link(
-        #     self._args.gripper_link_names[1]
-        # )
-        #
+        # About torque calculation and domain randomization
+        dof_kp, dof_kd = [], []
+        for dof_name in all_dof_names:
+            dof_kp.append(self._args.dof_kp[dof_name])
+            dof_kd.append(self._args.dof_kd[dof_name])
+        self._dof_kp = torch.tensor(dof_kp, device=self._device)
+        self._dof_kd = torch.tensor(dof_kd, device=self._device)
+        self._batched_dof_kp = self._dof_kp[None, :].repeat(self._num_envs, 1)
+        self._batched_dof_kd = self._dof_kd[None, :].repeat(self._num_envs, 1)
+        self._motor_strength = torch.ones((self._num_envs, self._dof_dim), device=self._device)
+        self._motor_offset = torch.zeros((self._num_envs, self._dof_dim), device=self._device)
+
         default_dof_pos = list(self._args.default_arm_dof.values())
         if self._args.default_gripper_dof is not None:
             default_dof_pos += list(self._args.default_gripper_dof.values())
         self._default_dof_pos = torch.tensor(default_dof_pos, dtype=torch.float32, device=self._device)
+
+        # Buffers
+        self._dof_pos = torch.zeros((self._num_envs, self._dof_dim), dtype=torch.float32, device=self._device)
+        self._dof_vel = torch.zeros((self._num_envs, self._dof_dim), dtype=torch.float32, device=self._device)
+        self._torque = torch.zeros((self._num_envs, self._dof_dim), device=self._device)
 
         # == set up control dispatch ==
         self._dispatch = {
@@ -122,17 +128,15 @@ class ManipulatorBase(BaseGymRobot):
 
     def post_build_init(self, eval_mode: bool = False) -> None:
         """Initialize limits and constraints after scene is built."""
-        # Collect all DOF names (arm + gripper/fingers)
-        all_dof_names = list(self._args.default_arm_dof.keys())
-        if self._args.default_gripper_dof is not None:
-            all_dof_names += list(self._args.default_gripper_dof.keys())
-        self._all_dof_names = all_dof_names
-
         # Get DOF indices for all joints
         all_dofs_idx_local = [
-            self._robot_entity.get_joint(name).dofs_idx_local[0] for name in all_dof_names
+            self._robot_entity.get_joint(name).dofs_idx_local[0] for name in self._all_dof_names
         ]
         self._all_dof_idx_local = all_dofs_idx_local
+        all_finger_links_idx_local = [
+            self._robot_entity.get_link(name).idx_local for name in self._args.gripper_link_names
+        ]
+        self._all_finger_links_idx_local = all_finger_links_idx_local
 
         # Set up DOF position limits
         self._dof_pos_limits = torch.stack(
@@ -164,6 +168,9 @@ class ManipulatorBase(BaseGymRobot):
             dofs_idx_local=self._all_dof_idx_local,
             zero_velocity=True,
         )
+        self._dof_pos[envs_idx] = self._default_dof_pos[None, :].repeat(len(envs_idx), 1)
+        self._dof_vel[envs_idx] = 0.0
+        self._torque[envs_idx] = 0.0
 
     def reset_to_pose(self, joint_positions: torch.Tensor) -> None:
         """Reset robot to a specific joint configuration."""
@@ -219,6 +226,9 @@ class ManipulatorBase(BaseGymRobot):
                 case CtrlType.DR_JOINT_POSITION:
                     raise RuntimeError("DR control not supported for manipulator.")
         self._dispatch[self._args.ctrl_type](action)
+        self._torque[:] = self._batched_dof_kp * (action.joint_pos - self._dof_pos + self._motor_offset) - self._batched_dof_kd * self._dof_vel
+        self._dof_pos[:] = self._robot_entity.get_dofs_position(self._all_dof_idx_local)
+        self._dof_vel[:] = self._robot_entity.get_dofs_velocity(self._all_dof_idx_local)
 
     def _apply_joint_pos(self, act: JointPosAction) -> None:
         """
@@ -296,30 +306,32 @@ class ManipulatorBase(BaseGymRobot):
         return self._robot_entity.get_qpos() + delta_joint_pos
 
     @property
-    def joint_positions(self) -> torch.Tensor:
-        return self._robot_entity.get_qpos()
-
-    @property
     def base_pos(self) -> torch.Tensor:
         return self._robot_entity.get_pos()
 
     @property
-    def ee_pose(self) -> torch.Tensor:
-        pos, quat = self._ee_link.get_pos(), self._ee_link.get_quat()
-        return torch.cat([pos, quat], dim=-1)
+    def torque(self) -> torch.Tensor:
+        return self._torque
 
     @property
-    def left_finger_pose(self) -> torch.Tensor:
-        pos, quat = self._left_finger_link.get_pos(), self._left_finger_link.get_quat()
-        return torch.cat([pos, quat], dim=-1)
+    def dof_pos(self) -> torch.Tensor:
+        return self._dof_pos
 
     @property
-    def right_finger_pose(self) -> torch.Tensor:
-        pos, quat = (
-            self._right_finger_link.get_pos(),
-            self._right_finger_link.get_quat(),
-        )
-        return torch.cat([pos, quat], dim=-1)
+    def dof_vel(self) -> torch.Tensor:
+        return self._dof_vel
+    
+    @property
+    def default_dof_pos(self) -> torch.Tensor:
+        return self._default_dof_pos
+    
+    @property
+    def dof_names(self) -> list[str]:
+        return self._all_dof_names
+    
+    @property
+    def fingertip_pos(self) -> torch.Tensor:
+        return self._robot_entity.get_links_pos(links_idx_local=self._all_finger_links_idx_local)
 
     def __getattr__(self, item: str) -> Any:
         # Use object.__getattribute__ to avoid recursion with hasattr
