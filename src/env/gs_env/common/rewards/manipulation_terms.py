@@ -1,0 +1,256 @@
+"""Reward terms for manipulation tasks."""
+import torch
+
+from .reward_terms import RewardTerm
+
+
+### ---- Main Task Rewards ---- ###
+
+
+class CubeZRotationVelocityReward(RewardTerm):
+    """
+    Reward for cube rotating around Z-axis.
+    Encourages positive angular velocity in the Z direction.
+
+    Args:
+        cube_ang_vel: Cube angular velocity tensor of shape (B, 3) where B is the batch size.
+    """
+
+    required_keys = ("cube_ang_vel",)
+
+    def _compute(self, cube_ang_vel: torch.Tensor) -> torch.Tensor:  # type: ignore
+        # Reward Z-axis angular velocity (index 2)
+        # Use absolute value to reward rotation in either direction
+        return torch.abs(cube_ang_vel[:, 2])
+
+
+class CubeZRotationVelocityDirectionalReward(RewardTerm):
+    """
+    Reward for cube rotating around Z-axis in a specific direction.
+    Positive scale encourages counter-clockwise rotation (positive Z angular velocity).
+    Negative scale encourages clockwise rotation (negative Z angular velocity).
+
+    Args:
+        cube_ang_vel: Cube angular velocity tensor of shape (B, 3) where B is the batch size.
+    """
+
+    required_keys = ("cube_ang_vel",)
+
+    def _compute(self, cube_ang_vel: torch.Tensor) -> torch.Tensor:  # type: ignore
+        # Reward Z-axis angular velocity (index 2), directional
+        return cube_ang_vel[:, 2]
+
+
+class CubeStabilityPenalty(RewardTerm):
+    """
+    Penalize cube linear velocity to encourage stable manipulation.
+
+    Args:
+        cube_lin_vel: Cube linear velocity tensor of shape (B, 3) where B is the batch size.
+    """
+
+    required_keys = ("cube_lin_vel",)
+
+    def _compute(self, cube_lin_vel: torch.Tensor) -> torch.Tensor:  # type: ignore
+        # Penalize linear motion
+        return -torch.sum(cube_lin_vel**2, dim=-1)
+
+
+class CubeXYRotationPenalty(RewardTerm):
+    """
+    Penalize cube rotation around X and Y axes to keep it upright.
+
+    Args:
+        cube_ang_vel: Cube angular velocity tensor of shape (B, 3) where B is the batch size.
+    """
+
+    required_keys = ("cube_ang_vel",)
+
+    def _compute(self, cube_ang_vel: torch.Tensor) -> torch.Tensor:  # type: ignore
+        # Penalize X and Y angular velocities to keep cube upright
+        return -torch.sum(cube_ang_vel[:, :2] ** 2, dim=-1)
+
+
+class CubeHeightPenalty(RewardTerm):
+    """
+    Penalize deviation from target cube height.
+
+    Args:
+        cube_pos: Cube position tensor of shape (B, 3) where B is the batch size.
+        hand_palm_pos: Hand palm position tensor of shape (B, 3).
+    """
+
+    required_keys = ("cube_pos", "hand_palm_pos")
+
+    def __init__(self, scale: float = 1.0, target_height_offset: float = 0.05, name: str | None = None):
+        super().__init__(scale, name)
+        self.target_height_offset = target_height_offset
+
+    def _compute(self, cube_pos: torch.Tensor, hand_palm_pos: torch.Tensor) -> torch.Tensor:  # type: ignore
+        # Penalize deviation from target height relative to hand
+        height_diff = cube_pos[:, 2] - hand_palm_pos[:, 2] - self.target_height_offset
+        return -torch.square(height_diff)
+
+
+### ---- Regularization Penalties ---- ###
+
+
+class ActionRatePenalty(RewardTerm):
+    """
+    Penalize large changes in actions between timesteps.
+
+    Args:
+        action_history_flat: Flattened action history of shape (B, D * H) where
+                             D is action dimension and H is history length.
+    """
+
+    required_keys = ("action_history_flat",)
+
+    def _compute(self, action_history_flat: torch.Tensor) -> torch.Tensor:  # type: ignore
+        # Reshape to (B, D, H)
+        batch_size = action_history_flat.shape[0]
+        # Assuming 20 DOF and at least 2 timesteps in history
+        dof_dim = 20
+        history_len = action_history_flat.shape[1] // dof_dim
+        action_history = action_history_flat.reshape(batch_size, dof_dim, history_len)
+
+        # Compute difference between last two actions
+        if history_len >= 2:
+            action_diff = action_history[:, :, -1] - action_history[:, :, -2]
+            return -torch.sum(action_diff**2, dim=-1)
+        else:
+            return torch.zeros(batch_size, device=action_history_flat.device)
+
+
+class ActionLimitPenalty(RewardTerm):
+    """
+    Penalize actions that are close to their limits.
+
+    Args:
+        action_history_flat: Flattened action history of shape (B, D * H).
+    """
+
+    required_keys = ("action_history_flat",)
+
+    def __init__(self, scale: float = 1.0, limit: float = 0.9, name: str | None = None):
+        super().__init__(scale, name)
+        self.limit = limit
+
+    def _compute(self, action_history_flat: torch.Tensor) -> torch.Tensor:  # type: ignore
+        # Get latest action
+        batch_size = action_history_flat.shape[0]
+        dof_dim = 20
+        history_len = action_history_flat.shape[1] // dof_dim
+        action_history = action_history_flat.reshape(batch_size, dof_dim, history_len)
+
+        latest_action = action_history[:, :, -1]
+
+        # Penalize actions beyond limit threshold
+        over_limit = torch.abs(latest_action) > self.limit
+        penalty = over_limit.float() * torch.abs(latest_action)
+        return -torch.sum(penalty, dim=-1)
+
+
+class DofPosLimitPenalty(RewardTerm):
+    """
+    Penalize DOF positions that are close to their limits.
+
+    Args:
+        hand_dof_pos: Hand DOF positions of shape (B, D).
+        dof_pos_limits: DOF position limits of shape (D, 2).
+    """
+
+    required_keys = ("hand_dof_pos",)
+
+    def __init__(self, scale: float = 1.0, margin: float = 0.1, name: str | None = None):
+        super().__init__(scale, name)
+        self.margin = margin
+
+    def _compute(self, hand_dof_pos: torch.Tensor) -> torch.Tensor:  # type: ignore
+        # Note: We would need dof_pos_limits from the robot, but for simplicity
+        # we assume normalized positions and penalize values close to -1 or 1
+        # This should be improved by passing actual limits from the environment
+
+        # Penalize positions beyond 1 - margin
+        over_limit_high = torch.relu(hand_dof_pos - (1.0 - self.margin))
+        over_limit_low = torch.relu(-(hand_dof_pos + (1.0 - self.margin)))
+
+        penalty = over_limit_high + over_limit_low
+        return -torch.sum(penalty**2, dim=-1)
+
+
+class DofVelLimitPenalty(RewardTerm):
+    """
+    Penalize high DOF velocities.
+
+    Args:
+        hand_dof_vel: Hand DOF velocities of shape (B, D).
+    """
+
+    required_keys = ("hand_dof_vel",)
+
+    def __init__(self, scale: float = 1.0, threshold: float = 10.0, name: str | None = None):
+        super().__init__(scale, name)
+        self.threshold = threshold
+
+    def _compute(self, hand_dof_vel: torch.Tensor) -> torch.Tensor:  # type: ignore
+        # Penalize velocities beyond threshold
+        over_threshold = torch.relu(torch.abs(hand_dof_vel) - self.threshold)
+        return -torch.sum(over_threshold**2, dim=-1)
+
+
+### ---- Contact-based Rewards ---- ###
+
+
+class FingertipContactReward(RewardTerm):
+    """
+    Reward for maintaining contact with fingertips.
+    (For future use if tactile sensors are added)
+
+    Args:
+        fingertip_contact_forces: Fingertip contact forces of shape (B, N, 3)
+                                   where N is number of fingertips.
+    """
+
+    required_keys = ("fingertip_contact_forces",)
+
+    def __init__(self, scale: float = 1.0, contact_threshold: float = 1.0, name: str | None = None):
+        super().__init__(scale, name)
+        self.contact_threshold = contact_threshold
+
+    def _compute(self, fingertip_contact_forces: torch.Tensor) -> torch.Tensor:  # type: ignore
+        # Compute force magnitude for each fingertip
+        force_magnitudes = torch.norm(fingertip_contact_forces, dim=-1)  # (B, N)
+
+        # Count fingertips in contact
+        in_contact = (force_magnitudes > self.contact_threshold).float()
+        num_in_contact = torch.sum(in_contact, dim=-1)  # (B,)
+
+        return num_in_contact
+
+
+### ---- Energy Efficiency ---- ###
+
+
+class EnergyEfficiencyPenalty(RewardTerm):
+    """
+    Penalize energy consumption (torque * velocity).
+
+    Args:
+        hand_dof_vel: Hand DOF velocities of shape (B, D).
+        action_history_flat: Action history to approximate torque.
+    """
+
+    required_keys = ("hand_dof_vel", "action_history_flat")
+
+    def _compute(self, hand_dof_vel: torch.Tensor, action_history_flat: torch.Tensor) -> torch.Tensor:  # type: ignore
+        # Get latest action as proxy for torque
+        batch_size = action_history_flat.shape[0]
+        dof_dim = 20
+        history_len = action_history_flat.shape[1] // dof_dim
+        action_history = action_history_flat.reshape(batch_size, dof_dim, history_len)
+        latest_action = action_history[:, :, -1]
+
+        # Power = torque * velocity (approximated by action * velocity)
+        power = torch.abs(latest_action * hand_dof_vel)
+        return -torch.sum(power, dim=-1)

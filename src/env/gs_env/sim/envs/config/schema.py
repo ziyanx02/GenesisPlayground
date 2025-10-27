@@ -63,3 +63,14 @@ class MotionEnvArgs(LeggedRobotEnvArgs):
     terminate_after_base_height_error: float = 0.15
     terminate_after_base_rot_error: float = 0.3
     terminate_after_dof_pos_error: float = 8.0
+
+
+class ManipulationEnvArgs(EnvArgs):
+    """Configuration for manipulation environments (e.g., in-hand rotation)."""
+    action_latency: int = 1
+    obs_history_len: int = 1
+    obs_scales: dict[str, float]
+    obs_noises: dict[str, float]
+    actor_obs_terms: list[str]
+    critic_obs_terms: list[str]
+    cube_args: dict[str, float | tuple[float, float, float]]

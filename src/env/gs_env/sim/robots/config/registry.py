@@ -206,6 +206,9 @@ RobotArgsRegistry["franka_default"] = ManipulatorRobotArgs(
         "joint7": 0.04,
         "joint8": -0.04,
     },  # open gripper
+    soft_dof_pos_range=0.95,
+    action_scale=0.05,
+    decimation=4,
 )
 
 
@@ -235,6 +238,9 @@ RobotArgsRegistry["franka_teleop"] = ManipulatorRobotArgs(
         "joint7": 0.04,
         "joint8": -0.04,
     },  # open gripper
+    soft_dof_pos_range=0.95,
+    action_scale=0.05,
+    decimation=4,
 )
 
 # ------------------------------------------------------------
@@ -447,4 +453,160 @@ RobotArgsRegistry["g1_no_waist"] = HumanoidRobotArgs(
     action_scale=0.15,
     ctrl_freq=50,
     decimation=4,
+)
+
+# ------------------------------------------------------------
+# WUJI Hand Configuration
+# ------------------------------------------------------------
+
+# Material configuration for WUJI hand
+MaterialArgsRegistry["wuji_hand"] = RigidMaterialArgs(
+    rho=200.0,
+    friction=None,
+    needs_coup=True,
+    coup_friction=0.8,  # Higher friction for grasping
+    coup_softness=0.002,
+    coup_restitution=0.0,
+    sdf_cell_size=0.002,  # Finer resolution for hand
+    sdf_min_res=32,
+    sdf_max_res=128,
+    gravity_compensation=1,  # Fixed hand needs gravity compensation
+)
+
+# Morph configuration for WUJI hand
+MorphArgsRegistry["wuji_hand"] = URDFMorphArgs(
+    pos=(0.0, 0.05, 0.15),  # Position above the ground
+    euler=(90, -90, 0),  # Rotate to align properly
+    quat=None,
+    visualization=True,
+    collision=True,
+    requires_jac_and_IK=False,  # No IK needed for direct joint control
+    is_free=False,  # Fixed base
+    file="/home/hanyang/code/humanoid/Genesis/assets/wujihand-urdf/urdf/right.urdf",
+    scale=1.0,
+    convexify=False,
+    recompute_inertia=False,
+    fixed=True,  # Hand base is fixed
+    prioritize_urdf_material=False,
+    merge_fixed_links=True,
+    links_to_keep=[],
+    decimate=True,
+)
+
+# Joint names for WUJI hand (5 fingers, each with 4 joints)
+WUJI_dof_names: list[str] = [
+    # Finger 1 (Thumb)
+    "finger1_joint1",
+    "finger1_joint2",
+    "finger1_joint3",
+    "finger1_joint4",
+    # Finger 2 (Index)
+    "finger2_joint1",
+    "finger2_joint2",
+    "finger2_joint3",
+    "finger2_joint4",
+    # Finger 3 (Middle)
+    "finger3_joint1",
+    "finger3_joint2",
+    "finger3_joint3",
+    "finger3_joint4",
+    # Finger 4 (Ring)
+    "finger4_joint1",
+    "finger4_joint2",
+    "finger4_joint3",
+    "finger4_joint4",
+    # Finger 5 (Pinky)
+    "finger5_joint1",
+    "finger5_joint2",
+    "finger5_joint3",
+    "finger5_joint4",
+]
+
+# Default joint positions for WUJI hand
+WUJI_default_dof_pos: dict[str, float] = {
+    # Finger 1 (Thumb) - slightly spread and open
+    "finger1_joint1": 0.7,
+    "finger1_joint2": -0.16,
+    "finger1_joint3": 0.0,
+    "finger1_joint4": 0.0,
+    # Finger 2 (Index) - open position
+    "finger2_joint1": 0.2,
+    "finger2_joint2": 0.0,
+    "finger2_joint3": 0.0,
+    "finger2_joint4": 0.0,
+    # Finger 3 (Middle) - open position
+    "finger3_joint1": 0.2,
+    "finger3_joint2": 0.0,
+    "finger3_joint3": 0.0,
+    "finger3_joint4": 0.0,
+    # Finger 4 (Ring) - open position
+    "finger4_joint1": 0.2,
+    "finger4_joint2": 0.0,
+    "finger4_joint3": 0.0,
+    "finger4_joint4": 0.0,
+    # Finger 5 (Pinky) - open position
+    "finger5_joint1": 0.2,
+    "finger5_joint2": 0.0,
+    "finger5_joint3": 0.0,
+    "finger5_joint4": 0.0,
+}
+
+# PD gains for WUJI hand
+WUJI_kp_dict: dict[str, float] = {
+    # Thumb joints
+    "finger1_joint1": 20.0,
+    "finger1_joint2": 20.0,
+    "finger1_joint3": 20.0,
+    "finger1_joint4": 20.0,
+    # Index finger joints
+    "finger2_joint": 20.0,
+    # Middle finger joints
+    "finger3_joint": 20.0,
+    # Ring finger joints
+    "finger4_joint": 20.0,
+    # Pinky finger joints
+    "finger5_joint": 20.0,
+}
+
+WUJI_kd_dict: dict[str, float] = {
+    # Thumb joints
+    "finger1_joint1": 1.0,
+    "finger1_joint2": 1.0,
+    "finger1_joint3": 1.0,
+    "finger1_joint4": 1.0,
+    # Index finger joints
+    "finger2_joint": 1.0,
+    # Middle finger joints
+    "finger3_joint": 1.0,
+    # Ring finger joints
+    "finger4_joint": 1.0,
+    # Pinky finger joints
+    "finger5_joint": 1.0,
+}
+
+# Fingertip link names for contact sensing
+WUJI_fingertip_link_names: list[str] = [
+    "finger1_link4",  # Thumb tip
+    "finger2_link4",  # Index tip
+    "finger3_link4",  # Middle tip
+    "finger4_link4",  # Ring tip
+    "finger5_link4",  # Pinky tip
+]
+
+# Register WUJI hand robot configuration
+RobotArgsRegistry["wuji_hand"] = ManipulatorRobotArgs(
+    material_args=MaterialArgsRegistry["wuji_hand"],
+    morph_args=MorphArgsRegistry["wuji_hand"],
+    visualize_contact=False,
+    vis_mode="collision",  # Use collision geometry for better contact
+    ctrl_type=CtrlType.JOINT_POSITION,  # Direct joint position control
+    ik_solver=IKSolver.GS,  # Not used but required by schema
+    ee_link_name="base",  # Palm as reference link
+    show_target=False,
+    gripper_link_names=WUJI_fingertip_link_names,  # Fingertips for grasping
+    default_arm_dof={},  # No arm joints - hand is fixed
+    default_gripper_dof=WUJI_default_dof_pos,  # All 20 finger joints
+    soft_dof_pos_range=0.95,  # Use 95% of joint range to avoid hitting limits
+    action_scale=0.1,  # Scale factor for delta actions (10cm/rad per action unit)
+    decimation=4,  # Run 4 physics steps per action (50Hz control @ 200Hz sim = 4)
 )

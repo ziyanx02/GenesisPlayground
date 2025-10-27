@@ -130,3 +130,27 @@ PPO_TELEOP_MLP = PPOArgs(
     optimizer_type=OptimizerType.ADAM,
     weight_decay=0.0,
 )
+
+# In-hand manipulation PPO config
+PPO_INHAND_ROTATION_MLP = PPOArgs(
+    policy_backbone=DEFAULT_MLP,
+    critic_backbone=DEFAULT_MLP,
+    lr=5e-4,
+    lr_type=LearningRateType.ADAPTIVE,
+    lr_adaptive_factor=1.5,
+    lr_min=1e-5,
+    lr_max=1e-2,
+    value_lr=None,
+    gamma=0.99,
+    gae_lambda=0.95,
+    clip_ratio=0.2,
+    value_loss_coef=1.0,
+    entropy_coef=0.01,  # Higher entropy for exploration in manipulation
+    max_grad_norm=1.0,
+    target_kl=0.01,
+    num_epochs=5,
+    num_mini_batches=4,
+    rollout_length=32,  # Longer episodes for manipulation
+    optimizer_type=OptimizerType.ADAM,
+    weight_decay=0.0,
+)

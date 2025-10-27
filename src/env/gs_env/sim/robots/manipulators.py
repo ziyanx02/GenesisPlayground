@@ -2,6 +2,7 @@ from typing import Any
 
 import genesis as gs
 import torch
+import numpy as np
 from genesis.engine.entities.rigid_entity import RigidEntity, RigidLink
 from gymnasium import spaces
 
@@ -32,10 +33,11 @@ class ManipulatorBase(BaseGymRobot):
 
         # == Genesis configurations ==
         material: gs.materials.Rigid = gs.materials.Rigid()
-        morph: gs.morphs.MJCF = gs.morphs.MJCF(
+        morph: gs.morphs.URDF = gs.morphs.URDF(
             file=args.morph_args.file,
             pos=args.morph_args.pos,
-            quat=args.morph_args.quat,
+            euler=args.morph_args.euler,
+            fixed=True,
         )
         #
         robot_entity = scene.add_entity(
@@ -50,26 +52,26 @@ class ManipulatorBase(BaseGymRobot):
         self._robot_entity = robot_entity
 
         # == action space ==
-        n_dof = len(args.default_arm_dof.keys())
-        action_space_dict: dict[str, spaces.Space[Any]] = {"gripper_width": spaces.Box(0.0, 0.08)}
+        n_dof = len(args.default_arm_dof.keys()) + len(args.default_gripper_dof.keys())
+        action_space_dict: dict[str, spaces.Space[Any]] = {}
         match args.ctrl_type:
             case CtrlType.JOINT_POSITION:
                 action_space_dict.update(
-                    {"joint_pos": spaces.Box(shape=(n_dof,), low=-1.0, high=1.0)}
+                    {"joint_pos": spaces.Box(shape=(n_dof,), low=-np.inf, high=np.inf)}
                 )
             case CtrlType.EE_POSE_ABS:
                 action_space_dict.update(
                     {
-                        "ee_link_pos": spaces.Box(shape=(3,), low=-1.0, high=1.0),
-                        "ee_link_quat": spaces.Box(shape=(4,), low=-1.0, high=1.0),
+                        "ee_link_pos": spaces.Box(shape=(3,), low=-np.inf, high=np.inf),
+                        "ee_link_quat": spaces.Box(shape=(4,), low=-np.inf, high=np.inf),
                     }
                 )
             case CtrlType.EE_POSE_REL:
                 action_space_dict.update(
                     {
-                        "ee_link_pos_delta": spaces.Box(shape=(3,), low=-1.0, high=1.0),
+                        "ee_link_pos_delta": spaces.Box(shape=(3,), low=-np.inf, high=np.inf),
                         "ee_link_ang_delta": spaces.Box(
-                            shape=(3,), low=-1.0, high=1.0
+                            shape=(3,), low=-np.inf, high=np.inf
                         ),  # roll, pitch, yaw
                     }
                 )
@@ -83,32 +85,33 @@ class ManipulatorBase(BaseGymRobot):
 
     def _init(self) -> None:
         self._arm_dof_dim = len(self._args.default_arm_dof.keys())  # total number of joints
-        self._gripper_dim = 0
+        self._gripper_dof_dim = 0
         if self._args.default_gripper_dof is not None:
-            self._gripper_dim = len(
+            self._gripper_dof_dim = len(
                 self._args.default_gripper_dof.keys()
             )  # number of gripper joints
+        self._dof_dim = self._arm_dof_dim + self._gripper_dof_dim
+
+        # self._arm_dof_idx = torch.arange(self._arm_dof_dim, device=self._device)
+        # self._fingers_dof_idx = torch.arange(
+        #     self._arm_dof_dim,
+        #     self._arm_dof_dim + self._gripper_dof_dim,
+        #     device=self._device,
+        # )
 
         #
-        self._arm_dof_idx = torch.arange(self._arm_dof_dim, device=self._device)
-        self._fingers_dof = torch.arange(
-            self._arm_dof_dim,
-            self._arm_dof_dim + self._gripper_dim,
-            device=self._device,
-        )
-
+        # self._ee_link: RigidLink = self._robot_entity.get_link(self._args.ee_link_name)
+        # self._left_finger_link: RigidLink = self._robot_entity.get_link(
+        #     self._args.gripper_link_names[0]
+        # )
+        # self._right_finger_link: RigidLink = self._robot_entity.get_link(
+        #     self._args.gripper_link_names[1]
+        # )
         #
-        self._ee_link: RigidLink = self._robot_entity.get_link(self._args.ee_link_name)
-        self._left_finger_link: RigidLink = self._robot_entity.get_link(
-            self._args.gripper_link_names[0]
-        )
-        self._right_finger_link: RigidLink = self._robot_entity.get_link(
-            self._args.gripper_link_names[1]
-        )
-        #
-        self._default_joint_angles = list(self._args.default_arm_dof.values())
+        default_dof_pos = list(self._args.default_arm_dof.values())
         if self._args.default_gripper_dof is not None:
-            self._default_joint_angles += list(self._args.default_gripper_dof.values())
+            default_dof_pos += list(self._args.default_gripper_dof.values())
+        self._default_dof_pos = torch.tensor(default_dof_pos, dtype=torch.float32, device=self._device)
 
         # == set up control dispatch ==
         self._dispatch = {
@@ -117,16 +120,50 @@ class ManipulatorBase(BaseGymRobot):
             CtrlType.EE_POSE_REL.value: self._apply_ee_pose_rel,
         }
 
+    def post_build_init(self, eval_mode: bool = False) -> None:
+        """Initialize limits and constraints after scene is built."""
+        # Collect all DOF names (arm + gripper/fingers)
+        all_dof_names = list(self._args.default_arm_dof.keys())
+        if self._args.default_gripper_dof is not None:
+            all_dof_names += list(self._args.default_gripper_dof.keys())
+        self._all_dof_names = all_dof_names
+
+        # Get DOF indices for all joints
+        all_dofs_idx_local = [
+            self._robot_entity.get_joint(name).dofs_idx_local[0] for name in all_dof_names
+        ]
+        self._all_dof_idx_local = all_dofs_idx_local
+
+        # Set up DOF position limits
+        self._dof_pos_limits = torch.stack(
+            self._robot_entity.get_dofs_limit(all_dofs_idx_local), dim=1
+        )
+
+        # Apply soft limits (reduce range to avoid hitting hard limits)
+        soft_range = self._args.soft_dof_pos_range
+        for i in range(self._dof_pos_limits.shape[0]):
+            # Calculate midpoint and range
+            m = (self._dof_pos_limits[i, 0] + self._dof_pos_limits[i, 1]) / 2
+            r = self._dof_pos_limits[i, 1] - self._dof_pos_limits[i, 0]
+            # Apply soft limits
+            self._dof_pos_limits[i, 0] = m - 0.5 * r * soft_range
+            self._dof_pos_limits[i, 1] = m + 0.5 * r * soft_range
+
+        # Set up torque limits
+        self._torque_limits = self._robot_entity.get_dofs_force_range(all_dofs_idx_local)[1]
+
     def reset(self, envs_idx: torch.IntTensor | None = None) -> None:
         if envs_idx is None or len(envs_idx) == 0:
             return
         self.go_home(envs_idx)
 
     def go_home(self, envs_idx: torch.IntTensor) -> None:
-        default_joint_angles = torch.tensor(
-            self._default_joint_angles, dtype=torch.float32, device=self._device
-        ).repeat(len(envs_idx), 1)
-        self._robot_entity.set_qpos(default_joint_angles, envs_idx=envs_idx)
+        self._robot_entity.set_dofs_position(
+            self._default_dof_pos.repeat(len(envs_idx), 1),
+            envs_idx=envs_idx,
+            dofs_idx_local=self._all_dof_idx_local,
+            zero_velocity=True,
+        )
 
     def reset_to_pose(self, joint_positions: torch.Tensor) -> None:
         """Reset robot to a specific joint configuration."""
@@ -136,7 +173,7 @@ class ManipulatorBase(BaseGymRobot):
             joint_positions = joint_positions.unsqueeze(0)
 
         # If only arm joints are provided, pad with default gripper values
-        if joint_positions.shape[1] < len(self._default_joint_angles):
+        if joint_positions.shape[1] < len(self._default_dof_pos):
             arm_joints = joint_positions
             # Get gripper joint values, handling potential duplicates
             gripper_values = (
@@ -189,10 +226,9 @@ class ManipulatorBase(BaseGymRobot):
         """
         assert act.joint_pos.shape == (
             self._num_envs,
-            self._arm_dof_dim,
+            self._dof_dim,
         ), "Joint position action must match the number of joints."
-        q_target = act.joint_pos.to(self._device)
-        self._robot_entity.control_dofs_position(position=q_target)
+        self._robot_entity.control_dofs_position(position=act.joint_pos)
 
     def _apply_ee_pose_abs(self, act: EEPoseAbsAction) -> None:
         """
@@ -219,7 +255,7 @@ class ManipulatorBase(BaseGymRobot):
             max_solver_iters=20,  # maximum solver iterations
         )
         if isinstance(q_pos, torch.Tensor):
-            q_pos[:, self._fingers_dof] = torch.tensor(
+            q_pos[:, self._fingers_dof_idx] = torch.tensor(
                 [act.gripper_width, act.gripper_width], device=self._device
             )
             self._robot_entity.control_dofs_position(position=q_pos)
@@ -238,7 +274,7 @@ class ManipulatorBase(BaseGymRobot):
         ), "End-effector angle delta must be a 3D vector."
         q_pos = self._dls_ik(act)
         # set gripper width
-        q_pos[:, self._fingers_dof] = torch.tensor(
+        q_pos[:, self._fingers_dof_idx] = torch.tensor(
             [act.gripper_width, -act.gripper_width], device=self._device
         )
         self._robot_entity.control_dofs_position(position=q_pos)
@@ -298,6 +334,16 @@ class ManipulatorBase(BaseGymRobot):
     def ctrl_type(self) -> CtrlType:
         return self._args.ctrl_type
 
+    @property
+    def dof_pos_limits(self) -> torch.Tensor:
+        """Get DOF position limits (soft limits)."""
+        return self._dof_pos_limits
+
+    @property
+    def torque_limits(self) -> torch.Tensor:
+        """Get torque limits for all DOFs."""
+        return self._torque_limits
+
 
 class FrankaRobot(ManipulatorBase):
     def __init__(
@@ -308,3 +354,30 @@ class FrankaRobot(ManipulatorBase):
         device: torch.device,
     ) -> None:
         super().__init__(num_envs=num_envs, scene=scene, args=args, device=device)
+
+
+class WUJIHand(ManipulatorBase):
+    """
+    WUJI Hand - 5-finger dexterous hand with 20 DOF (4 joints per finger).
+    The hand base is fixed in space, only the finger joints are actuated.
+    """
+
+    def __init__(
+        self,
+        num_envs: int,
+        scene: gs.Scene,
+        args: ManipulatorRobotArgs,
+        device: torch.device,
+    ) -> None:
+        super().__init__(num_envs=num_envs, scene=scene, args=args, device=device)
+
+        # Store fingertip links for contact detection and manipulation tasks
+        self._fingertip_links = [
+            self._robot_entity.get_link(name) for name in args.gripper_link_names
+        ]
+        self._fingertip_links_idx = [link.idx_local for link in self._fingertip_links]
+
+    @property
+    def fingertip_links_idx(self) -> list[int]:
+        """Get the indices of fingertip links for contact detection."""
+        return self._fingertip_links_idx

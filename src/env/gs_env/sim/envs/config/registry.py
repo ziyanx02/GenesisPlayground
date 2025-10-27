@@ -2,6 +2,7 @@ from gs_env.sim.envs.config.schema import (
     EnvArgs,
     GenesisInitArgs,
     LeggedRobotEnvArgs,
+    ManipulationEnvArgs,
     MotionEnvArgs,
     WalkingEnvArgs,
 )
@@ -317,5 +318,64 @@ EnvArgsRegistry["custom_g1_mocap"] = LeggedRobotEnvArgs(
         "right_shoulder_yaw_link",
         "left_elbow_link",
         "right_elbow_link",
+    ],
+)
+
+# ------------------------------------------------------------
+# WUJI Hand In-Hand Rotation Configuration
+# ------------------------------------------------------------
+
+EnvArgsRegistry["wuji_inhand_rotation"] = ManipulationEnvArgs(
+    env_name="InHandRotationEnv",
+    gs_init_args=GenesisInitArgsRegistry["default"],
+    scene_args=SceneArgsRegistry["flat_scene_default"],
+    robot_args=RobotArgsRegistry["wuji_hand"],
+    objects_args=[],  # Cube is created in environment
+    sensors_args=[],
+    reward_term="manipulation",
+    reward_args={
+        ### Main Task Reward ###
+        "CubeZRotationVelocityReward": 10.0,  # Reward for rotating cube around Z-axis
+        ### Regularization ###
+        "ActionRatePenalty": 0.01,  # Penalize large action changes
+        "ActionLimitPenalty": 0.1,  # Penalize actions near limits
+        "DofPosLimitPenalty": 1.0,  # Penalize joint positions near limits
+    },
+    cube_args={
+        "size": 0.05,
+        "position": (0.0, 0.0, 0.2),
+    },
+    img_resolution=(480, 480),
+    action_latency=1,
+    obs_history_len=3,  # 3 timesteps of history
+    # TODO: determine all these scales
+    obs_scales={
+        "hand_dof_vel": 0.1,
+        "cube_ang_vel": 0.5,
+    },
+    obs_noises={
+        "hand_dof_pos": 0.01,
+        "hand_dof_vel": 0.1,
+        "cube_pos": 0.002,
+        "cube_quat": 0.01,
+    },
+    actor_obs_terms=[
+        # Action history (20 * 3 = 60D)
+        "action_history_flat",  # Flattened action history
+        # DOF position history (20 * 3 = 60D)
+        "dof_pos_history_flat",  # Flattened DOF position history
+    ],
+    critic_obs_terms=[
+        # Action history (20 * 3 = 60D)
+        "action_history_flat",
+        # DOF position history (20 * 3 = 60D)
+        "dof_pos_history_flat",
+        # Hand velocity (20D)
+        "hand_dof_vel",
+        # Cube state (3 + 4 + 3 + 3 = 13D)
+        "cube_pos",
+        "cube_quat",
+        "cube_lin_vel",
+        "cube_ang_vel",
     ],
 )
