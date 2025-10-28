@@ -356,6 +356,7 @@ class InHandRotationEnv(BaseEnv):
         # Target position = current + scaled delta
         target_dof_pos = self.hand_dof_pos + exec_action
 
+        self.torques *= 0
         # Apply actions and simulate physics with decimation
         for _ in range(self._args.robot_args.decimation):
             self._pre_step()
@@ -499,7 +500,7 @@ class InHandRotationEnv(BaseEnv):
         if save_gif and self._rendered_images:
             self.save_gif(gif_path)
 
-    def save_gif(self, gif_path: str, duration: int = 20) -> None:
+    def save_gif(self, gif_path: str, duration: int = 100) -> None:
         """
         Save the rendered images as a GIF.
 

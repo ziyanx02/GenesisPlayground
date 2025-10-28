@@ -336,9 +336,9 @@ EnvArgsRegistry["wuji_inhand_rotation"] = ManipulationEnvArgs(
     reward_args={
         ### Main Task Rewards (Penspin-style) ###
         "RotateRewardClipped": {
-            "scale": 1.0,  # rotate_reward_scale from penspin
-            "angvel_clip_min": -0.5,  # angvelClipMin from penspin
-            "angvel_clip_max": 0.5,  # angvelClipMax from penspin
+            "scale": 100.0,  # rotate_reward_scale from penspin
+            "angvel_clip_min": -2.0,  # angvelClipMin from penspin
+            "angvel_clip_max": 2.0,  # angvelClipMax from penspin
         },
         "RotatePenaltyThreshold": {
             "scale": 0.03,  # rotate_penalty_scale from penspin (0.3)
@@ -388,6 +388,13 @@ EnvArgsRegistry["wuji_inhand_rotation"] = ManipulationEnvArgs(
         "action_history_flat",  # Flattened action history
         # DOF position history (20 * 3 = 60D)
         "dof_pos_history_flat",  # Flattened DOF position history
+
+        # privileged information
+        "hand_dof_vel",
+        "cube_pos",
+        "cube_quat",
+        "cube_lin_vel",
+        "cube_ang_vel",
     ],
     critic_obs_terms=[
         # Action history (20 * 3 = 60D)
