@@ -479,7 +479,7 @@ MaterialArgsRegistry["wuji_hand"] = RigidMaterialArgs(
 
 # Morph configuration for WUJI hand
 MorphArgsRegistry["wuji_hand"] = URDFMorphArgs(
-    pos=(0.0, 0.05, 0.15),  # Position above the ground
+    pos=(0.0, 0.1, 0.15),  # Position above the ground
     euler=(90, -90, 0),  # Rotate to align properly
     quat=None,
     visualization=True,
@@ -529,31 +529,31 @@ WUJI_dof_names: list[str] = [
 # Default joint positions for WUJI hand
 WUJI_default_dof_pos: dict[str, float] = {
     # Finger 1 (Thumb) - slightly spread and open
-    "finger1_joint1": 0.7,
-    "finger1_joint2": -0.16,
-    "finger1_joint3": 0.0,
-    "finger1_joint4": 0.0,
+    "finger1_joint1": 0.0,
+    "finger1_joint2": 0.6,
+    "finger1_joint3": 0.9,
+    "finger1_joint4": 0.4,
     # Finger 2 (Index) - open position
     "finger2_joint1": 0.2,
     "finger2_joint2": 0.0,
-    "finger2_joint3": 0.0,
-    "finger2_joint4": 0.0,
+    "finger2_joint3": 1.2,
+    "finger2_joint4": 0.4,
     # Finger 3 (Middle) - open position
     "finger3_joint1": 0.2,
     "finger3_joint2": 0.0,
-    "finger3_joint3": 0.0,
-    "finger3_joint4": 0.0,
+    "finger3_joint3": 1.2,
+    "finger3_joint4": 0.4,
     # Finger 4 (Ring) - open position
     "finger4_joint1": 0.2,
     "finger4_joint2": 0.0,
-    "finger4_joint3": 0.0,
-    "finger4_joint4": 0.0,
+    "finger4_joint3": 1.2,
+    "finger4_joint4": 0.4,
     # Finger 5 (Pinky) - open position
-    "finger5_joint1": 0.2,
+    "finger5_joint1": 0.3,
     "finger5_joint2": 0.0,
-    "finger5_joint3": 0.0,
-    "finger5_joint4": 0.0,
-}
+    "finger5_joint3": 1.2,
+    "finger5_joint4": 0.4,
+    }
 
 # PD gains for WUJI hand
 WUJI_kp_dict: dict[str, float] = {

@@ -358,16 +358,17 @@ EnvArgsRegistry["wuji_inhand_rotation"] = ManipulationEnvArgs(
             "scale": 0.001,  # work_penalty_scale from penspin (1.0)
         },
         "PositionPenalty": {
-            "scale": 1.0,  # position_penalty_scale from penspin (0.1)
+            "scale": 10.0,  # position_penalty_scale from penspin (0.1)
             "target_x": 0.0,  # target position from penspin (line 551-552)
             "target_y": 0.0,
             "target_z": 0.23,  # Adjusted for WUJI hand height (penspin uses reset_z_threshold + 0.01)
         },
-        # Note: penspin also uses pencil_z_dist_penalty_scale: -1.0, but we use cube not pencil
-        # Note: penspin also tracks finger_obj_penalty but doesn't include it in reward
+         "FingertipCubeProximityPenaltySquared": {
+            "scale": 0.5,
+        }
     },
     cube_args={
-        "size": 0.07,
+        "size": 0.05,
         "position": (0.0, 0.0, 0.22),
     },
     img_resolution=(480, 480),

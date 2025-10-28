@@ -500,7 +500,12 @@ class WandbOutputFormat(KVWriter):
             elif isinstance(value, Figure):
                 wandb.log({key: wandb.Image(value.figure, caption=key)}, step=step)
             elif isinstance(value, Video):
-                wandb.log({key: wandb.Video(value.frames, fps=int(value.fps), format="mp4")}, step=step) # type: ignore
+                # Convert to numpy if torch tensor, and ensure correct format for wandb
+                frames = value.frames
+                if isinstance(frames, th.Tensor):
+                    frames = frames.cpu().numpy()
+                # wandb.Video expects (T, H, W, C) in uint8 format [0, 255]
+                wandb.log({key: wandb.Video(frames, fps=int(value.fps), format="mp4")}, step=step) # type: ignore
             elif isinstance(value, HParam):
                 wandb.config.update(value.hparam_dict)
                 wandb.log(value.metric_dict, step=step) # type: ignore

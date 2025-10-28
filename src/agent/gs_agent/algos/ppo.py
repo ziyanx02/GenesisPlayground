@@ -208,9 +208,11 @@ class PPO(BaseAlgo):
             if hasattr(self.env.env, "_rendered_images") and len(self.env.env._rendered_images) > 0:
                 # Convert list of numpy arrays to torch tensor (T, H, W, C)
                 import numpy as np
-                video_frames = torch.from_numpy(
-                    np.stack(self.env.env._rendered_images, axis=0)
-                ).float() / 255.0  # Normalize to [0, 1]
+                frames_np = np.stack(self.env.env._rendered_images, axis=0)
+                # Ensure frames are uint8 in [0, 255] range for wandb.Video
+                if frames_np.dtype != np.uint8:
+                    frames_np = (frames_np * 255).astype(np.uint8)
+                video_frames = torch.from_numpy(frames_np)
                 # Note: we don't clear frames here - will be cleared after saving GIF
 
         return {
