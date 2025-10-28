@@ -358,7 +358,7 @@ EnvArgsRegistry["wuji_inhand_rotation"] = ManipulationEnvArgs(
             "scale": 0.001,  # work_penalty_scale from penspin (1.0)
         },
         "PositionPenalty": {
-            "scale": 0.01,  # position_penalty_scale from penspin (0.1)
+            "scale": 1.0,  # position_penalty_scale from penspin (0.1)
             "target_x": 0.0,  # target position from penspin (line 551-552)
             "target_y": 0.0,
             "target_z": 0.23,  # Adjusted for WUJI hand height (penspin uses reset_z_threshold + 0.01)
