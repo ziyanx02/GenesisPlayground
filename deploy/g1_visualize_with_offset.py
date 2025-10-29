@@ -30,7 +30,7 @@ def main(
     assert isinstance(env_args.robot_args, HumanoidRobotArgs)
     gs_joint_order = env_args.robot_args.dof_names
     qpos_offset = torch.tensor(
-        [offset_raw["dof_offset"][name] for name in gs_joint_order],
+        [offset_raw[name] for name in gs_joint_order],
         dtype=torch.float32,
         device=device,
     )

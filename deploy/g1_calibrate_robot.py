@@ -242,11 +242,13 @@ def main(args: argparse.Namespace) -> None:
             ),
         }
 
-    opt = torch.optim.Adam(
+    opt1 = torch.optim.Adam([v for d in opt_offset.values() for v in d.values()], lr=0.001)
+    opt2 = torch.optim.Adam(
         [qpos_offset] + [v for d in opt_offset.values() for v in d.values()], lr=0.001
     )
     loss_history = []
-    for _ in tqdm(range(1000)):
+    for step in tqdm(range(2000)):
+        opt = opt1 if step < 1000 else opt2
         opt.zero_grad()
         total_loss = torch.tensor(0.0, dtype=torch.float32, device=device)
 
@@ -322,7 +324,7 @@ def main(args: argparse.Namespace) -> None:
 
         mean_rms = np.mean(rms_Rs) * G1_R_WEIGHT + np.mean(rms_Ts) * (1 - G1_R_WEIGHT)
         loss_history.append(mean_rms)
-        total_loss += 0.01 * torch.sum(torch.square(qpos_offset))
+        total_loss += 0.05 * torch.sum(torch.square(qpos_offset))
         total_loss.backward()
 
         opt.step()
