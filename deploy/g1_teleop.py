@@ -5,11 +5,11 @@ from pathlib import Path
 
 import fire
 import torch
-from gs_env.common.utils.motion_utils import MotionLib
 from gs_env.sim.envs.config.schema import MotionEnvArgs
 
 # Add examples to path to import utils
 sys.path.insert(0, str(Path(__file__).parent.parent))
+from deploy.utils import RedisClient
 from examples.utils import yaml_to_config  # type: ignore
 
 
@@ -66,6 +66,8 @@ def main(
     show_viewer: bool = True,
     sim: bool = True,
     action_scale: float = 0.0,  # only for real robot
+    redis_url: str = "redis://localhost:6379/0",
+    redis_key: str = "motion:ref:latest",
 ) -> None:
     """Run policy on either simulation or real robot.
 
@@ -78,7 +80,6 @@ def main(
         num_envs: Number of environments (only for sim mode)
     """
     device = "cpu" if not torch.cuda.is_available() else device
-    device_t = torch.device(device)
 
     # Load checkpoint and env_args
     policy, env_args = load_checkpoint_and_env_args(exp_name, num_ckpt, device)
@@ -92,7 +93,7 @@ def main(
             args=env_args,
             num_envs=1,
             show_viewer=show_viewer,
-            device=device_t,
+            device=torch.device(device),
             eval_mode=True,
         )
         env.eval()
@@ -103,7 +104,7 @@ def main(
         from gs_env.real import UnitreeLeggedEnv
 
         env = UnitreeLeggedEnv(
-            env_args, action_scale=action_scale, interactive=True, device=device_t
+            env_args, action_scale=action_scale, interactive=True, device=torch.device(device)
         )
 
         print("Press Start button to start the policy")
@@ -120,22 +121,17 @@ def main(
         nonlocal env
 
         # Initialize tracking variables
-        last_action_t = torch.zeros(1, env.action_dim, device=device_t)
-        commands_t = torch.zeros(1, 3, device=device_t)
+        last_action_t = torch.zeros(1, env.action_dim, device=device)
+        commands_t = torch.zeros(1, 3, device=device)
         last_update_time = time.time()
         total_inference_time = 0
         step_id = 0
 
-        # Initialize motion library (direct file playback)
-        motion_lib = MotionLib(motion_file=env_args.motion_file, device=device_t)
-        motion_id_t = torch.tensor(
-            [
-                0,
-            ],
-            dtype=torch.long,
-            device=device_t,
-        )
-        t_val = 0.0
+        # Connect to Redis and construct client
+        dof_dim_cfg = len(getattr(env_args.robot_args, "dof_names", []))
+        if dof_dim_cfg <= 0:
+            dof_dim_cfg = int(last_action_t.shape[-1])
+        ref_client = RedisClient(url=redis_url, key=redis_key, device=device)
 
         while True:
             # Check termination condition (only for real robot)
@@ -159,18 +155,8 @@ def main(
                 commands_t[0, 1] = 0.0  # lateral velocity (m/s)
                 commands_t[0, 2] = 0.0  # angular velocity (rad/s)
 
-            # Advance motion time and compute reference frame (looping)
-            t_val += 0.02
-            motion_time_t = torch.tensor([t_val], dtype=torch.float32, device=device_t)
-            (
-                ref_base_pos,
-                ref_base_quat,
-                ref_base_lin_vel,
-                ref_base_ang_vel,
-                ref_dof_pos,
-                ref_dof_vel,
-                _,
-            ) = motion_lib.calc_motion_frame(motion_ids=motion_id_t, motion_times=motion_time_t)
+            # Update reference values from Redis (zeros if unavailable)
+            ref_client.update()
 
             # Construct observation (matching training observation structure)
             obs_components = []
@@ -180,22 +166,7 @@ def main(
                 elif key == "commands":
                     obs_gt = commands_t
                 elif key.startswith("ref_"):
-                    if key == "ref_base_pos":
-                        obs_gt = ref_base_pos
-                    elif key == "ref_base_quat":
-                        obs_gt = ref_base_quat
-                    elif key == "ref_base_lin_vel":
-                        obs_gt = ref_base_lin_vel
-                    elif key == "ref_base_ang_vel":
-                        obs_gt = ref_base_ang_vel
-                    elif key == "ref_dof_pos":
-                        obs_gt = ref_dof_pos
-                    elif key == "ref_dof_vel":
-                        obs_gt = ref_dof_vel
-                    else:
-                        # Fallback: try env if it exposes extra ref_* tensors
-                        obs_gt = getattr(env, key)
-                    obs_gt = obs_gt * env_args.obs_scales.get(key, 1.0)
+                    obs_gt = getattr(ref_client, key) * env_args.obs_scales.get(key, 1.0)
                 else:
                     obs_gt = getattr(env, key) * env_args.obs_scales.get(key, 1.0)
                 obs_components.append(obs_gt)

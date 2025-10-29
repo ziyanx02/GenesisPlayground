@@ -256,6 +256,11 @@ EnvArgsRegistry["g1_motion"] = MotionEnvArgs(
         "right_elbow_link",
     ],
     motion_file="assets/motion/twist_dataset.yaml",
+    no_terminate_before_motion_time=1.0,
+    terminate_after_base_pos_error=0.5,
+    terminate_after_base_height_error=0.15,
+    terminate_after_base_rot_error=0.3,
+    terminate_after_dof_pos_error=8.0,
 )
 
 
