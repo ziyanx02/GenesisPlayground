@@ -492,33 +492,26 @@ class WandbOutputFormat(KVWriter):
     ) -> None:
         log_dict = filter_excluded_keys(key_values, key_excluded, "wandb")
 
-        # Batch all logs into a single dictionary to avoid multiple sync points
-        wandb_log_batch = {}
-
         for key, value in log_dict.items():
             if isinstance(value, float | int):
-                wandb_log_batch[key] = value
+                wandb.log({key: value}, step=step)
             elif isinstance(value, Image):
-                wandb_log_batch[key] = wandb.Image(value.image, caption=key)
+                wandb.log({key: wandb.Image(value.image, caption=key)}, step=step)
             elif isinstance(value, Figure):
-                wandb_log_batch[key] = wandb.Image(value.figure, caption=key)
+                wandb.log({key: wandb.Image(value.figure, caption=key)}, step=step)
             elif isinstance(value, Video):
                 # Convert to numpy if torch tensor, and ensure correct format for wandb
                 frames = value.frames
                 if isinstance(frames, th.Tensor):
                     frames = frames.cpu().numpy()
                 # wandb.Video expects (T, H, W, C) in uint8 format [0, 255]
-                wandb_log_batch[key] = wandb.Video(frames, fps=int(value.fps), format="mp4") # type: ignore
+                wandb.log({key: wandb.Video(frames, fps=int(value.fps), format="mp4")}, step=step) # type: ignore
             elif isinstance(value, HParam):
                 wandb.config.update(value.hparam_dict)
-                wandb_log_batch.update(value.metric_dict) # type: ignore
+                wandb.log(value.metric_dict, step=step) # type: ignore
             else:
                 # For other types, log as text
-                wandb_log_batch[key] = str(value)
-
-        # Log everything in a single call to reduce overhead
-        if wandb_log_batch:
-            wandb.log(wandb_log_batch, step=step)
+                wandb.log({key: str(value)}, step=step)
 
     def close(self) -> None:
         wandb.finish()

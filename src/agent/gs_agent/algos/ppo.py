@@ -135,6 +135,9 @@ class PPO(BaseAlgo):
                 _, reward, terminated, truncated, _extra_infos = self.env.step(action)
                 next_actor_obs, next_critic_obs = self.env.get_observations()
 
+                if should_log_video and hasattr(self.env.env, "_rendered_images"):
+                    print(f"Collecting video frame at step {_step}/{num_steps}")
+
                 # add next value to reward of truncated steps
                 if "time_outs" in _extra_infos:
                     time_outs = _extra_infos["time_outs"]
