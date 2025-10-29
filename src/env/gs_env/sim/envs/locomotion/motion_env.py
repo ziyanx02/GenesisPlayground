@@ -125,6 +125,10 @@ class MotionEnv(LeggedRobotEnv):
         self.feet_air_time[envs_idx] = 0.0
 
     def reset_idx(self, envs_idx: torch.IntTensor) -> None:
+        if self._eval_mode:
+            super().reset_idx(envs_idx=envs_idx)
+            return
+
         # set reference motion first
         self._reset_ref_motion(envs_idx=envs_idx)
         self.hard_sync_motion(envs_idx=envs_idx)
@@ -208,7 +212,8 @@ class MotionEnv(LeggedRobotEnv):
         base_quat_mask = base_quat_error > self._args.terminate_after_base_rot_error
         dof_pos_mask = dof_pos_error > self._args.terminate_after_dof_pos_error
         terminate_by_error &= base_pos_mask | base_height_mask | base_quat_mask | dof_pos_mask
-        reset_buf |= terminate_by_error
+        if not self._eval_mode:
+            reset_buf |= terminate_by_error
 
         # if base_pos_mask[0]:
         #     print("terminate by base_pos_error")

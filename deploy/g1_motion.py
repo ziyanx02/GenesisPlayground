@@ -140,7 +140,7 @@ def main(
                 break
 
             # Control loop timing (50 Hz)
-            if time.time() - last_update_time < 0.5:
+            if time.time() - last_update_time < 0.02:
                 time.sleep(0.001)
                 continue
             last_update_time = time.time()
@@ -180,6 +180,11 @@ def main(
                 total_inference_time += end_time - start_time
 
             env.apply_action(action_t)
+
+            if sim:
+                terminated = env.get_terminated()
+                if terminated[0]:
+                    env.reset_idx(torch.IntTensor([0]))
 
             last_action_t = action_t.clone()
             step_id += 1
