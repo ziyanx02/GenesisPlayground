@@ -547,3 +547,40 @@ class FingertipCubeProximityReward(RewardTerm):
           num_in_contact = in_contact.sum(dim=-1)
 
           return num_in_contact  # Reward proportional to number of fingertips in contact
+
+
+class CubeOnHandReward(RewardTerm):
+    """
+    Reward for keeping the cube on the hand (not dropped).
+    Provides a constant positive reward when the cube is above the hand.
+
+    This encourages the policy to maintain grasp and avoid dropping the cube,
+    which should increase episode length.
+
+    Args:
+        cube_pos: Cube position tensor of shape (B, 3).
+        hand_palm_pos: Hand palm position tensor of shape (B, 3).
+    """
+
+    required_keys = ("cube_pos", "hand_palm_pos")
+
+    def __init__(
+        self,
+        scale: float = 1.0,
+        height_threshold: float = -0.05,  # Match termination threshold
+        name: str | None = None
+    ):
+        """
+        Args:
+            scale: Reward scale factor.
+            height_threshold: Minimum height above hand (negative = below hand palm).
+        """
+        super().__init__(scale, name)
+        self.height_threshold = height_threshold
+
+    def _compute(self, cube_pos: torch.Tensor, hand_palm_pos: torch.Tensor) -> torch.Tensor:  # type: ignore
+        # Check height constraint (cube should be above threshold)
+        cube_height_above_hand = cube_pos[:, 2] - hand_palm_pos[:, 2]
+        on_hand = (cube_height_above_hand >= self.height_threshold).float()
+
+        return on_hand  # Returns 1.0 when on hand, 0.0 when dropped
