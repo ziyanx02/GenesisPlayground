@@ -563,7 +563,7 @@ class CubeOnHandReward(RewardTerm):
         hand_palm_pos: Hand palm position tensor of shape (B, 3).
     """
 
-    required_keys = ("hand_palm_pos",)
+    required_keys = ("cube_pos",)
 
     def __init__(
         self,
@@ -584,13 +584,13 @@ class CubeOnHandReward(RewardTerm):
         self.height_threshold = height_threshold
         self.xy_threshold = xy_threshold
 
-    def _compute(self, hand_palm_pos: torch.Tensor) -> torch.Tensor:  # type: ignore
+    def _compute(self, cube_pos: torch.Tensor) -> torch.Tensor:  # type: ignore
         # Check height constraint (cube should be above threshold)
-        cube_height_above_hand = self.stay_center[:, 2] - hand_palm_pos[:, 2]
+        cube_height_above_hand = cube_pos[:, 2] - self.stay_center[:, 2]
         height_ok = (cube_height_above_hand >= self.height_threshold).float()
 
         # Check XY distance constraint (cube should be near hand center)
-        cube_xy_dist = torch.norm(self.stay_center[:, :2] - hand_palm_pos[:, :2], dim=-1)
+        cube_xy_dist = torch.norm(cube_pos[:, :2] - self.stay_center[:, :2], dim=-1)
         xy_ok = (cube_xy_dist <= self.xy_threshold).float()
 
         # Both constraints must be satisfied
