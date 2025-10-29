@@ -355,7 +355,7 @@ EnvArgsRegistry["wuji_inhand_rotation"] = ManipulationEnvArgs(
             "scale": 0.01,  # torque_penalty_scale from penspin (0.1)
         },
         "WorkPenalty": {
-            "scale": 0.001,  # work_penalty_scale from penspin (1.0)
+            "scale": 0.0001,  # work_penalty_scale from penspin (1.0)
         },
         "PositionPenalty": {
             "scale": 10.0,  # position_penalty_scale from penspin (0.1)
