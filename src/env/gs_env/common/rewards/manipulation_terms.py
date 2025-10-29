@@ -552,7 +552,8 @@ class FingertipCubeProximityReward(RewardTerm):
 class CubeOnHandReward(RewardTerm):
     """
     Reward for keeping the cube on the hand (not dropped).
-    Provides a constant positive reward when the cube is above the hand.
+    Provides a constant positive reward when the cube is above the hand
+    and within XY distance threshold.
 
     This encourages the policy to maintain grasp and avoid dropping the cube,
     which should increase episode length.
@@ -568,19 +569,29 @@ class CubeOnHandReward(RewardTerm):
         self,
         scale: float = 1.0,
         height_threshold: float = -0.05,  # Match termination threshold
+        xy_threshold: float = 0.15,  # Match termination threshold
         name: str | None = None
     ):
         """
         Args:
             scale: Reward scale factor.
             height_threshold: Minimum height above hand (negative = below hand palm).
+            xy_threshold: Maximum XY distance from hand center.
         """
         super().__init__(scale, name)
         self.height_threshold = height_threshold
+        self.xy_threshold = xy_threshold
 
     def _compute(self, cube_pos: torch.Tensor, hand_palm_pos: torch.Tensor) -> torch.Tensor:  # type: ignore
         # Check height constraint (cube should be above threshold)
         cube_height_above_hand = cube_pos[:, 2] - hand_palm_pos[:, 2]
-        on_hand = (cube_height_above_hand >= self.height_threshold).float()
+        height_ok = (cube_height_above_hand >= self.height_threshold).float()
+
+        # Check XY distance constraint (cube should be near hand center)
+        cube_xy_dist = torch.norm(cube_pos[:, :2] - hand_palm_pos[:, :2], dim=-1)
+        xy_ok = (cube_xy_dist <= self.xy_threshold).float()
+
+        # Both constraints must be satisfied
+        on_hand = height_ok * xy_ok
 
         return on_hand  # Returns 1.0 when on hand, 0.0 when dropped
