@@ -480,11 +480,10 @@ class InHandRotationEnv(BaseEnv):
     def _render_headless(self) -> None:
         """Render a frame from the floating camera if rendering is enabled."""
         if self._rendering and len(self._rendered_images) < 1000:
-            # Focus camera on cube
-            cube_pos = self.cube_pos[0]
+            hand_pos = self.hand_palm_pos[0]
             self._floating_camera.set_pose(
-                pos=cube_pos + self.camera_pos,
-                lookat=cube_pos + self.camera_lookat,
+                pos=hand_pos + self.camera_pos,
+                lookat=hand_pos + self.camera_lookat,
             )
             rgb, _, _, _ = self._floating_camera.render()
             self._rendered_images.append(rgb)
