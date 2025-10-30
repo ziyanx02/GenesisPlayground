@@ -188,6 +188,12 @@ def main(
                         obs_gt = ref_base_lin_vel
                     elif key == "ref_base_ang_vel":
                         obs_gt = ref_base_ang_vel
+                    elif key == "ref_base_lin_vel_local":
+                        # TODO: this is wrong, tmp for deployment
+                        obs_gt = ref_base_lin_vel - ref_base_pos
+                    elif key == "ref_base_ang_vel_local":
+                        # TODO: this is wrong, tmp for deployment
+                        obs_gt = ref_base_ang_vel - ref_base_pos
                     elif key == "ref_dof_pos":
                         obs_gt = ref_dof_pos
                     elif key == "ref_dof_vel":

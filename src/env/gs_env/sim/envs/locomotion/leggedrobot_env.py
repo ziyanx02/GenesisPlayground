@@ -545,6 +545,7 @@ class LeggedRobotEnv(BaseEnv):
     def batched_global_to_local(
         base_pos: torch.Tensor, base_quat: torch.Tensor, global_vec: torch.Tensor
     ) -> torch.Tensor:
+        # TODO: wrong implementation
         assert base_pos.shape[0] == base_quat.shape[0] == global_vec.shape[0]
         global_vec_shape = global_vec.shape
         global_vec = global_vec.reshape(global_vec_shape[0], -1, global_vec_shape[-1])
