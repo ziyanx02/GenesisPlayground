@@ -167,7 +167,6 @@ EnvArgsRegistry["g1_walk"] = WalkingEnvArgs(
         (0.0, 0.0),  # Left/Right
         (-1.0, 1.0),  # Turn
     ),
-    stand_prob=0.1,
 )
 
 
