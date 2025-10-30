@@ -178,8 +178,8 @@ class InHandRotationEnv(BaseEnv):
         self.init_dof_pos = self._robot._default_dof_pos.repeat(self.num_envs, 1).to(self._device)
         # Rotation axis buffer (for rotation rewards)
         self.rot_axis = torch.zeros((self.num_envs, 3), device=self._device)
-        # Default to Z-axis rotation (like penspin with -z)
-        self.rot_axis[:, 2] = -1.0
+        # Default to Z-axis rotation (like penspin with +z)
+        self.rot_axis[:, 2] = 1.0
         # Torques buffer (for torque penalties) - approximated from actions
         self.torques = torch.zeros((self.num_envs, self._action_dim), device=self._device)
 
