@@ -41,6 +41,7 @@ class MotionEnv(LeggedRobotEnv):
         show_viewer: bool = False,
         device: torch.device = _DEFAULT_DEVICE,
         eval_mode: bool = False,
+        debug: bool = False,
     ) -> None:
         # Initialize base legged-robot environment
         self._args = args
@@ -50,6 +51,7 @@ class MotionEnv(LeggedRobotEnv):
             show_viewer=show_viewer,
             device=device,
             eval_mode=eval_mode,
+            debug=debug,
         )
 
     def _init(self) -> None:
@@ -116,6 +118,7 @@ class MotionEnv(LeggedRobotEnv):
         self._motion_time_offsets = torch.zeros(
             self.num_envs, device=self._device, dtype=torch.float32
         )
+        self._motion_lengths = torch.zeros(self.num_envs, device=self._device, dtype=torch.float32)
 
         # initialize once
         self.reset_idx(torch.IntTensor(range(self.num_envs)))
@@ -126,14 +129,15 @@ class MotionEnv(LeggedRobotEnv):
 
     def reset_idx(self, envs_idx: torch.IntTensor) -> None:
         if self._eval_mode:
-            super().reset_idx(envs_idx=envs_idx)
+            self.reset_to_default_pos(envs_idx)
             return
 
         # set reference motion first
+        self.time_since_reset[envs_idx] = 0.0
         self._reset_ref_motion(envs_idx=envs_idx)
         self.hard_sync_motion(envs_idx=envs_idx)
 
-        num_selected = int(0.0 * len(envs_idx))
+        num_selected = int(self._args.reset_to_default_pose_ratio * len(envs_idx))
         if num_selected > 0:
             local_idx = torch.randperm(len(envs_idx), device=self._device)[:num_selected]
             envs_selected = envs_idx[local_idx]
@@ -153,6 +157,7 @@ class MotionEnv(LeggedRobotEnv):
         self._reset_buffers(envs_idx=envs_idx)
 
     def reset_to_default_pos(self, envs_idx: torch.Tensor) -> None:
+        # different from super().reset_idx(), considering the facing direction
         default_pos = self._robot.default_pos[None, :].repeat(len(envs_idx), 1)
         default_quat = self._robot.default_quat[None, :].repeat(len(envs_idx), 1)
         default_dof_pos = self._robot.default_dof_pos[None, :].repeat(len(envs_idx), 1)
@@ -171,6 +176,11 @@ class MotionEnv(LeggedRobotEnv):
             + self._args.reset_roll_range[0]
         )
         random_euler[:, 2] = self.ref_base_euler[envs_idx, 2]
+        random_euler[:, 2] += (
+            torch.rand(len(envs_idx), device=self._device)
+            * (self._args.reset_yaw_range[1] - self._args.reset_yaw_range[0])
+            + self._args.reset_yaw_range[0]
+        )
         random_quat = quat_from_euler(random_euler)
         base_quat = quat_mul(default_quat, random_quat)
         random_dof_pos = (
@@ -202,6 +212,11 @@ class MotionEnv(LeggedRobotEnv):
         )
         reset_buf |= contact_force_mask
 
+        # terminate if motino_time will exceed motion length after next step
+        # avoid passing overlimit motion time to calc_motion_frame
+        motion_end_mask = self.motion_times + self.dt > self._motion_lengths
+        reset_buf |= motion_end_mask
+
         terminate_by_error = self.motion_times > self._args.no_terminate_before_motion_time
         base_pos_error = torch.norm(self.base_pos - self.ref_base_pos, dim=-1)
         base_height_error = torch.abs(self.base_height - self.ref_base_height)
@@ -215,6 +230,8 @@ class MotionEnv(LeggedRobotEnv):
         if not self._eval_mode:
             reset_buf |= terminate_by_error
 
+        # if motion_end_mask[0]:
+        #     print("terminate by motion_end")
         # if base_pos_mask[0]:
         #     print("terminate by base_pos_error")
         # if base_height_mask[0]:
@@ -229,6 +246,7 @@ class MotionEnv(LeggedRobotEnv):
         termination_dict = {}
         # termination_dict["tilt"] = tilt_mask.clone()
         # termination_dict["height"] = height_mask.clone()
+        termination_dict["motion_end"] = motion_end_mask.clone()
         termination_dict["ref_base_pos"] = base_pos_mask.clone()
         termination_dict["ref_base_height"] = base_height_mask.clone()
         termination_dict["ref_base_quat"] = base_quat_mask.clone()
@@ -283,14 +301,14 @@ class MotionEnv(LeggedRobotEnv):
         assert self._motion_lib is not None
         n = len(envs_idx)
         motion_ids = self._motion_lib.sample_motion_ids(n)
-        motion_times = self._motion_lib.sample_motion_times(motion_ids)
+        motion_times = (
+            self._motion_lib.sample_motion_times(motion_ids)
+            * self._args.reset_to_motion_range_ratio
+        )
         self._motion_ids[envs_idx] = motion_ids
         self._motion_time_offsets[envs_idx] = motion_times
-
+        self._motion_lengths[envs_idx] = self._motion_lib.get_motion_length(motion_ids)
         self._update_ref_motion(envs_idx=envs_idx, motion_ids=motion_ids, motion_times=motion_times)
-
-        # lift slightly to avoid penetration
-        # base_pos[:, 2] += 0.05
 
     def _update_ref_motion(
         self,

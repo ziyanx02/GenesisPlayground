@@ -94,10 +94,10 @@ class UnitreeLeggedEnv(BaseGymRobot):
         )
         return torch.tensor(projected_gravity, device=self._device, dtype=torch.float32)[None, :]
 
-    @property
-    def base_ang_vel(self) -> torch.Tensor:
-        # TODO: remove duplication with base_ang_vel_local
-        return torch.tensor(self.robot.ang_vel, device=self._device, dtype=torch.float32)[None, :]
+    # @property
+    # def base_ang_vel(self) -> torch.Tensor:
+    #     return torch.tensor(self.robot.ang_vel, device=self._device, dtype=torch.float32)[None, :]
+    # SHOULD BE GLOBAL ANGULAR VELOCITY, NOT IMPLEMENTED YET
 
     @property
     def base_ang_vel_local(self) -> torch.Tensor:

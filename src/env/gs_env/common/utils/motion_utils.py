@@ -97,7 +97,6 @@ class MotionLib:
         motion_lengths = []
 
         motion_base_pos = []
-        motion_base_pos_delta = []
         motion_base_quat = []
         motion_base_lin_vel = []
         motion_base_ang_vel = []
@@ -165,7 +164,6 @@ class MotionLib:
                     motion_lengths.append(length)
 
                     motion_base_pos.append(base_pos)
-                    motion_base_pos_delta.append(base_pos_delta)
                     motion_base_quat.append(base_quat)
                     motion_base_lin_vel.append(base_lin_vel)
                     motion_base_ang_vel.append(base_ang_vel)
@@ -189,7 +187,6 @@ class MotionLib:
         self._motion_lengths = torch.tensor(motion_lengths, dtype=torch.float, device=self._device)
 
         self._motion_base_pos = torch.cat(motion_base_pos, dim=0)
-        self._motion_base_pos_delta = torch.stack(motion_base_pos_delta, dim=0)
         self._motion_base_quat = torch.cat(motion_base_quat, dim=0)
         motion_base_quat = torch.cat(motion_base_quat, dim=0)
         self._motion_base_quat = torch.cat(
@@ -286,8 +283,11 @@ class MotionLib:
         torch.Tensor,
         torch.Tensor,
     ]:
-        motion_loop_num = torch.floor(motion_times / self._motion_lengths[motion_ids])
-        motion_times -= motion_loop_num * self._motion_lengths[motion_ids]
+        assert motion_times.min() >= 0.0, "motion_times must be non-negative"
+        assert (motion_times <= self._motion_lengths[motion_ids]).all(), (
+            "motion_times must be less than motion length"
+        )
+
         frame_idx0, frame_idx1, blend = self._calc_frame_blend(motion_ids, motion_times)
 
         base_pos0 = self._motion_base_pos[frame_idx0]
@@ -309,7 +309,6 @@ class MotionLib:
 
         blend_unsqueeze = blend.unsqueeze(-1)
         base_pos = (1.0 - blend_unsqueeze) * base_pos0 + blend_unsqueeze * base_pos1
-        base_pos += motion_loop_num.unsqueeze(-1) * self._motion_base_pos_delta[motion_ids]
         base_quat = slerp(base_quat0, base_quat1, blend)
 
         dof_pos = (1.0 - blend_unsqueeze) * dof_pos0 + blend_unsqueeze * dof_pos1

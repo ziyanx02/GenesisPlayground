@@ -54,8 +54,9 @@ class LeggedRobotEnvArgs(EnvArgs):
 class WalkingEnvArgs(LeggedRobotEnvArgs):
     command_resample_time: float = 10.0
     commands_range: tuple[tuple[float, float], ...]
-    commands_clip: dict[str, float] = {}
-    stand_prob: float = 0.0
+    command_lin_vel_clip: float = 0.3
+    command_ang_vel_clip: float = 0.3
+    extra_stand_still_ratio: float = 0.0
 
 
 class MotionEnvArgs(LeggedRobotEnvArgs):
@@ -65,3 +66,5 @@ class MotionEnvArgs(LeggedRobotEnvArgs):
     terminate_after_base_height_error: float = 0.15
     terminate_after_base_rot_error: float = 0.3
     terminate_after_dof_pos_error: float = 8.0
+    reset_to_default_pose_ratio: float = 0.1
+    reset_to_motion_range_ratio: float = 0.9

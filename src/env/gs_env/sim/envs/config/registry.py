@@ -162,11 +162,6 @@ EnvArgsRegistry["g1_walk"] = WalkingEnvArgs(
         "right_elbow_link",
     ],
     command_resample_time=10.0,
-    commands_clip={
-        "lin_vel_x": 0.15,
-        "lin_vel_y": 0.15,
-        "ang_vel_z": 0.15,
-    },
     commands_range=(
         (-1.0, 1.0),  # Forward/Backward
         (0.0, 0.0),  # Left/Right
@@ -255,6 +250,7 @@ EnvArgsRegistry["g1_motion"] = MotionEnvArgs(
         # Privilleged
         "feet_contact_force",
     ],
+    reset_yaw_range=(-0.15, 0.15),
     terminate_after_collision_on=[
         "pelvis",
         "torso_link",
@@ -267,12 +263,12 @@ EnvArgsRegistry["g1_motion"] = MotionEnvArgs(
         "left_elbow_link",
         "right_elbow_link",
     ],
-    motion_file="assets/motion/twist_dataset.yaml",
     no_terminate_before_motion_time=1.0,
     terminate_after_base_pos_error=0.5,
     terminate_after_base_height_error=0.15,
     terminate_after_base_rot_error=0.3,
     terminate_after_dof_pos_error=8.0,
+    motion_file="assets/motion/twist_dataset.yaml",
 )
 
 
