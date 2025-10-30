@@ -139,7 +139,7 @@ class MotionEnv(LeggedRobotEnv):
 
         num_selected = int(self._args.reset_to_default_pose_ratio * len(envs_idx))
         if num_selected > 0:
-            local_idx = torch.randperm(len(envs_idx), device=self._device)[:num_selected]
+            local_idx = torch.randperm(len(envs_idx), device=envs_idx.device)[:num_selected]
             envs_selected = envs_idx[local_idx]
 
             # Set motion time to 0.0 by zeroing time_since_reset for selected
