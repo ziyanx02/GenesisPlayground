@@ -211,17 +211,17 @@ EnvArgsRegistry["g1_motion"] = MotionEnvArgs(
         # Proprioception
         "dof_pos",
         "dof_vel",
-        "base_euler",
+        # "base_euler",
         "base_ang_vel_local",
-        "base_rotation_6D",
+        # "base_rotation_6D",
         "projected_gravity",
         # Reference
         "ref_dof_pos",
         "ref_dof_vel",
-        "ref_base_euler",
+        # "ref_base_euler",
         "ref_base_lin_vel_local",
         "ref_base_ang_vel_local",
-        "ref_base_rotation_6D",
+        # "ref_base_rotation_6D",
     ],
     critic_obs_terms=[
         "last_action",
