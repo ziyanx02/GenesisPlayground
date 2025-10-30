@@ -14,7 +14,7 @@ import matplotlib
 matplotlib.use("Agg")  # Use non-interactive backend to prevent windows from showing
 import gs_env.sim.envs as gs_envs
 import torch
-from gs_agent.algos.config.registry import PPO_TELEOP_MLP
+from gs_agent.algos.config.registry import PPO_TELEOP_MLP, PPOArgs
 from gs_agent.algos.ppo import PPO
 from gs_agent.runners.config.registry import RUNNER_TELEOP_MLP
 from gs_agent.runners.onpolicy_runner import OnPolicyRunner
@@ -22,7 +22,8 @@ from gs_agent.utils.logger import configure as logger_configure
 from gs_agent.utils.policy_loader import load_latest_model
 from gs_agent.wrappers.gs_env_wrapper import GenesisEnvWrapper
 from gs_env.sim.envs.config.registry import EnvArgsRegistry
-from utils import apply_overrides_generic, config_to_yaml
+from gs_env.sim.envs.config.schema import MotionEnvArgs
+from utils import apply_overrides_generic, config_to_yaml, yaml_to_config
 
 
 def create_gs_env(
@@ -84,13 +85,37 @@ def evaluate_policy(
     show_viewer: bool = False,
     num_ckpt: int | None = None,
     device: str = "cuda",
-    env_args: Any = None,
-    algo_cfg: Any = None,
 ) -> None:
     """Evaluate the policy."""
     print("=" * 80)
     print("EVALUATION MODE: Disabling domain randomization, observation noise, and random push")
     print("=" * 80)
+
+    # Find the experiment directory without creating a new runner
+    log_pattern = f"logs/{exp_name}/*"
+    log_dirs = glob.glob(log_pattern)
+    if not log_dirs:
+        raise FileNotFoundError(f"No experiment directories found matching pattern: {log_pattern}")
+
+    log_dirs.sort(key=lambda x: os.path.getmtime(x), reverse=True)
+    exp_dir = log_dirs[0]
+    print(f"Loading policy from experiment: {exp_dir}")
+
+    # Load checkpoint - either specific one or latest
+    if num_ckpt is not None:
+        ckpt_path = Path(exp_dir) / "checkpoints" / f"checkpoint_{num_ckpt:04d}.pt"
+        if not ckpt_path.exists():
+            raise FileNotFoundError(f"Checkpoint {ckpt_path} not found")
+    else:
+        ckpt_path = load_latest_model(Path(exp_dir))
+        num_ckpt = int(ckpt_path.stem.split("_")[-1])
+
+    print(f"Loading checkpoint: {ckpt_path}")
+
+    print(f"Loading configs from experiment: {exp_dir}")
+
+    env_args = yaml_to_config(Path(exp_dir) / "configs" / "env_args.yaml", MotionEnvArgs)
+    algo_cfg = yaml_to_config(Path(exp_dir) / "configs" / "algo_cfg.yaml", PPOArgs)
 
     # Disable domain randomization, obs noise, and random push for evaluation
     # Create a copy of env_args with disabled randomization
@@ -116,27 +141,6 @@ def evaluate_policy(
         }
     )
     env_args = env_args.model_copy(update={"robot_args": robot_args})
-
-    # Find the experiment directory without creating a new runner
-    log_pattern = f"logs/{exp_name}/*"
-    log_dirs = glob.glob(log_pattern)
-    if not log_dirs:
-        raise FileNotFoundError(f"No experiment directories found matching pattern: {log_pattern}")
-
-    log_dirs.sort(key=lambda x: os.path.getmtime(x), reverse=True)
-    exp_dir = log_dirs[0]
-    print(f"Loading policy from experiment: {exp_dir}")
-
-    # Load checkpoint - either specific one or latest
-    if num_ckpt is not None:
-        ckpt_path = Path(exp_dir) / "checkpoints" / f"checkpoint_{num_ckpt:04d}.pt"
-        if not ckpt_path.exists():
-            raise FileNotFoundError(f"Checkpoint {ckpt_path} not found")
-    else:
-        ckpt_path = load_latest_model(Path(exp_dir))
-        num_ckpt = int(ckpt_path.stem.split("_")[-1])
-
-    print(f"Loading checkpoint: {ckpt_path}")
 
     # Create environment for evaluation
     env = create_gs_env(
@@ -234,6 +238,7 @@ def evaluate_policy(
                 # Get action from policy
                 with torch.no_grad():
                     action = inference_policy(obs)  # type: ignore[misc]
+                    action[1, :] = action[0, :]  # to reduce shaking of dummy env
 
                 # Step environment
                 env.apply_action(action)
@@ -487,8 +492,6 @@ def main(
             show_viewer=show_viewer,
             num_ckpt=num_ckpt,
             device=device,
-            env_args=env_args,
-            algo_cfg=algo_cfg,
         )
     elif view:
         view_motion(env_args, show_viewer=show_viewer)

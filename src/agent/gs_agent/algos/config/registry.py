@@ -96,6 +96,7 @@ PPO_WALKING_MLP = PPOArgs(
     gamma=0.99,
     gae_lambda=0.95,
     clip_ratio=0.2,
+    use_clipped_value_loss=True,
     value_loss_coef=1.0,
     entropy_coef=0.003,
     max_grad_norm=1.0,

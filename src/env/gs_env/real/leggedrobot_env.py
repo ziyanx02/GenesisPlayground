@@ -7,7 +7,6 @@ from gs_env.common.bases.base_robot import BaseGymRobot
 from gs_env.real.unitree.utils.low_state_controller import LowStateCmdHandler
 from gs_env.real.unitree.utils.low_state_handler import LowStateMsgHandler
 from gs_env.sim.envs.config.schema import LeggedRobotEnvArgs
-from gs_env.sim.robots.config.schema import HumanoidRobotArgs
 
 _DEFAULT_DEVICE = torch.device("cpu")
 
@@ -22,9 +21,6 @@ class UnitreeLeggedEnv(BaseGymRobot):
     ) -> None:
         super().__init__()
         self._args = args
-        assert isinstance(args.robot_args, HumanoidRobotArgs), (
-            "args.robot_args must be a LowStateCmdHandlerArgs"
-        )
         if interactive:
             self._robot = LowStateCmdHandler(args.robot_args)
             self._robot.init()
@@ -98,8 +94,13 @@ class UnitreeLeggedEnv(BaseGymRobot):
         )
         return torch.tensor(projected_gravity, device=self._device, dtype=torch.float32)[None, :]
 
+    # @property
+    # def base_ang_vel(self) -> torch.Tensor:
+    #     return torch.tensor(self.robot.ang_vel, device=self._device, dtype=torch.float32)[None, :]
+    # SHOULD BE GLOBAL ANGULAR VELOCITY, NOT IMPLEMENTED YET
+
     @property
-    def base_ang_vel(self) -> torch.Tensor:
+    def base_ang_vel_local(self) -> torch.Tensor:
         return torch.tensor(self.robot.ang_vel, device=self._device, dtype=torch.float32)[None, :]
 
     @property

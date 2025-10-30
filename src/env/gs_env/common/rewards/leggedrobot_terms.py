@@ -276,3 +276,38 @@ class FeetContactForceLimitPenalty(RewardTerm):
     def _compute(self, feet_contact_force: torch.Tensor) -> torch.Tensor:  # type: ignore
         out_of_limits = (feet_contact_force - self.contact_force_limit).clip(min=0.0).square()
         return -torch.sum(out_of_limits, dim=1)
+
+
+class DofVelPenalty(RewardTerm):
+    """
+    Penalize the dof velocities.
+
+    Args:
+        dof_vel: dof_vel tensor of shape (B, D) where B is the batch size and D is the number of DoFs.
+    """
+
+    required_keys = ("dof_vel",)
+
+    def _compute(self, dof_vel: torch.Tensor) -> torch.Tensor:  # type: ignore
+        return -torch.sum(torch.square(dof_vel), dim=-1)
+
+
+class StandStillReward(RewardTerm):
+    """
+    Reward standing still by low joint torques.
+
+    Args:
+        default_dof_pos: default_dof_pos tensor of shape (B, D) where B is the batch size and D is the number of DoFs.
+        dof_pos: dof_pos tensor of shape (B, D) where B is the batch size and D is the number of DoFs.
+        commands: Commands tensor of shape (B, 3) where B is the batch size.
+    """
+
+    required_keys = ("default_dof_pos", "dof_pos", "commands")
+
+    def _compute(
+        self, default_dof_pos: torch.Tensor, dof_pos: torch.Tensor, commands: torch.Tensor
+    ) -> torch.Tensor:  # type: ignore
+        dof_error = torch.norm(dof_pos - default_dof_pos, dim=1)
+        rew = torch.exp(-dof_error * 2)
+        rew[commands.norm(dim=1) > 0.1] = 0.0
+        return rew

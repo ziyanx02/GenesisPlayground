@@ -58,6 +58,7 @@ class PPOArgs(BaseModel):
     entropy_coef: NonNegativeFloat = 0.0
     max_grad_norm: PositiveFloat = 1.0
     target_kl: PositiveFloat = 0.02
+    use_clipped_value_loss: bool = False
 
     # Training
     num_epochs: NonNegativeInt = 10

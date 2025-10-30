@@ -9,6 +9,7 @@ from .leggedrobot_terms import (
     AngVelZReward,  # noqa
     BaseHeightPenalty,
     DofPosLimitPenalty,  # noqa
+    DofVelPenalty,  # noqa
     FeetAirTimePenalty,  # noqa
     FeetAirTimeReward,  # noqa
     FeetContactForceLimitPenalty,
@@ -19,6 +20,7 @@ from .leggedrobot_terms import (
     OrientationPenalty,  # noqa
     StandStillActionRatePenalty,  # noqa
     StandStillFeetContactPenalty,  # noqa
+    StandStillReward,  # noqa
     TorquePenalty,  # noqa
 )
 from .reward_terms import RewardTerm

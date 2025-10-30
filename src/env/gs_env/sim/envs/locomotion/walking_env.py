@@ -23,6 +23,7 @@ class WalkingEnv(LeggedRobotEnv):
         show_viewer: bool = False,
         device: torch.device = _DEFAULT_DEVICE,
         eval_mode: bool = False,
+        debug: bool = False,
     ) -> None:
         # Initialize base legged-robot environment
         self._args = args
@@ -32,6 +33,7 @@ class WalkingEnv(LeggedRobotEnv):
             show_viewer=show_viewer,
             device=device,
             eval_mode=eval_mode,
+            debug=debug,
         )
 
     def _init(self) -> None:
@@ -135,3 +137,13 @@ class WalkingEnv(LeggedRobotEnv):
                 * (self.commands_range[i][1] - self.commands_range[i][0])
                 + self.commands_range[i][0]
             )
+        self.commands[envs_idx, :2] *= (
+            torch.norm(self.commands[envs_idx, :2], dim=-1) > self._args.command_lin_vel_clip
+        )
+        self.commands[envs_idx, 2] *= (
+            torch.abs(self.commands[envs_idx, 2]) > self._args.command_ang_vel_clip
+        )
+        if_stand_still = (
+            torch.rand((len(envs_idx), 1), device=self.device) < self._args.extra_stand_still_ratio
+        )
+        self.commands[envs_idx] *= ~if_stand_still

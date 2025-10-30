@@ -38,6 +38,7 @@ class LeggedRobotEnv(BaseEnv):
         show_viewer: bool = False,
         device: torch.device = _DEFAULT_DEVICE,
         eval_mode: bool = False,
+        debug: bool = False,
     ) -> None:
         super().__init__(device=device)
         self._num_envs = num_envs
@@ -46,6 +47,7 @@ class LeggedRobotEnv(BaseEnv):
         self._refresh_visualizer = False if platform.system() == "Darwin" else True
         self._args = args
         self._eval_mode = eval_mode
+        self.debug = debug
 
         if not gs._initialized:  # noqa: SLF001
             gs.init(performance_mode=True, backend=getattr(gs.constants.backend, device.type))
@@ -341,6 +343,8 @@ class LeggedRobotEnv(BaseEnv):
         self.time_since_random_push += self._scene.scene.dt
 
     def update_history(self) -> None:
+        if self.debug:
+            self._draw_debug_vis()
         # save for reward computation
         self.last_last_action = self.last_action.clone()
         self.last_action = self._action.clone()
@@ -351,6 +355,16 @@ class LeggedRobotEnv(BaseEnv):
         if not self._eval_mode:
             self._random_push(envs_idx=push_env_ids)
         self.time_since_random_push[push_env_ids] = 0.0
+
+    def _draw_debug_vis(self) -> None:
+        """Draws visualizations for dubugging (slows down simulation a lot).
+        Default behaviour: draws height measurement points
+        """
+        self.scene.clear_debug_objects()
+        solver = self.scene.rigid_solver
+        com = solver.get_links_root_COM(links_idx=self._robot.body_link_idx).squeeze(0).squeeze(0)
+
+        self.scene.draw_debug_sphere(pos=com, radius=0.05, color=(0, 0, 1, 0.7))
 
     def get_extra_infos(self) -> dict[str, Any]:
         self.update_buffers()
@@ -545,6 +559,7 @@ class LeggedRobotEnv(BaseEnv):
     def batched_global_to_local(
         base_pos: torch.Tensor, base_quat: torch.Tensor, global_vec: torch.Tensor
     ) -> torch.Tensor:
+        # TODO: wrong implementation
         assert base_pos.shape[0] == base_quat.shape[0] == global_vec.shape[0]
         global_vec_shape = global_vec.shape
         global_vec = global_vec.reshape(global_vec_shape[0], -1, global_vec_shape[-1])

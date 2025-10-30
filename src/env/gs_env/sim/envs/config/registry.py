@@ -87,16 +87,21 @@ EnvArgsRegistry["g1_walk"] = WalkingEnvArgs(
         ### Pose Tracking ###
         "OrientationPenalty": 100.0,
         ### Regularization ###
-        "TorquePenalty": 0.00001,
+        "TorquePenalty": 0.0005,
         "ActionRatePenalty": 0.3,
-        "DofPosLimitPenalty": 10.0,
-        # "G1BaseHeightPenalty": 30.0,
+        "DofPosLimitPenalty": 100.0,
+        "DofVelPenalty": 0.05,
+        "G1BaseHeightPenalty": 100.0,
         "ActionLimitPenalty": 0.1,
         ### Motion Constraints ###
         "AnkleTorquePenalty": 0.001,
-        "HipYawPenalty": 10.0,
+        "HipYawPenalty": 100.0,
         "HipRollPenalty": 100.0,
-        # "UpperBodyDofPenalty": 3.0,
+        # "HipYawVelPenalty": 0.05,
+        # "HipRollVelPenalty": 0.05,
+        # "HipTorquePenalty": 0.001,
+        # "HipPositionPenalty": 10.0,
+        "UpperBodyDofPenalty": 1,
         "UpperBodyActionPenalty": 0.5,
         "WaistDofPenalty": 300.0,
         # "FeetAirTimeReward": 200.0,
@@ -105,13 +110,14 @@ EnvArgsRegistry["g1_walk"] = WalkingEnvArgs(
         "G1FeetContactForcePenalty": 30.0,
         "FeetZVelocityPenalty": 30.0,
         "FeetOrientationPenalty": 30.0,
-        "StandStillFeetContactPenalty": 3e-4,
-        "StandStillActionRatePenalty": 1.0,
+        "StandStillFeetContactPenalty": 1.0e-05,
+        "StandStillActionRatePenalty": 0.1,
+        "StandStillReward": 20.0,
         # "StandStillAnkleTorquePenalty": 0.01,
         "G1FeetContactForceLimitPenalty": 1e-4,
     },
     img_resolution=(480, 270),
-    action_latency=1,
+    action_latency=0,
     obs_history_len=1,
     obs_scales={
         "dof_vel": 0.1,
@@ -120,7 +126,7 @@ EnvArgsRegistry["g1_walk"] = WalkingEnvArgs(
     },
     obs_noises={
         "dof_pos": 0.01,
-        "dof_vel": 0.2,
+        "dof_vel": 0.02,
         "projected_gravity": 0.05,
         "base_ang_vel": 0.2,
     },
@@ -243,6 +249,7 @@ EnvArgsRegistry["g1_motion"] = MotionEnvArgs(
         # Privilleged
         "feet_contact_force",
     ],
+    reset_yaw_range=(-0.15, 0.15),
     terminate_after_collision_on=[
         "pelvis",
         "torso_link",
@@ -255,6 +262,11 @@ EnvArgsRegistry["g1_motion"] = MotionEnvArgs(
         "left_elbow_link",
         "right_elbow_link",
     ],
+    no_terminate_before_motion_time=1.0,
+    terminate_after_base_pos_error=0.5,
+    terminate_after_base_height_error=0.15,
+    terminate_after_base_rot_error=0.3,
+    terminate_after_dof_pos_error=8.0,
     motion_file="assets/motion/twist_dataset.yaml",
 )
 
