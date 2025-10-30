@@ -246,7 +246,7 @@ def main(args: argparse.Namespace) -> None:
     opt2 = torch.optim.Adam(
         [qpos_offset] + [v for d in opt_offset.values() for v in d.values()], lr=0.001
     )
-    loss_history = []
+    rms_R_history, rms_T_history = [], []
     for step in tqdm(range(2000)):
         opt = opt1 if step < 1000 else opt2
         opt.zero_grad()
@@ -311,19 +311,21 @@ def main(args: argparse.Namespace) -> None:
                 e_offset_T_inv,
             )  # expected mocap end link pose
 
-            R_diff = e2_rot - e_mocap_rot  # Samples x 3 x 3
-            T_diff = e2_pos - e_mocap_pos  # Samples x 3
+            e2_quat = torch_R_to_quat(e2_rot)  # Samples x 4
+            e_mocap_quat = torch_R_to_quat(e_mocap_rot)  # Samples x 4
+            R_diff = 1.0 - torch.sum(e2_quat * e_mocap_quat, dim=-1) ** 2  # Samples
+            T_diff = torch.sum(torch.square(e2_pos - e_mocap_pos), dim=-1)  # Samples
 
-            total_loss += torch.sum(torch.square(R_diff)) / Samples * G1_R_WEIGHT
-            total_loss += torch.sum(torch.square(T_diff)) / Samples * (1 - G1_R_WEIGHT)
+            total_loss += torch.mean(R_diff) * G1_R_WEIGHT
+            total_loss += torch.mean(T_diff) * (1 - G1_R_WEIGHT)
 
-            rms_R = torch.sqrt(torch.mean(R_diff**2))
-            rms_T = torch.sqrt(torch.mean(T_diff**2))
+            rms_R = torch.mean(R_diff)
+            rms_T = torch.sqrt(torch.mean(T_diff))
             rms_Rs.append(rms_R.item())
             rms_Ts.append(rms_T.item())
 
-        mean_rms = np.mean(rms_Rs) * G1_R_WEIGHT + np.mean(rms_Ts) * (1 - G1_R_WEIGHT)
-        loss_history.append(mean_rms)
+        rms_R_history.append(np.mean(rms_Rs))
+        rms_T_history.append(np.mean(rms_Ts))
         total_loss += 0.05 * torch.sum(torch.square(qpos_offset))
         total_loss.backward()
 
@@ -354,12 +356,14 @@ def main(args: argparse.Namespace) -> None:
     print(f"[INFO] Robot calibration offsets saved to {save_path_robot}.")
 
     plt.figure(figsize=(6, 4))
-    plt.plot(loss_history)
+    plt.plot(rms_R_history, label="Rotation Error")
+    plt.plot(rms_T_history, label="Translation Error")
     plt.xlabel("Iteration")
     plt.ylabel("Total Loss")
     plt.title("Calibration Loss Curve")
     plt.grid(True)
     plt.tight_layout()
+    plt.legend()
     plt.show()
 
 
