@@ -336,46 +336,53 @@ EnvArgsRegistry["wuji_inhand_rotation"] = ManipulationEnvArgs(
     reward_args={
         ### Main Task Rewards (Penspin-style) ###
         "RotateRewardClipped": {
-            "scale": 50.0,  # rotate_reward_scale from penspin
-            "angvel_clip_min": -0.3,  # angvelClipMin from penspin
-            "angvel_clip_max": 0.3,  # angvelClipMax from penspin
+            "scale": 100.0,  # rotate_reward_scale from penspin
+            "angvel_scale_factor": 10.0,  # New scaling factor for angular velocity
+            "angvel_clip_min": -3.14,  # angvelClipMin from penspin
+            "angvel_clip_max": 3.14,  # angvelClipMax from penspin
         },
-        "CubeOnHandReward": {
-            "scale": 10.0,  # Strong baseline reward for maintaining grasp
-            "stay_center": [0.0, 0.01, 0.15],
-            "height_threshold": 0.0,
-            "xy_threshold": 0.02
-        },
-        "RotatePenaltyThreshold": {
-            "scale": 3.0,  # rotate_penalty_scale from penspin (0.3)
-            "angvel_penalty_threshold": 0.3,  # angvelPenaltyThres from penspin
-        },
+        # "CubeOnHandReward": {
+        #     "scale": 10.0,  # Strong baseline reward for maintaining grasp
+        #     "stay_center": [0.0, 0.01, 0.15],
+        #     "height_threshold": 0.0,
+        #     "xy_threshold": 0.02
+        # },
+        # "RotatePenaltyThreshold": {
+        #     "scale": 3.0,  # rotate_penalty_scale from penspin (0.3)
+        #     "angvel_penalty_threshold": 0.3,  # angvelPenaltyThres from penspin
+        # },
         ### Regularization Penalties ###
         "ObjectLinVelPenalty": {
-            "scale": 0.003,  # obj_linvel_penalty_scale from penspin (0.3)
+            "scale": 5.0,  # obj_linvel_penalty_scale from penspin (0.3)
         },
-        "PoseDiffPenalty": {
-            "scale": 10.0,  # pose_diff_penalty_scale from penspin (0.1)
-        },
+        # "PoseDiffPenalty": {
+        #     "scale": 10.0,  # pose_diff_penalty_scale from penspin (0.1)
+        # },
         "TorquePenalty": {
-            "scale": 0.1,  # torque_penalty_scale from penspin (0.1)
+            "scale": 0.05,  # torque_penalty_scale from penspin (0.1)
         },
         "WorkPenalty": {
-            "scale": 0.001,  # work_penalty_scale from penspin (1.0)
+            "scale": 0.0005,  # work_penalty_scale from penspin (1.0)
         },
-        "PositionPenalty": {
-            "scale": 1000.0,  # position_penalty_scale from penspin (0.1)
-            "target_x": 0.0,  # target position from penspin (line 551-552)
-            "target_y": 0.0,
-            "target_z": 0.19,  # Adjusted for WUJI hand height (penspin uses reset_z_threshold + 0.01)
-        },
+        # "PositionPenalty": {
+        #     "scale": 1000.0,  # position_penalty_scale from penspin (0.1)
+        #     "target_x": 0.0,  # target position from penspin (line 551-552)
+        #     "target_y": 0.0,
+        #     "target_z": 0.19,  # Adjusted for WUJI hand height (penspin uses reset_z_threshold + 0.01)
+        # },
          "FingertipCubeProximityPenaltySquared": {
             "scale": 50.0,
         },
-        "FingertipCubeProximityReward": {
-            "scale": 5.0,
-            "threshold": 0.05,  # 5cm proximity threshold
-        },
+        # "FingertipCubeProximityReward": {
+        #     "scale": 5.0,
+        #     "threshold": 0.05,  # 5cm proximity threshold
+        # },
+        "EarlyTerminationPenalty": {
+          "scale": 5000.0,  # Large one-time penalty at termination
+          "stay_center": [0.0, 0.0, 0.15],
+          "height_threshold": 0.0,
+          "xy_threshold": 0.15,
+      },
     },
     cube_args={
         "size": 0.05,

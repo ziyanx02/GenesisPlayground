@@ -274,11 +274,13 @@ class RotateRewardClipped(RewardTerm):
     def __init__(
         self,
         scale: float = 1.0,
+        angvel_scale_factor: float = 1.0,
         angvel_clip_min: float = -4.0,
         angvel_clip_max: float = 4.0,
         name: str | None = None,
     ):
         super().__init__(scale, name)
+        self.angvel_scale_factor = angvel_scale_factor
         self.angvel_clip_min = angvel_clip_min
         self.angvel_clip_max = angvel_clip_max
 
@@ -286,7 +288,7 @@ class RotateRewardClipped(RewardTerm):
         # Compute dot product between angular velocity and rotation axis
         vec_dot = torch.sum(cube_ang_vel * rot_axis, dim=-1)
         # Clip the reward
-        rotate_reward = torch.clamp(vec_dot, min=self.angvel_clip_min, max=self.angvel_clip_max)
+        rotate_reward = torch.clamp(vec_dot * self.angvel_scale_factor, min=self.angvel_clip_min, max=self.angvel_clip_max)
         return rotate_reward
 
 
@@ -597,3 +599,55 @@ class CubeOnHandReward(RewardTerm):
         on_hand = height_ok * xy_ok
 
         return on_hand  # Returns 1.0 when on hand, 0.0 when dropped
+
+
+class EarlyTerminationPenalty(RewardTerm):
+    """
+    Penalty applied when episode terminates early (cube dropped or too far).
+    Provides a one-time large negative reward at termination to discourage dropping.
+
+    This is computed based on whether the cube violates termination conditions,
+    giving a strong signal to avoid those states.
+
+    Args:
+        cube_pos: Cube position tensor of shape (B, 3).
+    """
+
+    required_keys = ("cube_pos",)
+
+    def __init__(
+        self,
+        scale: float = 1.0,
+        stay_center: list[float] = [0.0, 0.0, 0.15],
+        height_threshold: float = -0.05,
+        xy_threshold: float = 0.15,
+        name: str | None = None
+    ):
+        """
+        Args:
+            scale: Penalty scale factor (use negative value for penalty).
+            stay_center: Center position to compare against (typically hand position).
+            height_threshold: Minimum height above center.
+            xy_threshold: Maximum XY distance from center.
+        """
+        super().__init__(scale, name)
+        self.stay_center = stay_center
+        self.height_threshold = height_threshold
+        self.xy_threshold = xy_threshold
+
+    def _compute(self, cube_pos: torch.Tensor) -> torch.Tensor:  # type: ignore
+        # Convert stay_center to tensor on the same device as cube_pos
+        stay_center_tensor = torch.tensor(self.stay_center, device=cube_pos.device).unsqueeze(0)
+
+        # Check if cube is dropped (height below threshold)
+        cube_height_above_center = cube_pos[:, 2] - stay_center_tensor[:, 2]
+        is_dropped = (cube_height_above_center < self.height_threshold).float()
+
+        # Check if cube is too far in XY
+        cube_xy_dist = torch.norm(cube_pos[:, :2] - stay_center_tensor[:, :2], dim=-1)
+        is_too_far = (cube_xy_dist > self.xy_threshold).float()
+
+        # Penalty if either condition is violated (will be multiplied by negative scale)
+        terminated = torch.clamp(is_dropped + is_too_far, 0.0, 1.0)
+
+        return -terminated  # Returns -1.0 when terminated, 0.0 when safe

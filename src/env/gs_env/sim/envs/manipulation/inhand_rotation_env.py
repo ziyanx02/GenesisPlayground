@@ -259,7 +259,7 @@ class InHandRotationEnv(BaseEnv):
 
         # Terminate if cube falls below threshold relative to hand palm
         cube_height_above_hand = self.cube_pos[:, 2] - self.hand_palm_pos[:, 2]
-        cube_dropped = cube_height_above_hand < -0.05  # More than 5cm below hand palm
+        cube_dropped = cube_height_above_hand < -0.0  # More than 0cm below hand palm
         reset_buf |= cube_dropped
 
         # Terminate if cube moves too far from hand in XY
@@ -419,43 +419,43 @@ class InHandRotationEnv(BaseEnv):
         pass
 
     def get_reward(self) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
-        # """Compute rewards using additive composition (penspin-style)."""
-        # reward_total = torch.zeros(self.num_envs, device=self._device)
-        # reward_dict = {}
-
-        # # Prepare state dict for reward functions
-        # state_dict = {key: getattr(self, key) for key in self._reward_required_keys}
-
-        # # Compute all configured rewards and sum them
-        # # Each reward term already has its scale applied in the RewardTerm class
-        # for key, func in self._reward_functions.items():
-        #     reward = func(state_dict)
-        #     reward_total += reward
-        #     reward_dict[f"{key}"] = reward.clone()
-
-        # reward_dict["Total"] = reward_total
-
-        # return reward_total, reward_dict
-
+        """Compute rewards using additive composition (penspin-style)."""
         reward_total = torch.zeros(self.num_envs, device=self._device)
-        reward_total_pos = torch.zeros(self.num_envs, device=self._device)
-        reward_total_neg = torch.zeros(self.num_envs, device=self._device)
         reward_dict = {}
 
+        # Prepare state dict for reward functions
         state_dict = {key: getattr(self, key) for key in self._reward_required_keys}
+
+        # Compute all configured rewards and sum them
+        # Each reward term already has its scale applied in the RewardTerm class
         for key, func in self._reward_functions.items():
             reward = func(state_dict)
-            if reward.sum() >= 0:
-                reward_total_pos += reward
-            else:
-                reward_total_neg += reward
+            reward_total += reward
             reward_dict[f"{key}"] = reward.clone()
-        reward_total = reward_total_pos * torch.exp(reward_total_neg)
+
         reward_dict["Total"] = reward_total
-        reward_dict["TotalPositive"] = reward_total_pos
-        reward_dict["TotalNegative"] = reward_total_neg
 
         return reward_total, reward_dict
+
+        # reward_total = torch.zeros(self.num_envs, device=self._device)
+        # reward_total_pos = torch.zeros(self.num_envs, device=self._device)
+        # reward_total_neg = torch.zeros(self.num_envs, device=self._device)
+        # reward_dict = {}
+
+        # state_dict = {key: getattr(self, key) for key in self._reward_required_keys}
+        # for key, func in self._reward_functions.items():
+        #     reward = func(state_dict)
+        #     if reward.sum() >= 0:
+        #         reward_total_pos += reward
+        #     else:
+        #         reward_total_neg += reward
+        #     reward_dict[f"{key}"] = reward.clone()
+        # reward_total = reward_total_pos * torch.exp(reward_total_neg)
+        # reward_dict["Total"] = reward_total
+        # reward_dict["TotalPositive"] = reward_total_pos
+        # reward_dict["TotalNegative"] = reward_total_neg
+
+        # return reward_total, reward_dict
 
     def get_extra_infos(self) -> dict[str, Any]:
         self.update_buffers()
