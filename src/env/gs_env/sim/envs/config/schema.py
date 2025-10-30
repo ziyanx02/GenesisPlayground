@@ -33,7 +33,7 @@ class EnvArgs(BaseModel):
     objects_args: list[ObjectArgs]
     sensors_args: list[SensorArgs]
     reward_term: str = "reward"
-    reward_args: dict[str, float] | dict[str, dict[str, float]]
+    reward_args: dict[str, float] | dict[str, dict[str, float | tuple[float, float, float]]]
     img_resolution: tuple[int, int]
 
 
