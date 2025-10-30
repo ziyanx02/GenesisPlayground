@@ -217,15 +217,33 @@ class MotionEnv(LeggedRobotEnv):
         motion_end_mask = self.motion_times + self.dt > self._motion_lengths
         reset_buf |= motion_end_mask
 
+        # Only enable error-based termination after a certain motion time, if specified
         terminate_by_error = self.motion_times > self._args.no_terminate_before_motion_time
         base_pos_error = torch.norm(self.base_pos - self.ref_base_pos, dim=-1)
         base_height_error = torch.abs(self.base_height - self.ref_base_height)
         base_quat_error = quat_error_magnitude(self.base_quat, self.ref_base_quat)
         dof_pos_error = torch.sum(torch.abs(self.dof_pos - self.ref_dof_pos), dim=-1)
-        base_pos_mask = base_pos_error > self._args.terminate_after_base_pos_error
-        base_height_mask = base_height_error > self._args.terminate_after_base_height_error
-        base_quat_mask = base_quat_error > self._args.terminate_after_base_rot_error
-        dof_pos_mask = dof_pos_error > self._args.terminate_after_dof_pos_error
+        # When thresholds are None, ignore the corresponding term
+        base_pos_mask = (
+            torch.zeros_like(base_pos_error, dtype=torch.bool)
+            if self._args.terminate_after_base_pos_error is None
+            else base_pos_error > self._args.terminate_after_base_pos_error
+        )
+        base_height_mask = (
+            torch.zeros_like(base_height_error, dtype=torch.bool)
+            if self._args.terminate_after_base_height_error is None
+            else base_height_error > self._args.terminate_after_base_height_error
+        )
+        base_quat_mask = (
+            torch.zeros_like(base_quat_error, dtype=torch.bool)
+            if self._args.terminate_after_base_rot_error is None
+            else base_quat_error > self._args.terminate_after_base_rot_error
+        )
+        dof_pos_mask = (
+            torch.zeros_like(dof_pos_error, dtype=torch.bool)
+            if self._args.terminate_after_dof_pos_error is None
+            else dof_pos_error > self._args.terminate_after_dof_pos_error
+        )
         terminate_by_error &= base_pos_mask | base_height_mask | base_quat_mask | dof_pos_mask
         if not self._eval_mode:
             reset_buf |= terminate_by_error
