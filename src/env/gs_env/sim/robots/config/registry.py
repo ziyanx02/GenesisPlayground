@@ -625,7 +625,7 @@ RobotArgsRegistry["wuji_hand"] = ManipulatorRobotArgs(
     default_arm_dof={},  # No arm joints - hand is fixed
     default_gripper_dof=WUJI_default_dof_pos,  # All 20 finger joints
     soft_dof_pos_range=0.95,  # Use 95% of joint range to avoid hitting limits
-    action_scale=0.03,  # Scale factor for delta actions (10cm/rad per action unit)
+    action_scale=0.1,  # Scale factor for delta actions (10cm/rad per action unit)
     decimation=4,  # Run 4 physics steps per action (50Hz control @ 200Hz sim = 4)
     dof_kp=WUJI_kp_dict,
     dof_kd=WUJI_kd_dict,
