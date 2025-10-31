@@ -35,6 +35,7 @@ class ManipulatorBase(BaseGymRobot):
         material: gs.materials.Rigid = gs.materials.Rigid()
         morph: gs.morphs.URDF = gs.morphs.URDF(
             file=args.morph_args.file,
+            merge_fixed_links=True,
             pos=args.morph_args.pos,
             euler=args.morph_args.euler,
             fixed=True,
@@ -238,7 +239,10 @@ class ManipulatorBase(BaseGymRobot):
             self._num_envs,
             self._dof_dim,
         ), "Joint position action must match the number of joints."
-        self._robot_entity.control_dofs_position(position=act.joint_pos)
+        self._robot_entity.control_dofs_position(
+            position=act.joint_pos,
+            dofs_idx_local=self._all_dof_idx_local,
+        )
 
     def _apply_ee_pose_abs(self, act: EEPoseAbsAction) -> None:
         """
