@@ -530,10 +530,6 @@ class FingertipCubeProximityReward(RewardTerm):
       """
       required_keys = ("fingertip_pos", "cube_pos")
 
-      def __init__(self, scale: float = 1.0, threshold: float = 0.05, name: str | None = None):
-          super().__init__(scale, name)
-          self.threshold = threshold
-
       def _compute(self, fingertip_pos: torch.Tensor, cube_pos: torch.Tensor) -> torch.Tensor:
           batch_size = fingertip_pos.shape[0]
           num_fingertips = fingertip_pos.shape[1] // 3
@@ -544,11 +540,11 @@ class FingertipCubeProximityReward(RewardTerm):
           # Distance from each fingertip to cube
           distances = torch.norm(fingertip_pos_reshaped - cube_pos_expanded, dim=-1)
 
-          # Reward fingertips within threshold
-          in_contact = (distances < self.threshold).float()
-          num_in_contact = in_contact.sum(dim=-1)
+          distance_reward = torch.mean(
+                torch.clamp(0.1 / (4 * distances + 0.02), min=0.0, max=1.0), dim=-1
+          )
 
-          return num_in_contact  # Reward proportional to number of fingertips in contact
+          return distance_reward
 
 
 class CubeOnHandReward(RewardTerm):

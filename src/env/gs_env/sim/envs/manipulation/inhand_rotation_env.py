@@ -182,6 +182,8 @@ class InHandRotationEnv(BaseEnv):
         self.rot_axis[:, 2] = 1.0
         # Torques buffer (for torque penalties) - approximated from actions
         self.torques = torch.zeros((self.num_envs, self._action_dim), device=self._device)
+        # reference point for termination calculation
+        self.stay_center = torch.tensor(self._args.reward_args["EarlyTerminationPenalty"]["stay_center"], device=self._device).unsqueeze(0)
 
         # Rendering buffers
         self._rendered_images = []
@@ -258,13 +260,13 @@ class InHandRotationEnv(BaseEnv):
         reset_buf = self.get_truncated()
 
         # Terminate if cube falls below threshold relative to hand palm
-        cube_height_above_hand = self.cube_pos[:, 2] - self.hand_palm_pos[:, 2]
-        cube_dropped = cube_height_above_hand < -0.0  # More than 0cm below hand palm
+        cube_height_above_hand = self.cube_pos[:, 2] - self.stay_center[:, 2]
+        cube_dropped = cube_height_above_hand < self._args.reward_args["EarlyTerminationPenalty"]["height_threshold"]
         reset_buf |= cube_dropped
 
         # Terminate if cube moves too far from hand in XY
-        cube_xy_dist = torch.norm(self.cube_pos[:, :2] - self.hand_palm_pos[:, :2], dim=-1)
-        cube_too_far = cube_xy_dist > 0.15  # 15cm from hand center
+        cube_xy_dist = torch.norm(self.cube_pos[:, :2] - self.stay_center[:, :2], dim=-1)
+        cube_too_far = cube_xy_dist > self._args.reward_args["EarlyTerminationPenalty"]["xy_threshold"]
         reset_buf |= cube_too_far
 
         self.reset_buf[:] = reset_buf
