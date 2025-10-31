@@ -483,10 +483,10 @@ def transform_RT_by(
 ) -> tuple[np.typing.NDArray[np.float32], np.typing.NDArray[np.float32]]:
     """
     Apply the offset (R2, T2) to the pose (R1, T1).
-    R = R2 * R1
+    R = R1 * R2
     T = R1 * T2 + T1
     """
-    R_out = np.array(gu.transform_quat_by_quat(R1, R2))
+    R_out = np.array(gu.transform_quat_by_quat(R2, R1))
     T_out = np.array(gu.transform_by_quat(T2, R1) + T1)
     return R_out, T_out
 
@@ -499,9 +499,9 @@ def get_RT_between(
 ) -> tuple[np.typing.NDArray[np.float32], np.typing.NDArray[np.float32]]:
     """
     Get the offset from (R1, T1) to (R2, T2).
-    R = R2 * R1^T
-    T = R1^T * (T2 - T1)
+    R = R1^t * R2
+    T = R1^t * (T2 - T1)
     """
-    R_out = np.array(gu.transform_quat_by_quat(gu.inv_quat(R1), R2))
+    R_out = np.array(gu.transform_quat_by_quat(R2, gu.inv_quat(R1)))
     T_out = np.array(gu.transform_by_quat(T2 - T1, gu.inv_quat(R1)))
     return R_out, T_out

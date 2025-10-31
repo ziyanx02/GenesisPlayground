@@ -51,11 +51,11 @@ def torch_transform_RT_by(
     R1: torch.Tensor, T1: torch.Tensor, R2: torch.Tensor, T2: torch.Tensor
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """
-    Apply local transform (R2, T2) to pose (R1, T1)
-    R = R2 * R1
+    Apply local transform (R2, T2) in the frame of (R1, T1)
+    R = R1 * R2
     T = R1 * T2 + T1
     """
-    R_out = R2 @ R1
+    R_out = R1 @ R2
     T_out = (R1 @ T2.unsqueeze(-1)).squeeze(-1) + T1
     return R_out, T_out
 
@@ -65,10 +65,10 @@ def torch_get_RT_between(
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """
     Get local transform from (R1, T1) to (R2, T2)
-    R = R2 * R1^t
+    R = R1^t * R2
     T = R1^t * (T2 - T1)
     """
-    R_out = R2 @ R1.transpose(-1, -2)
+    R_out = R1.transpose(-1, -2) @ R2
     T_out = (R1.transpose(-1, -2) @ (T2 - T1).unsqueeze(-1)).squeeze(-1)
     return R_out, T_out
 
@@ -326,7 +326,7 @@ def main(args: argparse.Namespace) -> None:
 
         rms_R_history.append(np.mean(rms_Rs))
         rms_T_history.append(np.mean(rms_Ts))
-        total_loss += 0.05 * torch.sum(torch.square(qpos_offset))
+        total_loss += 0.0 * torch.sum(torch.square(qpos_offset))
         total_loss.backward()
 
         opt.step()
@@ -356,8 +356,8 @@ def main(args: argparse.Namespace) -> None:
     print(f"[INFO] Robot calibration offsets saved to {save_path_robot}.")
 
     plt.figure(figsize=(6, 4))
-    plt.plot(rms_R_history, label="Rotation Error")
-    plt.plot(rms_T_history, label="Translation Error")
+    plt.plot(rms_R_history[900:], label="Rotation Error")
+    plt.plot(rms_T_history[900:], label="Translation Error")
     plt.xlabel("Iteration")
     plt.ylabel("Total Loss")
     plt.title("Calibration Loss Curve")
