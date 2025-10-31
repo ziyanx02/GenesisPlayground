@@ -373,20 +373,19 @@ EnvArgsRegistry["wuji_inhand_rotation"] = ManipulationEnvArgs(
          "FingertipCubeProximityPenaltySquared": {
             "scale": 50.0,
         },
-        # "FingertipCubeProximityReward": {
-        #     "scale": 5.0,
-        #     "threshold": 0.05,  # 5cm proximity threshold
-        # },
+        "FingertipCubeProximityReward": {
+            "scale": 10.0,
+        },
         "EarlyTerminationPenalty": {
           "scale": 5000.0,  # Large one-time penalty at termination
           "stay_center": [0.0, 0.0, 0.15],
           "height_threshold": 0.0,
-          "xy_threshold": 0.15,
+          "xy_threshold": 0.06,
       },
     },
     cube_args={
-        "size": 0.05,
-        "position": (0.0, 0.0, 0.22),
+        "size": 0.04,
+        "position": (0.0, 0.0, 0.20),
     },
     img_resolution=(480, 480),
     action_latency=1,
