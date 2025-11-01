@@ -74,3 +74,8 @@ class ManipulationEnvArgs(EnvArgs):
     actor_obs_terms: list[str]
     critic_obs_terms: list[str]
     cube_args: dict[str, float | tuple[float, float, float]]
+    # Tactile sensor configuration
+    use_tactile: bool = False
+    tactile_grid_path: str | None = None
+    tactile_sensor_links: list[str] | None = None
+    tactile_kn: float = 2000.0

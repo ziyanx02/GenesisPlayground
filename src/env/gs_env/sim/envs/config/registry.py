@@ -333,6 +333,11 @@ EnvArgsRegistry["wuji_inhand_rotation"] = ManipulationEnvArgs(
     objects_args=[],  # Cube is created in environment
     sensors_args=[],
     reward_term="manipulation",
+    # Tactile sensor configuration
+    use_tactile=True,  # Set to True to enable tactile sensing
+    tactile_grid_path="assets/robot/wujihand-urdf/merged_tactile_grid.json",
+    tactile_sensor_links=None,  # None = use all links from grid file
+    tactile_kn=2000.0,
     reward_args={
         ### Main Task Rewards (Penspin-style) ###
         "RotateRewardClipped": {

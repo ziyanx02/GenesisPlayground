@@ -1,5 +1,7 @@
 """In-hand rotation environment for WUJI hand."""
 import importlib
+import json
+from pathlib import Path
 from typing import Any
 
 import genesis as gs
@@ -12,6 +14,7 @@ from gs_env.common.bases.base_env import BaseEnv
 from gs_env.common.utils.math_utils import quat_to_euler
 from gs_env.common.utils.misc_utils import get_space_dim
 from gs_env.sim.envs.config.schema import ManipulationEnvArgs
+from gs_env.sim.envs.manipulation.tactile_visualizer import TactileVisualizer
 from gs_env.sim.robots.manipulators import WUJIHand
 from gs_env.sim.scenes import FlatScene
 
@@ -88,11 +91,33 @@ class InHandRotationEnv(BaseEnv):
             GUI=False,
         )
 
+        # == setup tactile sensors ==
+        self._use_tactile = args.use_tactile
+        self._tactile_sensors = {}
+        self._tactile_points = {}
+        self._tactile_sensor_configs = {}
+        self._tactile_visualizer = None
+
+        if self._use_tactile:
+            self._setup_tactile_sensors(args)
+
         # == build the scene ==
         self._scene.build()
 
         # == initialize robot limits after scene is built ==
         self._robot.post_build_init(eval_mode=eval_mode)
+
+        # == setup tactile visualization if enabled ==
+        if self._use_tactile and show_viewer and eval_mode:
+            print(f"\n{'='*70}")
+            print(f"Initializing tactile visualization...")
+            print(f"{'='*70}")
+            self._tactile_visualizer = TactileVisualizer(
+                tactile_sensors=self._tactile_sensors,
+                tactile_points=self._tactile_points,
+                tactile_sensor_configs=self._tactile_sensor_configs,
+            )
+            print(f"✓ Tactile visualization ready")
 
         # == setup reward scalars and functions ==
         dt = self._scene.scene.dt
@@ -190,6 +215,18 @@ class InHandRotationEnv(BaseEnv):
         self._rendering = False
         self.camera_lookat = torch.tensor([0.0, 0.0, 0.2], device=self._device)
         self.camera_pos = torch.tensor([0.3, -0.3, 0.3], device=self._device)
+
+        # Tactile buffers (will be initialized after scene is built if tactile is enabled)
+        # Only store z-axis (normal) force component
+        if self._use_tactile:
+            self._total_tactile_points = sum(
+                config['num_points'] for config in self._tactile_sensor_configs.values()
+            )
+            self.tactile_forces_flat = torch.zeros((self.num_envs, self._total_tactile_points), device=self._device)
+            self._args.actor_obs_terms.append("tactile_forces_flat")
+            self._args.critic_obs_terms.append("tactile_forces_flat")
+        else:
+            self.tactile_forces_flat = torch.zeros((self.num_envs, 0), device=self._device)
 
         # Build observation spaces dynamically from args
         actor_obs_spaces = {}
@@ -312,6 +349,32 @@ class InHandRotationEnv(BaseEnv):
         self.dof_pos_history_flat[:] = self._dof_pos_buf[:, :, -self._action_history_len:].transpose(1, 2).reshape(
             self.num_envs, -1
         )
+
+        # Update tactile sensor data if enabled (only z-axis / normal force)
+        if self._use_tactile:
+            tactile_forces_list = []
+            for link_name in sorted(self._tactile_sensors.keys()):
+                sensor = self._tactile_sensors[link_name]
+                config = self._tactile_sensor_configs[link_name]
+
+                # Read sensor data (returns num_points * 3 forces)
+                force_field_full = sensor.read()
+                num_points = config['num_points']
+
+                # Reshape to (num_points, 3) to extract z-axis component
+                force_field_3d = force_field_full.reshape(self.num_envs, num_points, 3)
+
+                # Extract only z-axis (normal) force: shape (num_envs, num_points)
+                force_z = force_field_3d[..., 2]
+
+                tactile_forces_list.append(force_z)
+
+            # Concatenate all sensor readings: shape (num_envs, total_tactile_points)
+            self.tactile_forces_flat[:] = torch.cat(tactile_forces_list, dim=-1)
+
+            # Update visualization if enabled
+            if self._tactile_visualizer is not None:
+                self._tactile_visualizer.update()
 
     def get_observations(self) -> tuple[torch.Tensor, torch.Tensor]:
         """Get actor and critic observations."""
@@ -559,3 +622,83 @@ class InHandRotationEnv(BaseEnv):
     def eval(self) -> None:
         """Set environment to evaluation mode."""
         self._eval_mode = True
+
+    def close(self) -> None:
+        """Clean up resources."""
+        if self._tactile_visualizer is not None:
+            self._tactile_visualizer.close()
+            self._tactile_visualizer = None
+
+    def _setup_tactile_sensors(self, args: ManipulationEnvArgs) -> None:
+        """Setup tactile sensors from JSON grid file."""
+        if args.tactile_grid_path is None:
+            raise ValueError("tactile_grid_path must be specified when use_tactile=True")
+
+        tactile_grid_path = Path(args.tactile_grid_path)
+        if not tactile_grid_path.exists():
+            raise FileNotFoundError(f"Tactile grid file not found: {tactile_grid_path}")
+
+        print(f"\n{'='*70}")
+        print(f"Loading tactile grid from: {tactile_grid_path}")
+        print(f"{'='*70}")
+
+        with open(tactile_grid_path, 'r') as f:
+            tactile_data = json.load(f)
+
+        links_data = tactile_data['links']
+        sensor_link_names = list(links_data.keys())
+
+        print(f"Configuring tactile sensors for links: {sensor_link_names}")
+
+        # Validate sensor links and store tactile points
+        for link_name in sensor_link_names:
+            if link_name not in links_data:
+                raise ValueError(f"Link '{link_name}' not found in tactile grid JSON")
+
+            link_data = links_data[link_name]
+            points = link_data.get('points', [])
+
+            if not points:
+                raise ValueError(f"No tactile points found for link '{link_name}'")
+
+            # Store local positions
+            local_positions = np.array(points, dtype=np.float32)
+            self._tactile_points[link_name] = local_positions
+
+            print(f"  {link_name}: {len(local_positions)} tactile points")
+
+        # Add TactileFieldSensors
+        print(f"\n{'='*70}")
+        print(f"Adding TactileFieldSensors")
+        print(f"{'='*70}")
+
+        for link_name in sensor_link_names:
+            link_data = links_data[link_name]
+            link_idx_local = self.robot.get_link(link_name).idx_local
+            assert link_idx_local == link_data['link_idx_local'], f"Link index mismatch for {link_name}: {link_idx_local} vs {link_data['link_idx_local']}"
+            num_points = link_data['num_points']
+            local_positions = self._tactile_points[link_name]
+
+            print(f"\nSensor for {link_name}:")
+            print(f"  Link index (local): {link_idx_local}")
+            print(f"  Tactile points: {num_points}")
+
+            # Create TactileFieldSensor with custom tactile points
+            sensor = self._scene.scene.add_sensor(
+                gs.sensors.TactileField(
+                    entity_idx=self._robot._robot_entity.idx,
+                    link_idx_local=link_idx_local,
+                    indenter_entity_idx=self._cube.idx,
+                    indenter_link_idx_local=0,
+                    tactile_points_local=local_positions,
+                    kn=args.tactile_kn,
+                )
+            )
+
+            self._tactile_sensors[link_name] = sensor
+            self._tactile_sensor_configs[link_name] = {
+                'num_points': num_points,
+                'link_idx_local': link_idx_local,
+            }
+
+            print(f"  ✓ TactileFieldSensor added")
