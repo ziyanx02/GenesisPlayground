@@ -358,12 +358,9 @@ class SlowRotationPenalty(RewardTerm):
         # Project angular velocity onto rotation axis
         vec_dot = torch.sum(cube_ang_vel * rot_axis, dim=-1)
 
-        # Use absolute value to encourage rotation in either direction
-        angvel_magnitude = torch.abs(vec_dot)
-
         # Penalize when below threshold
         # Penalty increases as velocity gets slower
-        penalty = torch.clamp(self.min_angvel_threshold - angvel_magnitude, min=0.0)
+        penalty = torch.clamp(self.min_angvel_threshold - vec_dot, min=0.0)
 
         return -penalty
 
