@@ -108,7 +108,7 @@ class InHandRotationEnv(BaseEnv):
         self._robot.post_build_init(eval_mode=eval_mode)
 
         # == setup tactile visualization if enabled ==
-        if self._use_tactile and show_viewer and eval_mode:
+        if self._use_tactile and show_viewer and eval_mode and False:
             print(f"\n{'='*70}")
             print(f"Initializing tactile visualization...")
             print(f"{'='*70}")
