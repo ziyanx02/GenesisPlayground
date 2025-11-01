@@ -341,6 +341,10 @@ EnvArgsRegistry["wuji_inhand_rotation"] = ManipulationEnvArgs(
             "angvel_clip_min": -3.14,  # angvelClipMin from penspin
             "angvel_clip_max": 3.14,  # angvelClipMax from penspin
         },
+        "SlowRotationPenalty": {
+            "scale": 50.0,  # Penalty for rotating too slowly
+            "min_angvel_threshold": 0.1,  # Minimum acceptable angular velocity (rad/s)
+        },
         # "CubeOnHandReward": {
         #     "scale": 10.0,  # Strong baseline reward for maintaining grasp
         #     "stay_center": [0.0, 0.01, 0.15],

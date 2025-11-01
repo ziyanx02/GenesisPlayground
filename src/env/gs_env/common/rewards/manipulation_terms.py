@@ -324,6 +324,50 @@ class RotatePenaltyThreshold(RewardTerm):
         return -rotate_penalty
 
 
+class SlowRotationPenalty(RewardTerm):
+    """
+    Penalty for rotation velocity below a minimum threshold.
+    Encourages maintaining continuous rotation instead of holding still.
+
+    This is the opposite of RotatePenaltyThreshold - it penalizes velocities
+    that are TOO SLOW rather than too fast.
+
+    Args:
+        cube_ang_vel: Cube angular velocity tensor of shape (B, 3).
+        rot_axis: Rotation axis tensor of shape (B, 3).
+    """
+
+    required_keys = ("cube_ang_vel", "rot_axis")
+
+    def __init__(
+        self,
+        scale: float = 1.0,
+        min_angvel_threshold: float = 0.2,
+        name: str | None = None,
+    ):
+        """
+        Args:
+            scale: Penalty scale factor (should be positive, penalty is applied as negative).
+            min_angvel_threshold: Minimum acceptable angular velocity (rad/s).
+                                  Velocities below this will be penalized.
+        """
+        super().__init__(scale, name)
+        self.min_angvel_threshold = min_angvel_threshold
+
+    def _compute(self, cube_ang_vel: torch.Tensor, rot_axis: torch.Tensor) -> torch.Tensor:  # type: ignore
+        # Project angular velocity onto rotation axis
+        vec_dot = torch.sum(cube_ang_vel * rot_axis, dim=-1)
+
+        # Use absolute value to encourage rotation in either direction
+        angvel_magnitude = torch.abs(vec_dot)
+
+        # Penalize when below threshold
+        # Penalty increases as velocity gets slower
+        penalty = torch.clamp(self.min_angvel_threshold - angvel_magnitude, min=0.0)
+
+        return -penalty
+
+
 class ObjectLinVelPenalty(RewardTerm):
     """
     Penalty for object linear velocity (L1 norm).
