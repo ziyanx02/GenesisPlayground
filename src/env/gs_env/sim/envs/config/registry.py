@@ -400,8 +400,11 @@ EnvArgsRegistry["wuji_inhand_rotation"] = ManipulationEnvArgs(
     action_latency=1,
     obs_history_len=3,  # 3 timesteps of history
     obs_scales={
-        "hand_dof_vel": 0.1,
+        "hand_dof_vel": 0.8,
         "cube_ang_vel": 0.5,
+        "tactile_forces_flat": 8.0,
+        "cube_lin_vel": 10.0,
+        "cube_pos": 10.0,
     },
     obs_noises={
         "hand_dof_pos": 0.01,
