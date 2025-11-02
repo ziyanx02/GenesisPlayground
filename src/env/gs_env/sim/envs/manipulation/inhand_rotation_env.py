@@ -266,9 +266,9 @@ class InHandRotationEnv(BaseEnv):
         cube_init_pos = torch.tensor(self._args.cube_args["position"], device=self._device).unsqueeze(0).repeat(num_reset, 1)
 
         # Add small random offset if not in eval mode
-        # if not self._eval_mode:
-        cube_init_pos[:, :2] += (torch.rand((num_reset, 2), device=self._device) - 0.5) * 0.06
-        cube_init_pos[:, 2] += (torch.rand(num_reset, device=self._device) - 0.5) * 0.01
+        init_pos_noise = torch.rand((num_reset,), device=self._device)  # [0, 1]
+        cube_init_pos[:, 0] += (init_pos_noise - 0.5) * 0.06  # [-0.03, 0.03]
+        cube_init_pos[:, 1] += init_pos_noise * 0.04  # [0, 0.04]
 
         # Random initial orientation
         cube_init_quat = torch.zeros((num_reset, 4), device=self._device)
