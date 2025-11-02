@@ -446,19 +446,31 @@ class PositionPenalty(RewardTerm):
 
     required_keys = ("cube_pos",)
 
-    def __init__(self, scale: float = 1.0, target_x: float = 0.0, target_y: float = 0.0, target_z: float = 0.61, name: str | None = None):
+    def __init__(self, scale: float = 1.0, target_x: float | None = None, target_y: float | None = None, target_z: float | None = None, name: str | None = None):
         super().__init__(scale, name)
         self.target_x = target_x
         self.target_y = target_y
         self.target_z = target_z
 
     def _compute(self, cube_pos: torch.Tensor) -> torch.Tensor:  # type: ignore
-        position_penalty = (
-            (cube_pos[:, 0] - self.target_x) ** 2
-            + (cube_pos[:, 1] - self.target_y) ** 2
-            + (cube_pos[:, 2] - self.target_z) ** 2
-        )
-        return -position_penalty
+        # position_penalty = (
+        #     (cube_pos[:, 0] - self.target_x) ** 2
+        #     + (cube_pos[:, 1] - self.target_y) ** 2
+        #     + (cube_pos[:, 2] - self.target_z) ** 2
+        # )
+        if self.target_x is not None:
+            dx = (cube_pos[:, 0] - self.target_x) ** 2
+        else:
+            dx = 0.0
+        if self.target_y is not None:
+            dy = (cube_pos[:, 1] - self.target_y) ** 2
+        else:
+            dy = 0.0
+        if self.target_z is not None:
+            dz = (cube_pos[:, 2] - self.target_z) ** 2
+        else:
+            dz = 0.0
+        return -(dx + dy + dz)
 
 
 class FingerObjectDistancePenalty(RewardTerm):
