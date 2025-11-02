@@ -267,7 +267,7 @@ class InHandRotationEnv(BaseEnv):
 
         # Add small random offset if not in eval mode
         init_pos_noise = torch.rand((num_reset,), device=self._device)  # [0, 1]
-        cube_init_pos[:, 0] += (init_pos_noise - 0.5) * 0.06  # [-0.03, 0.03]
+        cube_init_pos[:, 0] += (init_pos_noise - 0.5) * 0.04  # [-0.02, 0.02]
         cube_init_pos[:, 1] += init_pos_noise * 0.04  # [0, 0.04]
 
         # Random initial orientation
