@@ -576,6 +576,29 @@ class FingertipCubeProximityPenaltySquared(RewardTerm):
         # Return negative penalty (closer = less penalty)
         return -avg_squared_distance
 
+
+class FingertipCubeMaxDistancePenalty(RewardTerm):
+    required_keys = ("fingertip_pos", "cube_pos")
+
+    def _compute(self, fingertip_pos: torch.Tensor, cube_pos: torch.Tensor) -> torch.Tensor:  # type: ignore
+        batch_size = fingertip_pos.shape[0]
+        num_fingertips = fingertip_pos.shape[1] // 3
+
+        # Reshape fingertip_pos to (B, N, 3)
+        fingertip_pos_reshaped = fingertip_pos.reshape(batch_size, num_fingertips, 3)
+
+        # Expand cube_pos to (B, 1, 3) for broadcasting
+        cube_pos_expanded = cube_pos.unsqueeze(1)
+
+        # Compute distance from each fingertip to cube center: (B, N)
+        distances = torch.sum(torch.abs(fingertip_pos_reshaped - cube_pos_expanded), dim=-1)
+
+        max_distance = torch.max(distances, dim=-1).values
+
+        # Return negative penalty (closer = less penalty)
+        return -max_distance
+
+
 class FingertipCubeProximityReward(RewardTerm):
       """
       Reward for fingertips being close to the cube.
