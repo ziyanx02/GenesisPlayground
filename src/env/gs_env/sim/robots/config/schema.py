@@ -73,6 +73,7 @@ class ManipulatorRobotArgs(BaseModel):
 
     material_args: RigidMaterialArgs
     morph_args: URDFMorphArgs | MJCFMorphArgs
+    dr_args: DomainRandomizationArgs
     visualize_contact: bool
     vis_mode: str
     ctrl_type: CtrlType
@@ -87,6 +88,7 @@ class ManipulatorRobotArgs(BaseModel):
     decimation: int = 4  # Number of simulation steps per action
     dof_kp: dict[str, float]
     dof_kd: dict[str, float]
+    dof_max_force: float
 
 
 class DomainRandomizationArgs(BaseModel):

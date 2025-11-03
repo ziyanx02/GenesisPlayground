@@ -91,7 +91,7 @@ def evaluate_policy(
 ) -> None:
     """Evaluate the policy."""
     print("=" * 80)
-    print("EVALUATION MODE: Disabling observation noise")
+    print("EVALUATION MODE: Disabling domain randomization and observation noise")
     print("=" * 80)
 
     # Disable observation noise for evaluation
@@ -100,6 +100,24 @@ def evaluate_policy(
             "obs_noises": {},  # Disable observation noise
         }
     )
+
+    # Disable domain randomization for evaluation
+    from gs_env.sim.robots.config.schema import DomainRandomizationArgs
+
+    robot_args = env_args.robot_args.model_copy(
+        update={
+            "dr_args": DomainRandomizationArgs(
+                kp_range=(1.0, 1.0),
+                kd_range=(1.0, 1.0),
+                motor_strength_range=(1.0, 1.0),
+                motor_offset_range=(0.0, 0.0),
+                friction_range=(1.0, 1.0),
+                mass_range=(0.0, 0.0),
+                com_displacement_range=(0.0, 0.0),
+            )
+        }
+    )
+    env_args = env_args.model_copy(update={"robot_args": robot_args})
 
     # Find the experiment directory without creating a new runner
     log_pattern = f"logs/{exp_name}/*"

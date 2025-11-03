@@ -129,6 +129,9 @@ class ManipulatorBase(BaseGymRobot):
 
     def post_build_init(self, eval_mode: bool = False) -> None:
         """Initialize limits and constraints after scene is built."""
+        # Store eval mode flag for later use
+        self._eval_mode = eval_mode
+
         # Get DOF indices for all joints
         all_dofs_idx_local = [
             self._robot_entity.get_joint(name).dofs_idx_local[0] for name in self._all_dof_names
@@ -138,6 +141,10 @@ class ManipulatorBase(BaseGymRobot):
             self._robot_entity.get_link(name).idx_local for name in self._args.gripper_link_names
         ]
         self._all_finger_links_idx_local = all_finger_links_idx_local
+
+        # Initialize domain randomization for control parameters
+        if not eval_mode:
+            self._init_domain_randomization()
 
         # Set up DOF position limits
         self._dof_pos_limits = torch.stack(
@@ -155,11 +162,48 @@ class ManipulatorBase(BaseGymRobot):
             self._dof_pos_limits[i, 1] = m + 0.5 * r * soft_range
 
         # Set up torque limits
+        self._robot_entity.set_dofs_force_range(
+            lower=np.array([-self._args.dof_max_force] * self._dof_dim),
+            upper=np.array([self._args.dof_max_force] * self._dof_dim),
+            dofs_idx_local=all_dofs_idx_local,
+        )
         self._torque_limits = self._robot_entity.get_dofs_force_range(all_dofs_idx_local)[1]
+
+    def _init_domain_randomization(self) -> None:
+        """Initialize domain randomization for all environments."""
+        envs_idx: torch.IntTensor = torch.arange(0, self._num_envs, device=self._device)  # type: ignore
+        self._randomize_controls(envs_idx)
+
+    def _randomize_controls(self, envs_idx: torch.IntTensor) -> None:
+        """Randomize control parameters (kp, kd, motor strength/offset)."""
+        # Randomize kp
+        min_kp, max_kp = self._args.dr_args.kp_range
+        ratios = torch.rand(len(envs_idx), self._dof_dim) * (max_kp - min_kp) + min_kp
+        self._batched_dof_kp[envs_idx] = ratios * self._dof_kp[None, :]
+
+        # Randomize kd
+        min_kd, max_kd = self._args.dr_args.kd_range
+        ratios = torch.rand(len(envs_idx), self._dof_dim) * (max_kd - min_kd) + min_kd
+        self._batched_dof_kd[envs_idx] = ratios * self._dof_kd[None, :]
+
+        # Randomize motor strength
+        min_strength, max_strength = self._args.dr_args.motor_strength_range
+        self._motor_strength[envs_idx] = (
+            torch.rand(len(envs_idx), self._dof_dim) * (max_strength - min_strength) + min_strength
+        )
+
+        # Randomize motor offset
+        min_offset, max_offset = self._args.dr_args.motor_offset_range
+        self._motor_offset[envs_idx] = (
+            torch.rand(len(envs_idx), self._dof_dim) * (max_offset - min_offset) + min_offset
+        )
 
     def reset(self, envs_idx: torch.IntTensor | None = None) -> None:
         if envs_idx is None or len(envs_idx) == 0:
             return
+        # Re-randomize control parameters on reset (only if not in eval mode)
+        if not self._eval_mode:
+            self._randomize_controls(envs_idx)
         self.go_home(envs_idx)
 
     def go_home(self, envs_idx: torch.IntTensor) -> None:
@@ -227,22 +271,40 @@ class ManipulatorBase(BaseGymRobot):
                 case CtrlType.DR_JOINT_POSITION:
                     raise RuntimeError("DR control not supported for manipulator.")
         self._dispatch[self._args.ctrl_type](action)
-        self._torque[:] = self._batched_dof_kp * (action.joint_pos - self._dof_pos + self._motor_offset) - self._batched_dof_kd * self._dof_vel
+        # self._torque[:] = self._batched_dof_kp * (action.joint_pos - self._dof_pos + self._motor_offset) - self._batched_dof_kd * self._dof_vel
         self._dof_pos[:] = self._robot_entity.get_dofs_position(self._all_dof_idx_local)
         self._dof_vel[:] = self._robot_entity.get_dofs_velocity(self._all_dof_idx_local)
 
     def _apply_joint_pos(self, act: JointPosAction) -> None:
+        # """
+        # Apply joint position control to the robot.
+        # """
+        # assert act.joint_pos.shape == (
+        #     self._num_envs,
+        #     self._dof_dim,
+        # ), "Joint position action must match the number of joints."
+        # self._robot_entity.control_dofs_position(
+        #     position=act.joint_pos,
+        #     dofs_idx_local=self._all_dof_idx_local,
+        # )
+
+
         """
-        Apply joint position control to the robot.
+        Apply noised joint position control to the robot.
         """
         assert act.joint_pos.shape == (
             self._num_envs,
             self._dof_dim,
         ), "Joint position action must match the number of joints."
-        self._robot_entity.control_dofs_position(
-            position=act.joint_pos,
-            dofs_idx_local=self._all_dof_idx_local,
+        q_force = (
+            self._batched_dof_kp
+            * (act.joint_pos - self._dof_pos + self._motor_offset)
+            - self._batched_dof_kd * self._dof_vel
         )
+        q_force = q_force * self._motor_strength
+        q_force = torch.clamp(q_force, -self._torque_limits, self._torque_limits)
+        self._torque[:] = q_force
+        self._robot_entity.control_dofs_force(force=q_force, dofs_idx_local=self._all_dof_idx_local)
 
     def _apply_ee_pose_abs(self, act: EEPoseAbsAction) -> None:
         """

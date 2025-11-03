@@ -383,7 +383,7 @@ EnvArgsRegistry["wuji_inhand_rotation"] = ManipulationEnvArgs(
             "scale": 50.0,
         },
         "FingertipCubeProximityReward": {
-            "scale": 10.0,
+            "scale": 100.0,
         },
         "EarlyTerminationPenalty": {
           "scale": 5000.0,  # Large one-time penalty at termination

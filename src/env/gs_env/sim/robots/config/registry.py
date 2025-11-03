@@ -183,6 +183,7 @@ RobotArgsRegistry: dict[str, ManipulatorRobotArgs | QuadrupedRobotArgs | Humanoi
 RobotArgsRegistry["franka_default"] = ManipulatorRobotArgs(
     material_args=MaterialArgsRegistry["default"],
     morph_args=MorphArgsRegistry["franka_default"],
+    dr_args=DRArgsRegistry["no_randomization"],
     visualize_contact=False,
     vis_mode="visual",
     ctrl_type=CtrlType.EE_POSE_REL,
@@ -211,12 +212,14 @@ RobotArgsRegistry["franka_default"] = ManipulatorRobotArgs(
     decimation=4,
     dof_kp={},
     dof_kd={},
+    dof_max_force=100.0,
 )
 
 
 RobotArgsRegistry["franka_teleop"] = ManipulatorRobotArgs(
     material_args=MaterialArgsRegistry["default"],
     morph_args=MorphArgsRegistry["franka_default"],
+    dr_args=DRArgsRegistry["no_randomization"],
     visualize_contact=False,
     vis_mode="visual",
     ctrl_type=CtrlType.EE_POSE_ABS,
@@ -245,6 +248,7 @@ RobotArgsRegistry["franka_teleop"] = ManipulatorRobotArgs(
     decimation=4,
     dof_kp={},
     dof_kd={},
+    dof_max_force=100.0,
 )
 
 # ------------------------------------------------------------
@@ -557,49 +561,49 @@ WUJI_default_dof_pos: dict[str, float] = {
 
 # PD gains for WUJI hand
 WUJI_kp_dict: dict[str, float] = {
-    "finger1_joint1": 20.0,
-    "finger1_joint2": 20.0,
-    "finger1_joint3": 20.0,
-    "finger1_joint4": 20.0,
-    "finger2_joint1": 20.0,
-    "finger2_joint2": 20.0,
-    "finger2_joint3": 20.0,
-    "finger2_joint4": 20.0,
-    "finger3_joint1": 20.0,
-    "finger3_joint2": 20.0,
-    "finger3_joint3": 20.0,
-    "finger3_joint4": 20.0,
-    "finger4_joint1": 20.0,
-    "finger4_joint2": 20.0,
-    "finger4_joint3": 20.0,
-    "finger4_joint4": 20.0,
-    "finger5_joint1": 20.0,
-    "finger5_joint2": 20.0,
-    "finger5_joint3": 20.0,
-    "finger5_joint4": 20.0,
+    "finger1_joint1": 100.0,
+    "finger1_joint2": 100.0,
+    "finger1_joint3": 100.0,
+    "finger1_joint4": 100.0,
+    "finger2_joint1": 100.0,
+    "finger2_joint2": 100.0,
+    "finger2_joint3": 100.0,
+    "finger2_joint4": 100.0,
+    "finger3_joint1": 100.0,
+    "finger3_joint2": 100.0,
+    "finger3_joint3": 100.0,
+    "finger3_joint4": 100.0,
+    "finger4_joint1": 100.0,
+    "finger4_joint2": 100.0,
+    "finger4_joint3": 100.0,
+    "finger4_joint4": 100.0,
+    "finger5_joint1": 100.0,
+    "finger5_joint2": 100.0,
+    "finger5_joint3": 100.0,
+    "finger5_joint4": 100.0,
 }
 
 WUJI_kd_dict: dict[str, float] = {
-    "finger1_joint1": 1.0,
-    "finger1_joint2": 1.0,
-    "finger1_joint3": 1.0,
-    "finger1_joint4": 1.0,
-    "finger2_joint1": 1.0,
-    "finger2_joint2": 1.0,
-    "finger2_joint3": 1.0,
-    "finger2_joint4": 1.0,
-    "finger3_joint1": 1.0,
-    "finger3_joint2": 1.0,
-    "finger3_joint3": 1.0,
-    "finger3_joint4": 1.0,
-    "finger4_joint1": 1.0,
-    "finger4_joint2": 1.0,
-    "finger4_joint3": 1.0,
-    "finger4_joint4": 1.0,
-    "finger5_joint1": 1.0,
-    "finger5_joint2": 1.0,
-    "finger5_joint3": 1.0,
-    "finger5_joint4": 1.0,
+    "finger1_joint1": 10.0,
+    "finger1_joint2": 10.0,
+    "finger1_joint3": 10.0,
+    "finger1_joint4": 10.0,
+    "finger2_joint1": 10.0,
+    "finger2_joint2": 10.0,
+    "finger2_joint3": 10.0,
+    "finger2_joint4": 10.0,
+    "finger3_joint1": 10.0,
+    "finger3_joint2": 10.0,
+    "finger3_joint3": 10.0,
+    "finger3_joint4": 10.0,
+    "finger4_joint1": 10.0,
+    "finger4_joint2": 10.0,
+    "finger4_joint3": 10.0,
+    "finger4_joint4": 10.0,
+    "finger5_joint1": 10.0,
+    "finger5_joint2": 10.0,
+    "finger5_joint3": 10.0,
+    "finger5_joint4": 10.0,
 }
 
 # Fingertip link names for contact sensing
@@ -615,6 +619,15 @@ WUJI_fingertip_link_names: list[str] = [
 RobotArgsRegistry["wuji_hand"] = ManipulatorRobotArgs(
     material_args=MaterialArgsRegistry["wuji_hand"],
     morph_args=MorphArgsRegistry["wuji_hand"],
+    dr_args=DomainRandomizationArgs(
+        kp_range=(0.8, 1.2),  # ±20% variation in joint stiffness
+        kd_range=(0.8, 1.2),  # ±20% variation in joint damping
+        motor_strength_range=(0.9, 1.1),  # ±10% variation in motor strength
+        motor_offset_range=(-0.01, 0.01),  # ±0.01 rad motor offset
+        friction_range=(0.7, 1.3),  # ±30% variation in cube friction (0.56-1.04)
+        mass_range=(-0.002, 0.01),  # ±10g variation in cube mass
+        com_displacement_range=(-0.005, 0.005),  # ±5mm COM displacement in cube
+    ),
     visualize_contact=False,
     vis_mode="collision",  # Use collision geometry for better contact
     ctrl_type=CtrlType.JOINT_POSITION,  # Direct joint position control
@@ -629,4 +642,5 @@ RobotArgsRegistry["wuji_hand"] = ManipulatorRobotArgs(
     decimation=4,  # Run 4 physics steps per action (50Hz control @ 200Hz sim = 4)
     dof_kp=WUJI_kp_dict,
     dof_kd=WUJI_kd_dict,
+    dof_max_force=100.0,
 )

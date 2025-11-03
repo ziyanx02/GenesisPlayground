@@ -107,6 +107,10 @@ class InHandRotationEnv(BaseEnv):
         # == initialize robot limits after scene is built ==
         self._robot.post_build_init(eval_mode=eval_mode)
 
+        # == initialize cube domain randomization ==
+        if not eval_mode:
+            self._init_cube_domain_randomization()
+
         # == setup tactile visualization if enabled ==
         if self._use_tactile and show_viewer and eval_mode and False:
             print(f"\n{'='*70}")
@@ -258,6 +262,10 @@ class InHandRotationEnv(BaseEnv):
         if len(envs_idx) == 0:
             return
 
+        # Re-randomize cube properties on reset (only if not in eval mode)
+        if not self._eval_mode:
+            self._randomize_cube(envs_idx)
+
         # Reset robot to default pose
         self._robot.reset(envs_idx=envs_idx)
 
@@ -291,6 +299,46 @@ class InHandRotationEnv(BaseEnv):
         )
         # Reset torques for penspin-style reward calculation
         self.torques[envs_idx] = 0.0
+
+    def _init_cube_domain_randomization(self) -> None:
+        """Initialize domain randomization for the cube across all environments."""
+        envs_idx: torch.IntTensor = torch.arange(0, self.num_envs, device=self._device)  # type: ignore
+        self._randomize_cube(envs_idx)
+
+    def _randomize_cube(self, envs_idx: torch.IntTensor) -> None:
+        """Randomize cube properties (friction and mass)."""
+        # Get domain randomization args from robot args
+        dr_args = self._args.robot_args.dr_args
+
+        # Randomize cube friction for all geometries
+        min_friction, max_friction = dr_args.friction_range
+        solver = self._cube.solver
+        ratios = (
+            torch.rand(len(envs_idx), 1).repeat(1, solver.n_geoms) * (max_friction - min_friction)
+            + min_friction
+        )
+        solver.set_geoms_friction_ratio(ratios, torch.arange(0, solver.n_geoms), envs_idx)
+
+        # Randomize cube mass
+        min_mass, max_mass = dr_args.mass_range
+        if max_mass > min_mass:
+            added_mass = torch.rand(len(envs_idx), 1) * (max_mass - min_mass) + min_mass
+            # Apply to cube's only link (index 0)
+            self._cube.set_mass_shift(
+                added_mass,
+                [0],  # cube's link
+                envs_idx,
+            )
+
+        # Randomize cube COM displacement
+        min_com, max_com = dr_args.com_displacement_range
+        if max_com > min_com:
+            displacement = (torch.rand(len(envs_idx), 1, 3) - 0.5) * (max_com - min_com) + min_com
+            self._cube.set_COM_shift(
+                displacement,
+                [0],  # cube's link
+                envs_idx,
+            )
 
     def get_terminated(self) -> torch.Tensor:
         """Check if episodes should terminate."""
