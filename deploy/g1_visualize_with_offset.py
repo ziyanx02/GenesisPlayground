@@ -6,21 +6,24 @@ import torch
 import yaml
 from gs_env.real.leggedrobot_env import UnitreeLeggedEnv
 from gs_env.sim.envs.config.registry import EnvArgsRegistry
+from gs_env.sim.envs.config.schema import LeggedRobotEnvArgs
 from gs_env.sim.envs.locomotion.custom_env import CustomEnv
 from gs_env.sim.robots.config.schema import HumanoidRobotArgs
 
 
 def main(
-    device: str = "cpu",
+    device: torch.device | str = "cpu",
 ) -> None:
     device = "cpu" if not torch.cuda.is_available() else device
-    device = torch.device(device)  # type: ignore[arg-type]
+    device = torch.device(device)
 
     env_args = EnvArgsRegistry["custom_g1_mocap"]
-    sim_env = CustomEnv(args=env_args, num_envs=1, show_viewer=True, device=device)  # type: ignore[arg-type]
+    assert isinstance(env_args, LeggedRobotEnvArgs)
+    sim_env = CustomEnv(args=env_args, num_envs=1, show_viewer=True, device=device)
 
     env_args = EnvArgsRegistry["g1_walk"]
-    real_env = UnitreeLeggedEnv(args=env_args, interactive=False, device=device)  # type: ignore[arg-type]
+    assert isinstance(env_args, LeggedRobotEnvArgs)
+    real_env = UnitreeLeggedEnv(args=env_args, interactive=False, device=device)
 
     offset_path = (
         Path(__file__).resolve().parent.parent / "config" / "robot_offset" / "calibrated.yaml"
