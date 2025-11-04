@@ -12,6 +12,7 @@ from gymnasium import spaces
 
 from gs_env.common.bases.base_robot import BaseGymRobot
 from gs_env.common.utils.math_utils import quat_from_euler
+from gs_env.common.utils.misc_utils import get_space_dim
 from gs_env.sim.robots.config.schema import (
     BaseAction,
     CtrlType,
@@ -114,6 +115,9 @@ class LeggedRobotBase(BaseGymRobot):
         self._dof_vel = torch.zeros(
             (self._num_envs, self._dof_dim), dtype=torch.float32, device=self._device
         )
+
+        # self.exec_action = torch.zeros((self._num_envs, self.action_dim), device=self._device)
+        self.last_action = torch.zeros((self._num_envs, self.action_dim), device=self._device)
 
         # == set up control dispatch ==
         self._dispatch: dict[CtrlType, Callable[[BaseAction], None]] = {  # type: ignore
@@ -309,11 +313,16 @@ class LeggedRobotBase(BaseGymRobot):
             self._num_envs,
             self._dof_dim,
         ), "Joint position action must match the number of joints."
-        q_force = (
-            self._batched_dof_kp
-            * (act.joint_pos + self._default_dof_pos - self._dof_pos + self._motor_offset)
-            - self._batched_dof_kd * self._dof_vel
-        )
+        qd_1 = (act.joint_pos - self.last_action) / self.scene.dt
+        # qd_des = torch.clamp(qd_1, -0.95, 0.95)
+        q_force = self._batched_dof_kp * (
+            act.joint_pos + self._default_dof_pos - self._dof_pos + self._motor_offset
+        ) + self._batched_dof_kd * (qd_1 - self._dof_vel)
+        # q_force_V = (
+        #     self._batched_dof_kp
+        #     * (act.joint_pos - self._dof_vel + self._motor_offset)
+        #     - self._batched_dof_kd * (self._dof_vel - self.last_dof_vel) / self.scene.dt * self._args.decimation
+        # )
         q_force = q_force * self._motor_strength
         q_force = torch.clamp(q_force, -self._torque_limits, self._torque_limits)
         self._torque[:] = q_force
@@ -325,6 +334,11 @@ class LeggedRobotBase(BaseGymRobot):
     @property
     def action_space(self) -> spaces.Box:
         return self._action_space
+
+    @property
+    def action_dim(self) -> int:
+        act_dim = get_space_dim(self._action_space)
+        return act_dim
 
     @property
     def n_links(self) -> int:

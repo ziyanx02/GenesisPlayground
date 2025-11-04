@@ -203,6 +203,7 @@ class LeggedRobotEnv(BaseEnv):
         self.time_since_reset[envs_idx] = 0.0
         self.last_action[envs_idx] *= 0
         self.last_last_action[envs_idx] *= 0
+        self._robot.last_action[envs_idx] *= 0
 
     def reset_idx(self, envs_idx: torch.IntTensor) -> None:
         default_pos = self._robot.default_pos[None, :].repeat(len(envs_idx), 1)
@@ -330,6 +331,7 @@ class LeggedRobotEnv(BaseEnv):
             self._pre_step()
 
             self._robot.apply_action(action=exec_action)
+            self._robot.last_action = exec_action.clone()
             self._scene.scene.step(refresh_visualizer=self._refresh_visualizer)
             self.torque = torch.max(self.torque, torch.abs(self._robot.torque))
 

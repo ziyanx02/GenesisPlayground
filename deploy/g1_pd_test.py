@@ -234,7 +234,7 @@ def main(
         dof_names = env.dof_names
 
         if sim:
-            log_dir = Path(__file__).parent / "logs" / "pd_test" / "sim"
+            log_dir = Path(__file__).parent / "logs" / "pd_test" / "sim-last_dof_pos-v4"
         else:
             log_dir = Path(__file__).parent / "logs" / "pd_test" / "real"
 
