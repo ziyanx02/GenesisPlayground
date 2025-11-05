@@ -6,7 +6,7 @@ import os
 import platform
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import fire
 import matplotlib
@@ -23,6 +23,7 @@ from gs_agent.utils.policy_loader import load_latest_model
 from gs_agent.wrappers.gs_env_wrapper import GenesisEnvWrapper
 from gs_env.sim.envs.config.registry import EnvArgsRegistry
 from gs_env.sim.envs.config.schema import MotionEnvArgs
+from gs_env.sim.scenes.config.registry import SceneArgsRegistry
 from utils import apply_overrides_generic, config_to_yaml, yaml_to_config
 
 
@@ -312,6 +313,10 @@ def train_policy(
     runner_args: Any = None,
 ) -> None:
     """Train the policy using PPO."""
+
+    env_args = cast(MotionEnvArgs, env_args).model_copy(
+        update={"scene_args": SceneArgsRegistry["flat_scene_legged"]}
+    )
 
     # Create environment
     env = create_gs_env(

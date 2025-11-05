@@ -8,6 +8,8 @@ import numpy as np
 import torch
 from PIL import Image
 
+import gs_env.sim.scenes as scenes
+
 #
 from gs_env.common.bases.base_env import BaseEnv
 from gs_env.common.utils.math_utils import (
@@ -21,7 +23,6 @@ from gs_env.common.utils.math_utils import (
 from gs_env.common.utils.misc_utils import get_space_dim
 from gs_env.sim.envs.config.schema import LeggedRobotEnvArgs
 from gs_env.sim.robots.leggedrobots import G1Robot
-from gs_env.sim.scenes import FlatScene
 
 _DEFAULT_DEVICE = torch.device("cpu")
 
@@ -53,12 +54,14 @@ class LeggedRobotEnv(BaseEnv):
             gs.init(performance_mode=True, backend=getattr(gs.constants.backend, device.type))
 
         # == setup the scene ==
-        self._scene = FlatScene(
+        SCENE_CLASS = getattr(scenes, args.scene_args.scene_type)
+        self._scene = SCENE_CLASS(
             num_envs=self._num_envs,
             args=args.scene_args,
             show_viewer=self._show_viewer,
             img_resolution=args.img_resolution,
             env_spacing=(1.0, 1.0),
+            device=self._device,
         )
 
         # == setup the robot ==
@@ -578,7 +581,7 @@ class LeggedRobotEnv(BaseEnv):
         return local_flat.reshape(global_vec_shape)
 
     @property
-    def scene(self) -> FlatScene:
+    def scene(self) -> scenes.CustomScene | scenes.FlatScene:
         return self._scene
 
     @property

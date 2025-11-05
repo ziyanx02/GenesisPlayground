@@ -3,6 +3,7 @@ import torch
 from gs_env.common.utils.math_utils import (
     quat_apply,
     quat_error_magnitude,
+    quat_from_angle_axis,
     quat_from_euler,
     quat_inv,
     quat_mul,
@@ -82,8 +83,11 @@ class MotionEnv(LeggedRobotEnv):
         )
         self.base_lin_vel_local = torch.zeros(self.num_envs, 3, device=self._device)
         self.base_ang_vel_local = torch.zeros(self.num_envs, 3, device=self._device)
-        self.link_positions_local = torch.zeros(
+        self.link_positions_local_yaw = torch.zeros(
             self.num_envs, self._robot.n_links, 3, device=self._device
+        )
+        self.link_quaternions_local_yaw = torch.zeros(
+            self.num_envs, self._robot.n_links, 4, device=self._device
         )
 
         # reference trajectories (current frame)
@@ -298,10 +302,16 @@ class MotionEnv(LeggedRobotEnv):
 
         self.link_contact_forces[:] = self._robot.link_contact_forces
         self.link_positions[:] = self._robot.link_positions
-        self.link_positions_local[:] = self.batched_global_to_local(
-            self.base_pos, self.base_quat, self.link_positions
+        link_positions_local_yaw = self._robot.link_positions
+        link_positions_local_yaw[:, :, :2] -= self.base_pos[:, :2]
+        quat_yaw = quat_from_angle_axis(
+            self.base_euler[:, 2], torch.tensor([0, 0, 1], device=self._device, dtype=torch.float)
         )
+        link_positions_local_yaw = quat_apply(quat_inv(quat_yaw), link_positions_local_yaw)
+        self.link_positions_local_yaw[:] = link_positions_local_yaw
         self.link_quaternions[:] = self._robot.link_quaternions
+        link_quaternions_local_yaw = quat_mul(quat_inv(quat_yaw), self._robot.link_quaternions)
+        self.link_quaternions_local_yaw[:] = link_quaternions_local_yaw
         self.link_velocities[:] = self._robot.link_velocities
 
         # contacts

@@ -327,6 +327,10 @@ class LeggedRobotBase(BaseGymRobot):
         return self._action_space
 
     @property
+    def robot(self) -> RigidEntity:
+        return self._robot
+
+    @property
     def n_links(self) -> int:
         return self._robot.n_links
 

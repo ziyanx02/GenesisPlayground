@@ -11,6 +11,7 @@ class FlatScene(BaseSimScene):
     def __init__(
         self,
         num_envs: int,
+        device: torch.device,
         args: FlatSceneArgs,
         show_viewer: bool = False,
         show_fps: bool = False,
@@ -19,6 +20,7 @@ class FlatScene(BaseSimScene):
         img_resolution: tuple[int, int] | None = None,
     ) -> None:
         super().__init__()
+        self._device = device
         #
         # _renderer = (
         #     gs.options.renderers.BatchRenderer(

@@ -173,7 +173,7 @@ EnvArgsRegistry["g1_walk"] = WalkingEnvArgs(
 EnvArgsRegistry["g1_motion"] = MotionEnvArgs(
     env_name="MotionEnv",
     gs_init_args=GenesisInitArgsRegistry["default"],
-    scene_args=SceneArgsRegistry["flat_scene_legged"],
+    scene_args=SceneArgsRegistry["custom_scene_g1_mocap"],
     robot_args=RobotArgsRegistry["g1_default"],
     objects_args=[],
     sensors_args=[],
@@ -267,7 +267,7 @@ EnvArgsRegistry["g1_motion"] = MotionEnvArgs(
     terminate_after_base_height_error=0.15,
     terminate_after_base_rot_error=None,
     terminate_after_dof_pos_error=8.0,
-    motion_file="assets/motion/twist_dataset.yaml",
+    motion_file=None,
 )
 
 

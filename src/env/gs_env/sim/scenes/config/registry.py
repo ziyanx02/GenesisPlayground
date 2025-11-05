@@ -250,6 +250,7 @@ SceneArgsRegistry: dict[str, SceneArgs] = {}
 
 
 SceneArgsRegistry["flat_scene_default"] = FlatSceneArgs(
+    scene_type="FlatScene",
     show_viewer=False,
     show_FPS=False,
     center_envs_at_origin=True,
@@ -280,6 +281,7 @@ SceneArgsRegistry["flat_scene_default"] = FlatSceneArgs(
 
 
 SceneArgsRegistry["flat_scene_legged"] = FlatSceneArgs(
+    scene_type="FlatScene",
     show_viewer=False,
     show_FPS=False,
     center_envs_at_origin=True,
@@ -310,6 +312,7 @@ SceneArgsRegistry["flat_scene_legged"] = FlatSceneArgs(
 
 
 SceneArgsRegistry["custom_scene_desk"] = CustomSceneArgs(
+    scene_type="CustomScene",
     show_viewer=False,
     show_FPS=False,
     center_envs_at_origin=True,
@@ -362,6 +365,7 @@ SceneArgsRegistry["custom_scene_desk"] = CustomSceneArgs(
 
 
 SceneArgsRegistry["custom_scene_g1_mocap"] = CustomSceneArgs(
+    scene_type="CustomScene",
     show_viewer=False,
     show_FPS=False,
     center_envs_at_origin=True,

@@ -12,83 +12,23 @@ from gs_env.common.utils.math_utils import (
     slerp,
 )
 
+_DEFAULT_DEVICE = torch.device("cpu")
+
 
 class MotionLib:
     # CREDITS: https://github.com/YanjieZe/TWIST
-    def __init__(self, motion_file: str, device: torch.device) -> None:
+    def __init__(
+        self, motion_file: str | None = None, device: torch.device = _DEFAULT_DEVICE
+    ) -> None:
         self._device = device
-
-        gsplayground_order = [
-            # Left Lower body 0:6
-            "left_hip_roll_joint",
-            "left_hip_pitch_joint",
-            "left_hip_yaw_joint",
-            "left_knee_joint",
-            "left_ankle_roll_joint",
-            "left_ankle_pitch_joint",
-            # Right Lower body 6:12
-            "right_hip_roll_joint",
-            "right_hip_pitch_joint",
-            "right_hip_yaw_joint",
-            "right_knee_joint",
-            "right_ankle_roll_joint",
-            "right_ankle_pitch_joint",
-            # Waist 12:15
-            "waist_roll_joint",
-            "waist_pitch_joint",
-            "waist_yaw_joint",
-            # Left Upper body 12:19
-            "left_shoulder_roll_joint",
-            "left_shoulder_pitch_joint",
-            "left_shoulder_yaw_joint",
-            "left_elbow_joint",
-            "left_wrist_roll_joint",
-            "left_wrist_pitch_joint",
-            "left_wrist_yaw_joint",
-            # Right Upper body 19:26
-            "right_shoulder_roll_joint",
-            "right_shoulder_pitch_joint",
-            "right_shoulder_yaw_joint",
-            "right_elbow_joint",
-            "right_wrist_roll_joint",
-            "right_wrist_pitch_joint",
-            "right_wrist_yaw_joint",
-        ]
-        twist_order = [
-            "left_hip_pitch_joint",
-            "left_hip_roll_joint",
-            "left_hip_yaw_joint",
-            "left_knee_joint",
-            "left_ankle_pitch_joint",
-            "left_ankle_roll_joint",
-            "right_hip_pitch_joint",
-            "right_hip_roll_joint",
-            "right_hip_yaw_joint",
-            "right_knee_joint",
-            "right_ankle_pitch_joint",
-            "right_ankle_roll_joint",
-            "waist_yaw_joint",
-            "waist_roll_joint",
-            "waist_pitch_joint",
-            "left_shoulder_pitch_joint",
-            "left_shoulder_roll_joint",
-            "left_shoulder_yaw_joint",
-            "left_elbow_joint",
-            "right_shoulder_pitch_joint",
-            "right_shoulder_roll_joint",
-            "right_shoulder_yaw_joint",
-            "right_elbow_joint",
-        ]
-        self._dof_index = []
-        for dof_name in twist_order:
-            self._dof_index.append(gsplayground_order.index(dof_name))
-
-        self._load_motions(motion_file)
+        if motion_file is not None:
+            self._load_motions(motion_file)
 
     def _load_motions(self, motion_file: str) -> None:
         self._motion_names = []
         self._motion_files = []
-        self._body_link_list = []
+        self._link_names = []
+        self._dof_names = []
 
         motion_weights = []
         motion_fps = []
@@ -102,8 +42,8 @@ class MotionLib:
         motion_base_ang_vel = []
         motion_dof_pos = []
         motion_dof_vel = []
-
-        motion_local_body_pos = []
+        motion_link_pos_global = []
+        motion_link_quat_global = []
 
         full_motion_files, full_motion_weights = self._fetch_motion_files(motion_file)
         num_motion_files = len(full_motion_files)
@@ -114,24 +54,23 @@ class MotionLib:
                 with open(curr_file, "rb") as f:
                     motion_data = pickle.load(f)
 
-                    if len(self._body_link_list) == 0:
-                        self._body_link_list = motion_data["link_body_list"]
+                    if len(self._link_names) == 0:
+                        self._link_names = motion_data["link_names"]
+                        self._dof_names = motion_data["dof_names"]
 
                     base_pos = torch.tensor(
-                        motion_data["root_pos"], dtype=torch.float, device=self._device
-                    )  # (num_frames, 3)
-                    base_pos_delta = base_pos[-1] - base_pos[0]
-                    base_pos_delta[..., -1] = 0.0  # TODO: why?
+                        motion_data["pos"], dtype=torch.float, device=self._device
+                    )
                     base_quat = torch.tensor(
-                        motion_data["root_rot"], dtype=torch.float, device=self._device
-                    )  # TODO: convert to wxyz
+                        motion_data["quat"], dtype=torch.float, device=self._device
+                    )
 
                     fps = motion_data["fps"]
                     dt = 1.0 / fps
                     num_frames = base_pos.shape[0]
                     length = dt * (num_frames - 1)
 
-                    base_lin_vel = torch.zeros_like(base_pos)  # (num_frames, 3)
+                    base_lin_vel = torch.zeros_like(base_pos)
                     base_lin_vel[:-1, :] = fps * (base_pos[1:, :] - base_pos[:-1, :])
                     base_lin_vel[-1, :] = base_lin_vel[-2, :]
                     base_lin_vel = self.smooth(base_lin_vel, 19, device=self._device)
@@ -150,9 +89,14 @@ class MotionLib:
                     dof_vel[-1, :] = dof_vel[-2, :]
                     dof_vel = self.smooth(dof_vel, 19, device=self._device)
 
-                    local_body_pos = torch.tensor(
-                        motion_data["local_body_pos"], dtype=torch.float, device=self._device
+                    link_pos_global = torch.tensor(
+                        motion_data["link_pos"], dtype=torch.float, device=self._device
                     )
+                    link_quat_global = torch.tensor(
+                        motion_data["link_quat"], dtype=torch.float, device=self._device
+                    )
+                    # link_pos_local = quat_apply(base_quat, link_pos_global - base_pos)
+                    # link_quat_local = quat_mul(quat_inv(base_quat), link_quat_global)
 
                     self._motion_names.append(os.path.basename(curr_file))
                     self._motion_files.append(curr_file)
@@ -169,13 +113,15 @@ class MotionLib:
                     motion_base_ang_vel.append(base_ang_vel)
                     motion_dof_pos.append(dof_pos)
                     motion_dof_vel.append(dof_vel)
+                    motion_link_pos_global.append(link_pos_global)
+                    motion_link_quat_global.append(link_quat_global)
 
-                    motion_local_body_pos.append(local_body_pos)
             except Exception as e:
                 print("Error loading motion file %s: %s", curr_file, e)
                 continue
 
-        assert len(self._body_link_list) > 0, "Body link list is empty"
+        assert len(self._link_names) > 0, "Link names list is empty"
+        assert len(self._dof_names) > 0, "Dof names list is empty"
 
         motion_weights = torch.tensor(motion_weights, dtype=torch.float, device=self._device)
         self._motion_weights = motion_weights / torch.sum(motion_weights)
@@ -188,22 +134,12 @@ class MotionLib:
 
         self._motion_base_pos = torch.cat(motion_base_pos, dim=0)
         self._motion_base_quat = torch.cat(motion_base_quat, dim=0)
-        motion_base_quat = torch.cat(motion_base_quat, dim=0)
-        self._motion_base_quat = torch.cat(
-            [motion_base_quat[:, 3:], motion_base_quat[:, :3]], dim=1
-        )
         self._motion_base_lin_vel = torch.cat(motion_base_lin_vel, dim=0)
         self._motion_base_ang_vel = torch.cat(motion_base_ang_vel, dim=0)
-        self._motion_dof_pos = torch.zeros(
-            torch.cat(motion_dof_pos, dim=0).shape[0], 29, device=self._device
-        )
-        self._motion_dof_pos[:, self._dof_index] = torch.cat(motion_dof_pos, dim=0)
-        self._motion_dof_vel = torch.zeros(
-            torch.cat(motion_dof_vel, dim=0).shape[0], 29, device=self._device
-        )
-        self._motion_dof_vel[:, self._dof_index] = torch.cat(motion_dof_vel, dim=0)
-
-        self._motion_local_body_pos = torch.cat(motion_local_body_pos, dim=0)
+        self._motion_dof_pos = torch.cat(motion_dof_pos, dim=0)
+        self._motion_dof_vel = torch.cat(motion_dof_vel, dim=0)
+        self._motion_link_pos_global = torch.cat(motion_link_pos_global, dim=0)
+        self._motion_link_quat_global = torch.cat(motion_link_quat_global, dim=0)
 
         lengths_shifted = self._motion_num_frames.roll(1)
         lengths_shifted[0] = 0
@@ -302,8 +238,8 @@ class MotionLib:
         dof_pos0 = self._motion_dof_pos[frame_idx0]
         dof_pos1 = self._motion_dof_pos[frame_idx1]
 
-        local_key_body_pos0 = self._motion_local_body_pos[frame_idx0]
-        local_key_body_pos1 = self._motion_local_body_pos[frame_idx1]
+        local_key_body_pos0 = self._motion_link_pos_global[frame_idx0]
+        local_key_body_pos1 = self._motion_link_pos_global[frame_idx1]
 
         dof_vel = self._motion_dof_vel[frame_idx0]
 
@@ -322,7 +258,7 @@ class MotionLib:
     def get_key_body_idx(self, key_body_names: list[str]) -> list[int]:
         key_body_idx = []
         for key_body_name in key_body_names:
-            key_body_idx.append(self._body_link_list.index(key_body_name))
+            key_body_idx.append(self._link_names.index(key_body_name))
         return key_body_idx  # list
 
     def get_motion_length(self, motion_ids: torch.Tensor) -> torch.Tensor:
