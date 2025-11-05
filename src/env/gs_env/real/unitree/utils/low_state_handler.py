@@ -104,6 +104,7 @@ JointID = {
 class LowStateMsgHandler:
     def __init__(self, cfg: HumanoidRobotArgs, freq: int = 1000) -> None:
         self.cfg = cfg
+        self.logger = None  # type: Optional[SimpleHFBinLogger]
         self.update_interval = 1.0 / freq
         if "g1" in cfg.morph_args.file:
             self.robot_name = "g1"
@@ -179,6 +180,23 @@ class LowStateMsgHandler:
     def LowStateHandler_hg(self, msg: LowState_hg) -> None:
         self.msg = msg
         self.msg_received = True
+
+        t_ns = time.perf_counter_ns()  # monotonic timestamp
+        ms = msg.motor_state
+        nj = self.num_full_dof
+
+        q = [0.0] * nj
+        dq = [0.0] * nj
+        tau = [0.0] * nj
+
+        for i in range(nj):
+            m = ms[self.dof_index[i]]
+            q[i] = m.q
+            dq[i] = m.dq
+            tau[i] = m.tau_est
+
+        if self.logger:  # background writer, non-blocking
+            self.logger.push(t_ns, q, dq, tau)
 
     def main_loop(self) -> None:
         total_publish_cnt = 0  # noqa: F841

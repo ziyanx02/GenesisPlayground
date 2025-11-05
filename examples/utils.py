@@ -6,6 +6,45 @@ import numpy as np
 import yaml
 
 
+def load_and_align_hf_npz_vel(
+    npz_path: str | Path,
+    target_pos: list[float] | np.ndarray,
+    dof_idx: int,
+    dt: float = 0.02,  # control loop period (s), e.g., 50 Hz
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Returns (steps, target_vel, dq_interp)
+
+    - target_vel: finite-difference of the commanded target positions using the known control dt
+    - dq_interp:  HF-measured joint velocity resampled onto the control time grid
+    - steps:      0..N-1 (index axis), to avoid breaking existing plotting code
+                  (you can switch to a time axis by returning t_ctrl instead)
+    """
+    npz_path = Path(npz_path)
+    data = np.load(npz_path)
+
+    # High-rate timestamps and measured joint velocity (rad/s)
+    t_ns = data["t_ns"]  # shape [N_meas]
+    dq_meas = data["dq"][:, dof_idx]  # shape [N_meas]
+
+    # HF time in seconds, starting at 0
+    t_meas = (t_ns - t_ns[0]) * 1e-9  # [0 .. T_meas]
+
+    # Control grid from command length
+    target_pos = np.asarray(target_pos, dtype=np.float64)
+    N = len(target_pos)
+    t_ctrl = np.arange(N, dtype=np.float64) * dt
+
+    target_vel = np.gradient(target_pos, dt, edge_order=2)
+
+    # np.interp extrapolates by holding edge values; that’s fine for minor
+    # start/stop misalignments. If you prefer clipping, you could clip t_ctrl.
+    dq_interp = np.interp(t_ctrl, t_meas, dq_meas)
+
+    steps = np.arange(N, dtype=np.int64)
+    return steps, target_vel, dq_interp
+
+
 def plot_metric_on_axis(
     ax: Any,
     steps: Any,

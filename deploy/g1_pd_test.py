@@ -11,12 +11,14 @@ matplotlib.use("Agg")  # Use non-interactive backend to prevent windows from sho
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+from gs_env.real import UnitreeLeggedEnv
+from gs_env.real.unitree.utils.hf_logger import SimpleHFBinLogger
 from gs_env.sim.envs.config.registry import EnvArgsRegistry
 from gs_env.sim.envs.config.schema import LeggedRobotEnvArgs
 
 # Add examples to path to import utils
 sys.path.insert(0, str(Path(__file__).parent.parent / "examples"))
-from utils import plot_metric_on_axis, yaml_to_config  # type: ignore
+from utils import load_and_align_hf_npz_vel, plot_metric_on_axis, yaml_to_config  # type: ignore
 
 
 def load_env_args(exp_name: str) -> LeggedRobotEnvArgs:
@@ -129,8 +131,16 @@ def run_single_dof_diagnosis(
     offset: float = 0.0,
     log_dir: Path = Path(__file__).parent / "logs" / "pd_test",
 ) -> None:
-    fig, axes = plt.subplots(4, 1, figsize=(12, 12))
-    for i, wave_type in enumerate(["SIN", "FM-SIN"]):
+    fig, axes = plt.subplots(6, 1, figsize=(12, 12))
+    for i, wave_type in enumerate(["SIN"]):
+        logger = None
+        if isinstance(env, UnitreeLeggedEnv):
+            log_path = log_dir / f"{dof_name}_{wave_type}"
+            logger = SimpleHFBinLogger(str(log_path), nj=env.action_dim)
+            env.robot.logger = logger  # attach to robot
+            logger.start()
+            print(f"[HF LOG] Logging to {log_path}")
+
         target_dof_pos_list, dof_pos_list = run_single_dof_wave_diagnosis(
             env,
             dof_idx=dof_idx,
@@ -162,6 +172,28 @@ def run_single_dof_diagnosis(
                 "Truncated",
                 yscale="linear",
                 show_mean=False,
+            )
+
+        if logger:
+            logger.stop()
+            print("[HF LOG] Stopped logger")
+
+            # Convert to npz for plotting later
+            npz_path = SimpleHFBinLogger.export_npz(str(log_path) + ".bin")
+            print(f"[HF LOG] Exported to {npz_path}")
+            # Align HF measured data with the target and plot using your helper
+            steps, target_vel, dq_interp = load_and_align_hf_npz_vel(
+                npz_path, target_dof_pos_list, dof_idx
+            )
+
+            plot_metric_on_axis(
+                axes[i + 3],
+                steps,
+                [target_vel.tolist(), dq_interp.tolist()],
+                ["Target Vel", "Measured Vel (HF)"],
+                ylabel="Joint Velocity (rad/s)",
+                title=f"{wave_type} (aligned HF velocity)",
+                yscale="linear",
             )
 
     # Save plot
@@ -199,7 +231,6 @@ def main(
 
     else:
         print("Running in REAL ROBOT mode")
-        from gs_env.real import UnitreeLeggedEnv
 
         env = UnitreeLeggedEnv(
             env_args, action_scale=1.0, interactive=True, device=torch.device(device)
@@ -236,7 +267,7 @@ def main(
         if sim:
             log_dir = Path(__file__).parent / "logs" / "pd_test" / "sim-last_dof_pos-v4"
         else:
-            log_dir = Path(__file__).parent / "logs" / "pd_test" / "real"
+            log_dir = Path(__file__).parent / "logs" / "pd_test" / "real-first-order-v1"
 
         for dof_name, (lower_bound, upper_bound) in test_dofs.items():
             dof_idx = -1
