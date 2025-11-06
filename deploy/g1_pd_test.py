@@ -132,7 +132,7 @@ def run_single_dof_diagnosis(
     log_dir: Path = Path(__file__).parent / "logs" / "pd_test",
 ) -> None:
     fig, axes = plt.subplots(6, 1, figsize=(12, 12))
-    for i, wave_type in enumerate(["SIN"]):
+    for i, wave_type in enumerate(["SIN", "FM-SIN"]):
         logger = None
         if isinstance(env, UnitreeLeggedEnv):
             log_path = log_dir / f"{dof_name}_{wave_type}"
@@ -265,7 +265,7 @@ def main(
         dof_names = env.dof_names
 
         if sim:
-            log_dir = Path(__file__).parent / "logs" / "pd_test" / "sim-last_dof_pos-v4"
+            log_dir = Path(__file__).parent / "logs" / "pd_test" / "sim-V"
         else:
             log_dir = Path(__file__).parent / "logs" / "pd_test" / "real-first-order-v1"
 

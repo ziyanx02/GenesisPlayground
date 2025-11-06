@@ -100,6 +100,7 @@ class LeggedRobotBase(BaseGymRobot):
         self._default_pos = torch.tensor(
             self._args.morph_args.pos, dtype=torch.float32, device=self._device
         )
+        self._prev_q_des = torch.zeros((self._num_envs, self._dof_dim), device=self._device)
         self._default_euler = torch.tensor(
             self._args.morph_args.euler, dtype=torch.float32, device=self._device
         )
@@ -225,6 +226,7 @@ class LeggedRobotBase(BaseGymRobot):
             zero_velocity=True,
         )
         self._dof_pos[envs_idx] = self._default_dof_pos[None].repeat(len(envs_idx), 1)
+        self._prev_q_des[envs_idx] = self._default_dof_pos[None].repeat(len(envs_idx), 1)
         self._dof_vel[envs_idx] = 0.0
 
     def set_state(
@@ -313,15 +315,17 @@ class LeggedRobotBase(BaseGymRobot):
             self._num_envs,
             self._dof_dim,
         ), "Joint position action must match the number of joints."
-        qd_1 = (act.joint_pos - self.last_action) / self.scene.dt
-        # qd_des = torch.clamp(qd_1, -0.95, 0.95)
-        q_force = self._batched_dof_kp * (
-            act.joint_pos + self._default_dof_pos - self._dof_pos + self._motor_offset
-        ) + self._batched_dof_kd * (qd_1 - self._dof_vel)
+        q_des = act.joint_pos + self._default_dof_pos + self._motor_offset
+        qd_des = (q_des - self._prev_q_des) / self.scene.dt
+        # qd_des = torch.clamp(qd_des, -0.95, 0.95)
+        self._prev_q_des = q_des.clone()
+        q_err = q_des - self._dof_pos
+        qd_err = qd_des - self._dof_vel
+        q_force = self._batched_dof_kp * q_err + self._batched_dof_kd * qd_err
         # q_force_V = (
         #     self._batched_dof_kp
-        #     * (act.joint_pos - self._dof_vel + self._motor_offset)
-        #     - self._batched_dof_kd * (self._dof_vel - self.last_dof_vel) / self.scene.dt * self._args.decimation
+        #     * (qd_des - self._dof_vel)
+        #     - self._batched_dof_kd * (self._dof_vel - self.last_dof_vel) / self.scene.dt
         # )
         q_force = q_force * self._motor_strength
         q_force = torch.clamp(q_force, -self._torque_limits, self._torque_limits)
