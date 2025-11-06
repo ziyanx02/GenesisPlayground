@@ -165,7 +165,7 @@ class LeggedRobotEnv(BaseEnv):
             actor_obs_spaces[obs_term] = gym.spaces.Box(
                 low=-np.inf,
                 high=np.inf,
-                shape=(getattr(self, obs_term).shape[-1],),
+                shape=(getattr(self, obs_term).view(self.num_envs, -1).shape[-1],),
                 dtype=np.float32,
             )
         self._actor_observation_space = gym.spaces.Dict(actor_obs_spaces)
@@ -177,7 +177,7 @@ class LeggedRobotEnv(BaseEnv):
             critic_obs_spaces[obs_term] = gym.spaces.Box(
                 low=-np.inf,
                 high=np.inf,
-                shape=(getattr(self, obs_term).shape[-1],),
+                shape=(getattr(self, obs_term).view(self.num_envs, -1).shape[-1],),
                 dtype=np.float32,
             )
         self._critic_observation_space = gym.spaces.Dict(critic_obs_spaces)
@@ -277,6 +277,8 @@ class LeggedRobotEnv(BaseEnv):
         obs_components = []
         for key in self._args.actor_obs_terms:
             obs_gt = getattr(self, key) * self._args.obs_scales.get(key, 1.0)
+            if len(obs_gt.shape) > 2:
+                obs_gt = obs_gt.view(self.num_envs, -1)
             obs_noise = torch.randn_like(obs_gt) * self._args.obs_noises.get(key, 0.0)
             if self._eval_mode:
                 obs_noise *= 0
@@ -285,6 +287,8 @@ class LeggedRobotEnv(BaseEnv):
         obs_components = []
         for key in self._args.critic_obs_terms:
             obs_gt = getattr(self, key) * self._args.obs_scales.get(key, 1.0)
+            if len(obs_gt.shape) > 2:
+                obs_gt = obs_gt.view(self.num_envs, -1)
             obs_components.append(obs_gt)
         critic_obs = torch.cat(obs_components, dim=-1)
         return actor_obs, critic_obs
@@ -374,6 +378,8 @@ class LeggedRobotEnv(BaseEnv):
         obs_components = []
         for key in self._args.critic_obs_terms:
             obs_gt = getattr(self, key) * self._args.obs_scales.get(key, 1.0)
+            if len(obs_gt.shape) > 2:
+                obs_gt = obs_gt.view(self.num_envs, -1)
             obs_components.append(obs_gt)
         obs_tensor = torch.cat(obs_components, dim=-1)
         self._extra_info["observations"] = {"critic": obs_tensor}

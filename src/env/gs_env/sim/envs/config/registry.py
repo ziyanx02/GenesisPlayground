@@ -228,6 +228,7 @@ EnvArgsRegistry["g1_motion"] = MotionEnvArgs(
         "ref_base_lin_vel_local",
         "ref_base_ang_vel_local",
         # "ref_base_rotation_6D",
+        "ref_tracking_link_pos_local_yaw",
     ],
     critic_obs_terms=[
         "last_action",
@@ -238,6 +239,7 @@ EnvArgsRegistry["g1_motion"] = MotionEnvArgs(
         "base_lin_vel_local",
         "base_ang_vel_local",
         "base_rotation_6D",
+        "tracking_link_pos_local_yaw",
         "projected_gravity",
         # Reference
         "ref_dof_pos",
@@ -246,6 +248,7 @@ EnvArgsRegistry["g1_motion"] = MotionEnvArgs(
         "ref_base_lin_vel_local",
         "ref_base_ang_vel_local",
         "ref_base_rotation_6D",
+        "ref_tracking_link_pos_local_yaw",
         # Privilleged
         "feet_contact_force",
     ],

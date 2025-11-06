@@ -113,6 +113,20 @@ class MotionEnv(LeggedRobotEnv):
             self.num_envs, self._robot.n_links, 4, device=self._device
         )
 
+        tracking_link_names = self._args.tracking_link_names
+        self.tracking_link_pos_local_yaw = torch.zeros(
+            self.num_envs, len(tracking_link_names), 3, device=self._device
+        )
+        self.tracking_link_quat_local_yaw = torch.zeros(
+            self.num_envs, len(tracking_link_names), 4, device=self._device
+        )
+        self.ref_tracking_link_pos_local_yaw = torch.zeros(
+            self.num_envs, len(tracking_link_names), 3, device=self._device
+        )
+        self.ref_tracking_link_quat_local_yaw = torch.zeros(
+            self.num_envs, len(tracking_link_names), 4, device=self._device
+        )
+
         # Let base class set up common buffers, spaces, and rendering
         super()._init()
 
@@ -127,22 +141,9 @@ class MotionEnv(LeggedRobotEnv):
             ]
 
         # tracking link indices
-        tracking_link_names = self._args.tracking_link_names
         self.tracking_link_idx_local = [
             self._motion_lib.get_link_idx_local_by_name(name) for name in tracking_link_names
         ]
-        self.tracking_link_pos_local_yaw = torch.zeros(
-            self.num_envs, len(tracking_link_names), 3, device=self._device
-        )
-        self.tracking_link_quat_local_yaw = torch.zeros(
-            self.num_envs, len(tracking_link_names), 4, device=self._device
-        )
-        self.ref_tracking_link_pos_local_yaw = torch.zeros(
-            self.num_envs, len(tracking_link_names), 3, device=self._device
-        )
-        self.ref_tracking_link_quat_local_yaw = torch.zeros(
-            self.num_envs, len(tracking_link_names), 4, device=self._device
-        )
 
         # per-env motion selection and time offset
         self._motion_ids = torch.zeros(self.num_envs, device=self._device, dtype=torch.long)
@@ -279,16 +280,16 @@ class MotionEnv(LeggedRobotEnv):
         if not self._eval_mode:
             reset_buf |= terminate_by_error
 
-        if motion_end_mask[0]:
-            print("terminate by motion_end")
-        if base_pos_mask[0]:
-            print("terminate by base_pos_error")
-        if base_height_mask[0]:
-            print("terminate by base_height_error")
-        if base_quat_mask[0]:
-            print("terminate by base_quat_error")
-        if dof_pos_mask[0]:
-            print("terminate by dof_pos_error")
+        # if motion_end_mask[0]:
+        #     print("terminate by motion_end")
+        # if base_pos_mask[0]:
+        #     print("terminate by base_pos_error")
+        # if base_height_mask[0]:
+        #     print("terminate by base_height_error")
+        # if base_quat_mask[0]:
+        #     print("terminate by base_quat_error")
+        # if dof_pos_mask[0]:
+        #     print("terminate by dof_pos_error")
 
         self.reset_buf[:] = reset_buf
 
