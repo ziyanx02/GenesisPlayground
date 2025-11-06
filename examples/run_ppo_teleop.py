@@ -21,6 +21,7 @@ from gs_agent.runners.onpolicy_runner import OnPolicyRunner
 from gs_agent.utils.logger import configure as logger_configure
 from gs_agent.utils.policy_loader import load_latest_model
 from gs_agent.wrappers.gs_env_wrapper import GenesisEnvWrapper
+from gs_env.common.utils.math_utils import quat_apply, quat_from_angle_axis, quat_mul
 from gs_env.sim.envs.config.registry import EnvArgsRegistry
 from gs_env.sim.envs.config.schema import MotionEnvArgs
 from gs_env.sim.scenes.config.registry import SceneArgsRegistry
@@ -125,6 +126,9 @@ def evaluate_policy(
             "obs_noises": {},  # Disable observation noise
         }
     )
+    env_args = cast(MotionEnvArgs, env_args).model_copy(
+        update={"scene_args": SceneArgsRegistry["custom_scene_g1_mocap"]}
+    )
     # Update robot args to disable domain randomization
     from gs_env.sim.robots.config.schema import DomainRandomizationArgs
 
@@ -146,7 +150,7 @@ def evaluate_policy(
     # Create environment for evaluation
     env = create_gs_env(
         show_viewer=show_viewer,
-        num_envs=2,
+        num_envs=1,
         device=device,
         args=env_args,
         eval_mode=True,
@@ -237,17 +241,22 @@ def evaluate_policy(
             link_name_to_idx[link_name] = env.robot.link_names.index(link_name)
 
         while True:
-            env.hard_reset_motion(torch.IntTensor([0, 1]), motion_id)
+            env.hard_reset_motion(
+                torch.IntTensor(
+                    [
+                        0,
+                    ]
+                ),
+                motion_id,
+            )
             obs, _ = wrapped_env.get_observations()
             while env.motion_times[0] < env.motion_lib.get_motion_length(motion_id):
                 # Get action from policy
                 with torch.no_grad():
                     action = inference_policy(obs)  # type: ignore[misc]
-                    action[1, :] = action[0, :]  # to reduce shaking of dummy env
 
                 # Step environment
                 env.apply_action(action)
-                env.hard_sync_motion(torch.IntTensor([1]))
                 terminated = env.get_terminated()
                 if terminated[0]:
                     env.hard_sync_motion(torch.IntTensor([0]))
@@ -255,6 +264,18 @@ def evaluate_policy(
                 env.update_history()
                 env.get_reward()
                 obs, _ = wrapped_env.get_observations()
+
+                ref_quat_yaw = quat_from_angle_axis(
+                    env.ref_base_euler[:, 2],
+                    torch.tensor([0, 0, 1], device=env.device, dtype=torch.float),
+                )
+                for link_name in env.scene.objects.keys():
+                    ref_link_pos = env.ref_link_pos_local_yaw[:, link_name_to_idx[link_name]]
+                    ref_link_quat = env.ref_link_quat_local_yaw[:, link_name_to_idx[link_name]]
+                    ref_link_pos = quat_apply(ref_quat_yaw, ref_link_pos)
+                    ref_link_pos[:, :2] += env.ref_base_pos[:, :2]
+                    ref_link_quat = quat_mul(ref_quat_yaw, ref_link_quat)
+                    env.scene.set_obj_pose(link_name, pos=ref_link_pos, quat=ref_link_quat)
 
                 step_count += 1
 

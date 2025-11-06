@@ -440,6 +440,9 @@ class MotionEnv(LeggedRobotEnv):
         print(f"Hard resetting motion to {self.motion_lib.motion_names[motion_id]}")
         self._motion_ids[envs_idx] = motion_id
         self._motion_time_offsets[envs_idx] = 0.0
+        self._motion_lengths[envs_idx] = self._motion_lib.get_motion_length(
+            self._motion_ids[envs_idx]
+        )
         self.hard_sync_motion(envs_idx=envs_idx)
 
     @property
