@@ -87,13 +87,20 @@ class LeggedRobotBase(BaseGymRobot):
         self._dof_kd = torch.tensor(dof_kd, device=self._device)
         self._batched_dof_kp = self._dof_kp[None, :].repeat(self._num_envs, 1)
         self._batched_dof_kd = self._dof_kd[None, :].repeat(self._num_envs, 1)
+        self._torque = torch.zeros((self._num_envs, self._dof_dim), device=self._device)
+
+        #
+        self._kp_ratio = torch.ones(self._num_envs, self._dof_dim, device=self._device)
+        self._kd_ratio = torch.ones(self._num_envs, self._dof_dim, device=self._device)
         self._motor_strength = torch.ones(
             (self._num_envs, self._dof_dim), device=self._device
         )  # motor strength scaling factor
         self._motor_offset = torch.zeros(
             (self._num_envs, self._dof_dim), device=self._device
         )  # motor offset
-        self._torque = torch.zeros((self._num_envs, self._dof_dim), device=self._device)
+        self._friction_ratio = torch.ones(self._num_envs, 1, device=self._device)
+        self._added_mass = torch.zeros(self._num_envs, 1, device=self._device)
+        self._com_displacement = torch.zeros(self._num_envs, 3, device=self._device)
 
         # default states
         self._default_pos = torch.tensor(
@@ -149,6 +156,7 @@ class LeggedRobotBase(BaseGymRobot):
             + min_friction
         )
         solver.set_geoms_friction_ratio(ratios, torch.arange(0, solver.n_geoms), envs_idx)
+        self._friction_ratio[envs_idx, 0] = ratios[:, 0]
         # mass
         min_mass, max_mass = self._args.dr_args.mass_range
         added_mass = torch.rand(len(envs_idx), 1) * (max_mass - min_mass) + min_mass
@@ -159,6 +167,7 @@ class LeggedRobotBase(BaseGymRobot):
             ],
             envs_idx,
         )
+        self._added_mass[envs_idx] = added_mass
         # com displacement
         min_com, max_com = self._args.dr_args.com_displacement_range
         displacement = (torch.rand(len(envs_idx), 1, 3) - 0.5) * (max_com - min_com) + min_com
@@ -169,12 +178,14 @@ class LeggedRobotBase(BaseGymRobot):
             ],
             envs_idx,
         )
+        self._com_displacement[envs_idx] = displacement[:, 0, :]
 
     def _randomize_controls(self, envs_idx: torch.IntTensor) -> None:
         # kp
         min_kp, max_kp = self._args.dr_args.kp_range
         ratios = torch.rand(len(envs_idx), self._dof_dim) * (max_kp - min_kp) + min_kp
         self._batched_dof_kp[envs_idx] = ratios * self._dof_kp[None, :]
+        self._kp_ratio[envs_idx] = ratios
         # self._robot.set_dofs_kp(
         #     self._batched_dof_kp[envs_idx], dofs_idx_local=self._dofs_idx_local, envs_idx=envs_idx
         # )
@@ -182,6 +193,7 @@ class LeggedRobotBase(BaseGymRobot):
         min_kd, max_kd = self._args.dr_args.kd_range
         ratios = torch.rand(len(envs_idx), self._dof_dim) * (max_kd - min_kd) + min_kd
         self._batched_dof_kd[envs_idx] = ratios * self._dof_kd[None, :]
+        self._kd_ratio[envs_idx] = ratios
         # self._robot.set_dofs_kv(
         #     self._batched_dof_kd[envs_idx], dofs_idx_local=self._dofs_idx_local, envs_idx=envs_idx
         # )
@@ -401,6 +413,21 @@ class LeggedRobotBase(BaseGymRobot):
     @property
     def dof_pos_limits(self) -> torch.Tensor:
         return self._dof_pos_limits
+
+    @property
+    def dr_obs(self) -> torch.Tensor:
+        return torch.cat(
+            [
+                self._friction_ratio,
+                self._added_mass,
+                self._com_displacement,
+                self._kp_ratio,
+                self._kd_ratio,
+                self._motor_strength,
+                self._motor_offset,
+            ],
+            dim=-1,
+        )
 
     def __getattr__(self, item: str) -> Any:
         if hasattr(self._robot, item):

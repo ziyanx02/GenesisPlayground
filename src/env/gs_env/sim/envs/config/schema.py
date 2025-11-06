@@ -62,10 +62,15 @@ class WalkingEnvArgs(LeggedRobotEnvArgs):
 class MotionEnvArgs(LeggedRobotEnvArgs):
     motion_file: str | None = None
     tracking_link_names: list[str] = []
+
     no_terminate_before_motion_time: float = 1.0
+    no_terminate_after_random_push_time: float = 2.0
     terminate_after_base_pos_error: None | float = 0.5
     terminate_after_base_height_error: None | float = 0.15
-    terminate_after_base_rot_error: None | float = 0.3
+    terminate_after_base_quat_error: None | float = 0.3
     terminate_after_dof_pos_error: None | float = 8.0
+    terminate_after_tracking_link_pos_error: None | float = 0.1
+    adaptive_termination_ratio: None | float = None
+
     reset_to_default_pose_ratio: float = 0.1
     reset_to_motion_range_ratio: float = 0.9

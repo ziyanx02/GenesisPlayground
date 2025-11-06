@@ -182,7 +182,7 @@ class LeggedRobotEnv(BaseEnv):
             )
         self._critic_observation_space = gym.spaces.Dict(critic_obs_spaces)
         self._info_space = gym.spaces.Dict({})
-        self._extra_info = {}
+        self._extra_info = {"info": {}}
 
         # terminate after collision on these links
         self._terminate_link_idx_local = []
@@ -650,6 +650,10 @@ class LeggedRobotEnv(BaseEnv):
     @property
     def dof_vel(self) -> torch.Tensor:
         return self._robot.dof_vel
+
+    @property
+    def dr_obs(self) -> torch.Tensor:
+        return self._robot.dr_obs
 
     @property
     def reward_required_keys(self) -> set[str]:

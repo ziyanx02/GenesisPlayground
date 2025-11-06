@@ -139,7 +139,7 @@ class WalkingEnv(LeggedRobotEnv):
             )
         self.commands[envs_idx, :2] *= (
             torch.norm(self.commands[envs_idx, :2], dim=-1) > self._args.command_lin_vel_clip
-        )
+        )[:, None]
         self.commands[envs_idx, 2] *= (
             torch.abs(self.commands[envs_idx, 2]) > self._args.command_ang_vel_clip
         )

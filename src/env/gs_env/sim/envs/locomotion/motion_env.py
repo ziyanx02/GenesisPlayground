@@ -152,6 +152,23 @@ class MotionEnv(LeggedRobotEnv):
         )
         self._motion_lengths = torch.zeros(self.num_envs, device=self._device, dtype=torch.float32)
 
+        # termination
+        error_list = [
+            "base_pos_error",
+            "base_height_error",
+            "base_quat_error",
+            "dof_pos_error",
+            "tracking_link_pos_error",
+        ]
+        self._terminate_after_error = {}
+        self._num_step_since_update_terminate_error = 0
+        self._error_mask_buffer = {}
+        for error_name in error_list:
+            terminate_after_error = getattr(self._args, f"terminate_after_{error_name}", None)
+            if terminate_after_error is not None:
+                self._terminate_after_error[error_name] = terminate_after_error
+                self._error_mask_buffer[error_name] = []
+
         # initialize once
         self.reset_idx(torch.IntTensor(range(self.num_envs)))
 
@@ -226,6 +243,9 @@ class MotionEnv(LeggedRobotEnv):
         self._robot.set_state(pos=base_pos, quat=base_quat, dof_pos=dof_pos, envs_idx=envs_idx)
 
     def get_terminated(self) -> torch.Tensor:
+        # termination dictionary for extra info
+        termination_dict = {}
+
         reset_buf = self.get_truncated()
 
         # tilt_mask = torch.logical_or(
@@ -251,62 +271,73 @@ class MotionEnv(LeggedRobotEnv):
 
         # Only enable error-based termination after a certain motion time, if specified
         terminate_by_error = self.motion_times > self._args.no_terminate_before_motion_time
+        terminate_by_error |= (
+            self.time_since_random_push > self._args.no_terminate_before_motion_time
+        )
         base_pos_error = torch.norm(self.base_pos - self.ref_base_pos, dim=-1)
         base_height_error = torch.abs(self.base_height - self.ref_base_height)
         base_quat_error = quat_error_magnitude(self.base_quat, self.ref_base_quat)
         dof_pos_error = torch.sum(torch.abs(self.dof_pos - self.ref_dof_pos), dim=-1)
-        # When thresholds are None, ignore the corresponding term
-        base_pos_mask = (
-            torch.zeros_like(base_pos_error, dtype=torch.bool)
-            if self._args.terminate_after_base_pos_error is None
-            else base_pos_error > self._args.terminate_after_base_pos_error
-        )
-        base_height_mask = (
-            torch.zeros_like(base_height_error, dtype=torch.bool)
-            if self._args.terminate_after_base_height_error is None
-            else base_height_error > self._args.terminate_after_base_height_error
-        )
-        base_quat_mask = (
-            torch.zeros_like(base_quat_error, dtype=torch.bool)
-            if self._args.terminate_after_base_rot_error is None
-            else base_quat_error > self._args.terminate_after_base_rot_error
-        )
-        dof_pos_mask = (
-            torch.zeros_like(dof_pos_error, dtype=torch.bool)
-            if self._args.terminate_after_dof_pos_error is None
-            else dof_pos_error > self._args.terminate_after_dof_pos_error
-        )
-        terminate_by_error &= base_pos_mask | base_height_mask | base_quat_mask | dof_pos_mask
+        tracking_link_pos_error = torch.norm(
+            self.tracking_link_pos_local_yaw - self.ref_tracking_link_pos_local_yaw, dim=-1
+        ).mean(dim=-1)
+
+        error_dict = {}
+        error_dict["base_pos_error"] = base_pos_error.clone()
+        error_dict["base_height_error"] = base_height_error.clone()
+        error_dict["base_quat_error"] = base_quat_error.clone()
+        error_dict["dof_pos_error"] = dof_pos_error.clone()
+        error_dict["tracking_link_pos_error"] = tracking_link_pos_error.clone()
+
+        error_mask = {}
+        for error_name in self._terminate_after_error.keys():
+            error_mask[error_name] = (
+                error_dict[error_name] > self._terminate_after_error[error_name]
+            )
+            termination_dict[f"{error_name}"] = error_mask[error_name].clone()
+        if len(self._terminate_after_error.keys()) > 0:
+            terminate_by_error &= torch.any(torch.stack(list(error_mask.values())), dim=0)
         if not self._eval_mode:
             reset_buf |= terminate_by_error
 
-        # if motion_end_mask[0]:
-        #     print("terminate by motion_end")
-        # if base_pos_mask[0]:
-        #     print("terminate by base_pos_error")
-        # if base_height_mask[0]:
-        #     print("terminate by base_height_error")
-        # if base_quat_mask[0]:
-        #     print("terminate by base_quat_error")
-        # if dof_pos_mask[0]:
-        #     print("terminate by dof_pos_error")
+        if self._args.adaptive_termination_ratio is not None:
+            self._update_terminate_error(error_mask)
+
+        # for error_name in self._terminate_after_error.keys():
+        #     if error_mask[error_name][0]:
+        #         print(f"terminate by {error_name}")
 
         self.reset_buf[:] = reset_buf
 
-        termination_dict = {}
         # termination_dict["tilt"] = tilt_mask.clone()
         # termination_dict["height"] = height_mask.clone()
         termination_dict["motion_end"] = motion_end_mask.clone()
-        termination_dict["ref_base_pos"] = base_pos_mask.clone()
-        termination_dict["ref_base_height"] = base_height_mask.clone()
-        termination_dict["ref_base_quat"] = base_quat_mask.clone()
-        termination_dict["ref_dof_pos"] = dof_pos_mask.clone()
         termination_dict["terminate_by_error"] = terminate_by_error.clone()
         termination_dict["contact_force"] = contact_force_mask.clone()
         termination_dict["any"] = reset_buf.clone()
         self._extra_info["termination"] = termination_dict
 
+        for error_name in error_dict.keys():
+            error_dict[error_name] = error_dict[error_name].mean().item()
+        self._extra_info["info"].update(error_dict)
+
         return reset_buf
+
+    def _update_terminate_error(self, error_mask: dict[str, torch.Tensor]) -> None:
+        for error_name in self._terminate_after_error.keys():
+            self._error_mask_buffer[error_name].append(error_mask[error_name].float())
+        self._num_step_since_update_terminate_error += 1
+        if self._num_step_since_update_terminate_error >= 20:
+            self._num_step_since_update_terminate_error = 0
+            for error_name in self._terminate_after_error.keys():
+                terminate_by_error_ratio = torch.mean(
+                    torch.stack(self._error_mask_buffer[error_name])
+                ).item()
+                if terminate_by_error_ratio > 1.5 * self._args.adaptive_termination_ratio:  # type: ignore
+                    self._terminate_after_error[error_name] *= 1.5
+                elif terminate_by_error_ratio < 0.5 * self._args.adaptive_termination_ratio:  # type: ignore
+                    self._terminate_after_error[error_name] /= 1.5
+                self._error_mask_buffer[error_name] = []
 
     def apply_action(self, action: torch.Tensor) -> None:
         super().apply_action(action=action)

@@ -273,7 +273,7 @@ def evaluate_policy(
                     ref_link_pos = env.ref_link_pos_local_yaw[:, link_name_to_idx[link_name]]
                     ref_link_quat = env.ref_link_quat_local_yaw[:, link_name_to_idx[link_name]]
                     ref_link_pos = quat_apply(ref_quat_yaw, ref_link_pos)
-                    ref_link_pos[:, :2] += env.ref_base_pos[:, :2]
+                    ref_link_pos[:, :2] += env.base_pos[:, :2]
                     ref_link_quat = quat_mul(ref_quat_yaw, ref_link_quat)
                     env.scene.set_obj_pose(link_name, pos=ref_link_pos, quat=ref_link_quat)
 

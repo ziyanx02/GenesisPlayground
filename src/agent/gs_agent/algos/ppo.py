@@ -118,6 +118,7 @@ class PPO(BaseAlgo):
         actor_obs, critic_obs = self.env.get_observations()
         termination_buffer = []
         reward_terms_buffer = []
+        info_buffer = []
         with torch.inference_mode():
             # collect rollouts and compute returns & advantages
             for _step in range(num_steps):
@@ -154,7 +155,8 @@ class PPO(BaseAlgo):
                 # Update termination buffer
                 termination_buffer.append(_extra_infos["termination"])
                 reward_terms_buffer.append(_extra_infos["reward_terms"])
-
+                if "error" in _extra_infos:
+                    info_buffer.append(_extra_infos["error"])
                 # Check for episode completions and reset tracking
                 done_mask = terminated.unsqueeze(-1) | truncated.unsqueeze(-1)
                 new_ids = (done_mask > 0).nonzero(as_tuple=False)
@@ -181,6 +183,7 @@ class PPO(BaseAlgo):
         # import ipdb; ipdb.set_trace()
         mean_termination = {}
         mean_reward_terms = {}
+        mean_info = {}
         if len(termination_buffer) > 0:
             for key in termination_buffer[0].keys():
                 terminations = torch.stack([termination[key] for termination in termination_buffer])
@@ -191,11 +194,16 @@ class PPO(BaseAlgo):
                     [reward_term[key] for reward_term in reward_terms_buffer]
                 )
                 mean_reward_terms[key] = reward_terms.mean().item()
+        if len(info_buffer) > 0:
+            for key in info_buffer[0].keys():
+                infos = torch.tensor([info[key] for info in info_buffer])
+                mean_info[key] = infos.mean().item()
         return {
             "mean_reward": mean_reward,
             "mean_ep_len": mean_ep_len,
             "termination": mean_termination,
             "reward_terms": mean_reward_terms,
+            "info": mean_info,
         }
 
     def _train_one_batch(self, mini_batch: dict[GAEBufferKey, torch.Tensor]) -> dict[str, Any]:
@@ -344,6 +352,7 @@ class PPO(BaseAlgo):
             },
             "termination": rollout_infos["termination"],
             "reward_terms": rollout_infos["reward_terms"],
+            "info": rollout_infos["info"],
         }
         return iteration_infos
 
