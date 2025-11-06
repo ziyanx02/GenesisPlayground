@@ -304,3 +304,27 @@ class BaseAngVelReward(RewardTerm):
         base_ang_vel_error = torch.square(base_ang_vel - ref_base_ang_vel).sum(dim=-1)
         # print("base_ang_vel_error", base_ang_vel_error, torch.exp(-base_ang_vel_error * 1))
         return torch.exp(-base_ang_vel_error * 1)
+
+
+class TrackingLinkPosReward(RewardTerm):
+    """
+    Reward the tracking link position.
+
+    Args:
+        tracking_link_pos_local_yaw: Tracking link position tensor of shape (B, N, 3) where B is the batch size and N is the number of tracking links.
+        ref_tracking_link_pos_local_yaw: Reference tracking link position tensor of shape (B, N, 3) where B is the batch size and N is the number of tracking links.
+    """
+
+    required_keys = ("tracking_link_pos_local_yaw", "ref_tracking_link_pos_local_yaw")
+
+    def _compute(
+        self,
+        tracking_link_pos_local_yaw: torch.Tensor,
+        ref_tracking_link_pos_local_yaw: torch.Tensor,
+    ) -> torch.Tensor:  # type: ignore
+        tracking_link_pos_error = (
+            torch.square(tracking_link_pos_local_yaw - ref_tracking_link_pos_local_yaw)
+            .sum(dim=-1)
+            .sum(dim=-1)
+        )
+        return torch.exp(-tracking_link_pos_error * 2)

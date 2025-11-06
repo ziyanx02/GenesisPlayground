@@ -82,9 +82,16 @@ def publish_motion(
             t_val += publish_dt
 
             motion_time_t = torch.tensor([t_val], dtype=torch.float32, device=device_t)
-            base_pos, base_quat, base_lin_vel, base_ang_vel, dof_pos, dof_vel, _ = (
-                motion_lib.calc_motion_frame(motion_ids=motion_id_t, motion_times=motion_time_t)
-            )
+            (
+                base_pos,
+                base_quat,
+                base_lin_vel,
+                base_ang_vel,
+                dof_pos,
+                dof_vel,
+                link_pos_local,
+                link_quat_local,
+            ) = motion_lib.calc_motion_frame(motion_ids=motion_id_t, motion_times=motion_time_t)
 
             payload: dict[str, Any] = {
                 "base_pos": _to_list(base_pos),
@@ -93,6 +100,8 @@ def publish_motion(
                 "base_ang_vel": _to_list(base_ang_vel),
                 "dof_pos": _to_list(dof_pos),
                 "dof_vel": _to_list(dof_vel),
+                "link_pos_local": _to_list(link_pos_local),
+                "link_quat_local": _to_list(link_quat_local),
             }
             r.set(key, json.dumps(payload))
     except KeyboardInterrupt:

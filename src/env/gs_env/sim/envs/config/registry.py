@@ -187,7 +187,7 @@ EnvArgsRegistry["g1_motion"] = MotionEnvArgs(
         "BaseQuatReward": 10.0,
         "BaseLinVelReward": 20.0,
         "BaseAngVelReward": 20.0,
-        # "KeyBodyPosReward": 10.0,
+        "TrackingLinkPosReward": 10.0,
         ### Regularization ###
         "TorquePenalty": 0.00001,
         "ActionRatePenalty": 0.3,
@@ -262,11 +262,17 @@ EnvArgsRegistry["g1_motion"] = MotionEnvArgs(
         "left_elbow_link",
         "right_elbow_link",
     ],
+    tracking_link_names=[
+        "left_ankle_roll_link",
+        "right_ankle_roll_link",
+        "left_wrist_yaw_link",
+        "right_wrist_yaw_link",
+    ],
     no_terminate_before_motion_time=1.0,
     terminate_after_base_pos_error=None,
     terminate_after_base_height_error=0.15,
     terminate_after_base_rot_error=None,
-    terminate_after_dof_pos_error=8.0,
+    terminate_after_dof_pos_error=10.0,
     motion_file=None,
 )
 

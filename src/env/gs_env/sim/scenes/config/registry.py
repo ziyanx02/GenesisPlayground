@@ -395,7 +395,7 @@ SceneArgsRegistry["custom_scene_g1_mocap"] = CustomSceneArgs(
     remove_ground=False,
     objects=[
         {
-            "name": "left_foot",
+            "name": "left_ankle_roll_link",
             "type": "obj",
             "path": "assets/robot/unitree_g1/meshes/left_ankle_roll_link.STL",
             "scale": 1.0,
@@ -407,7 +407,7 @@ SceneArgsRegistry["custom_scene_g1_mocap"] = CustomSceneArgs(
             "color": (0.0, 0.0, 1.0),
         },
         {
-            "name": "right_foot",
+            "name": "right_ankle_roll_link",
             "type": "obj",
             "path": "assets/robot/unitree_g1/meshes/right_ankle_roll_link.STL",
             "scale": 1.0,
@@ -423,7 +423,7 @@ SceneArgsRegistry["custom_scene_g1_mocap"] = CustomSceneArgs(
             "type": "obj",
             "path": "assets/robot/unitree_g1/meshes/pelvis_contour_link.STL",
             "scale": 1.0,
-            "position": (0.6, 0.0, 0.0),
+            "position": (0.0, 0.0, 0.0),
             "orientation": (0.0, 0.0, 0.0),
             "fixed": True,
             "visualization": True,
@@ -431,7 +431,7 @@ SceneArgsRegistry["custom_scene_g1_mocap"] = CustomSceneArgs(
             "color": (0.0, 0.0, 1.0),
         },
         {
-            "name": "torso",
+            "name": "torso_link",
             "type": "obj",
             "path": "assets/robot/unitree_g1/meshes/torso_link_rev_1_0.STL",
             "scale": 1.0,
@@ -443,7 +443,7 @@ SceneArgsRegistry["custom_scene_g1_mocap"] = CustomSceneArgs(
             "color": (0.0, 0.0, 1.0),
         },
         {
-            "name": "left_hand",
+            "name": "left_wrist_yaw_link",
             "type": "obj",
             "path": "assets/robot/unitree_g1/meshes/left_rubber_hand.STL",
             "scale": 1.0,
@@ -455,7 +455,7 @@ SceneArgsRegistry["custom_scene_g1_mocap"] = CustomSceneArgs(
             "color": (0.0, 0.0, 1.0),
         },
         {
-            "name": "right_hand",
+            "name": "right_wrist_yaw_link",
             "type": "obj",
             "path": "assets/robot/unitree_g1/meshes/right_rubber_hand.STL",
             "scale": 1.0,

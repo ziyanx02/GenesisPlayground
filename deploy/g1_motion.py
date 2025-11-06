@@ -169,8 +169,12 @@ def main(
                 ref_base_ang_vel,
                 ref_dof_pos,
                 ref_dof_vel,
-                _,
+                ref_link_pos_local,
+                ref_link_quat_local,
             ) = motion_lib.calc_motion_frame(motion_ids=motion_id_t, motion_times=motion_time_t)
+
+            _ = ref_link_pos_local
+            _ = ref_link_quat_local
 
             # Construct observation (matching training observation structure)
             obs_components = []

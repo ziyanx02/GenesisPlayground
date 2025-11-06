@@ -232,6 +232,10 @@ def evaluate_policy(
         motion_id = 0
         step_count = 0
 
+        link_name_to_idx = {}
+        for link_name in env.scene.objects.keys():
+            link_name_to_idx[link_name] = env.robot.link_names.index(link_name)
+
         while True:
             env.hard_reset_motion(torch.IntTensor([0, 1]), motion_id)
             obs, _ = wrapped_env.get_observations()
@@ -394,6 +398,10 @@ def view_motion(env_args: Any, show_viewer: bool = False) -> None:
     )
     import time
 
+    link_name_to_idx = {}
+    for link_name in env.scene.objects.keys():
+        link_name_to_idx[link_name] = env.robot.link_names.index(link_name)
+
     def run() -> None:
         nonlocal env
         motion_id = 0
@@ -405,6 +413,10 @@ def view_motion(env_args: Any, show_viewer: bool = False) -> None:
                 env.time_since_reset[0] += 0.1
                 env.hard_sync_motion(torch.IntTensor([0]))
                 env.update_buffers()
+                for link_name in env.scene.objects.keys():
+                    link_pos = env.ref_link_pos_local_yaw[:, link_name_to_idx[link_name]]
+                    link_quat = env.ref_link_quat_local_yaw[:, link_name_to_idx[link_name]]
+                    env.scene.set_obj_pose(link_name, pos=link_pos, quat=link_quat)
                 while time.time() - last_update_time < 0.1:
                     time.sleep(0.01)
                 last_update_time = time.time()

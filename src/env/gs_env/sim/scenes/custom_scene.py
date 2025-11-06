@@ -5,9 +5,10 @@ import torch
 
 from gs_env.common.bases.base_scene import BaseSimScene
 from gs_env.sim.scenes.config.schema import CustomSceneArgs
+from gs_env.sim.scenes.flat_scene import FlatScene
 
 
-class CustomScene(BaseSimScene):
+class CustomScene(FlatScene):
     def __init__(
         self,
         num_envs: int,
@@ -19,7 +20,7 @@ class CustomScene(BaseSimScene):
         env_spacing: tuple[float, float] = (1.0, 1.0),
         img_resolution: tuple[int, int] | None = None,
     ) -> None:
-        super().__init__()
+        BaseSimScene.__init__(self)
         self._device = device
         #
         # _renderer = (
@@ -118,9 +119,6 @@ class CustomScene(BaseSimScene):
         self._center_envs_at_origin = args.center_envs_at_origin
         self._compile_kernels = args.compile_kernels
 
-    def reset(self, envs_idx: torch.IntTensor) -> None:
-        self._scene.reset(envs_idx=envs_idx)
-
     def set_obj_pose(
         self,
         name: str,
@@ -145,29 +143,6 @@ class CustomScene(BaseSimScene):
         if quat is not None:
             obj.set_quat(quat, envs_idx=envs_idx)
 
-    def __getattr__(self, item: str) -> Any:
-        if hasattr(self._scene, item):
-            return getattr(self._scene, item)
-        raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{item}'")
-
     @property
-    def scene(self) -> gs.Scene:
-        """Returns the underlying genesis scene."""
-        return self._scene
-
-    @property
-    def env_spacing(self) -> tuple[float, float]:
-        """Returns the spacing between environments."""
-        return self._env_spacing
-
-    @property
-    def n_envs_per_row(self) -> int | None:
-        return self._n_envs_per_row
-
-    @property
-    def center_envs_at_origin(self) -> bool:
-        return self._center_envs_at_origin
-
-    @property
-    def num_envs(self) -> int:
-        return self._num_envs
+    def objects(self) -> dict[str, Any]:
+        return self._objects

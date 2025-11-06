@@ -7,8 +7,12 @@ from tqdm import tqdm
 
 #
 from gs_env.common.utils.math_utils import (
+    quat_apply,
     quat_diff,
+    quat_from_euler,
+    quat_mul,
     quat_to_angle_axis,
+    quat_to_euler,
     slerp,
 )
 
@@ -44,6 +48,8 @@ class MotionLib:
         motion_dof_vel = []
         motion_link_pos_global = []
         motion_link_quat_global = []
+        motion_link_pos_local = []
+        motion_link_quat_local = []
 
         full_motion_files, full_motion_weights = self._fetch_motion_files(motion_file)
         num_motion_files = len(full_motion_files)
@@ -95,8 +101,16 @@ class MotionLib:
                     link_quat_global = torch.tensor(
                         motion_data["link_quat"], dtype=torch.float, device=self._device
                     )
-                    # link_pos_local = quat_apply(base_quat, link_pos_global - base_pos)
-                    # link_quat_local = quat_mul(quat_inv(base_quat), link_quat_global)
+
+                    relative_link_pos_global = link_pos_global.clone()
+                    relative_link_pos_global[:, :, :2] -= base_pos[:, None, :2]
+                    base_euler = quat_to_euler(base_quat)
+                    base_euler[:, :2] = 0.0
+                    batched_inv_quat_yaw = quat_from_euler(
+                        -base_euler[:, None, :].repeat(1, link_pos_global.shape[1], 1)
+                    )
+                    link_pos_local = quat_apply(batched_inv_quat_yaw, relative_link_pos_global)
+                    link_quat_local = quat_mul(batched_inv_quat_yaw, link_quat_global)
 
                     self._motion_names.append(os.path.basename(curr_file))
                     self._motion_files.append(curr_file)
@@ -115,6 +129,8 @@ class MotionLib:
                     motion_dof_vel.append(dof_vel)
                     motion_link_pos_global.append(link_pos_global)
                     motion_link_quat_global.append(link_quat_global)
+                    motion_link_pos_local.append(link_pos_local)
+                    motion_link_quat_local.append(link_quat_local)
 
             except Exception as e:
                 print("Error loading motion file %s: %s", curr_file, e)
@@ -140,6 +156,8 @@ class MotionLib:
         self._motion_dof_vel = torch.cat(motion_dof_vel, dim=0)
         self._motion_link_pos_global = torch.cat(motion_link_pos_global, dim=0)
         self._motion_link_quat_global = torch.cat(motion_link_quat_global, dim=0)
+        self._motion_link_pos_local = torch.cat(motion_link_pos_local, dim=0)
+        self._motion_link_quat_local = torch.cat(motion_link_quat_local, dim=0)
 
         lengths_shifted = self._motion_num_frames.roll(1)
         lengths_shifted[0] = 0
@@ -218,6 +236,7 @@ class MotionLib:
         torch.Tensor,
         torch.Tensor,
         torch.Tensor,
+        torch.Tensor,
     ]:
         assert motion_times.min() >= 0.0, "motion_times must be non-negative"
         assert (motion_times <= self._motion_lengths[motion_ids]).all(), (
@@ -238,8 +257,11 @@ class MotionLib:
         dof_pos0 = self._motion_dof_pos[frame_idx0]
         dof_pos1 = self._motion_dof_pos[frame_idx1]
 
-        local_key_body_pos0 = self._motion_link_pos_global[frame_idx0]
-        local_key_body_pos1 = self._motion_link_pos_global[frame_idx1]
+        link_pos_local0 = self._motion_link_pos_local[frame_idx0]
+        link_pos_local1 = self._motion_link_pos_local[frame_idx1]
+
+        link_quat_local0 = self._motion_link_quat_local[frame_idx0]
+        link_quat_local1 = self._motion_link_quat_local[frame_idx1]
 
         dof_vel = self._motion_dof_vel[frame_idx0]
 
@@ -249,17 +271,30 @@ class MotionLib:
 
         dof_pos = (1.0 - blend_unsqueeze) * dof_pos0 + blend_unsqueeze * dof_pos1
 
-        local_key_body_pos = (
+        link_pos_local = (
             1.0 - blend_unsqueeze.unsqueeze(1)
-        ) * local_key_body_pos0 + blend_unsqueeze.unsqueeze(1) * local_key_body_pos1
+        ) * link_pos_local0 + blend_unsqueeze.unsqueeze(1) * link_pos_local1
 
-        return base_pos, base_quat, base_lin_vel, base_ang_vel, dof_pos, dof_vel, local_key_body_pos
+        link_quat_local = slerp(
+            link_quat_local0, link_quat_local1, blend[:, None].repeat(1, link_quat_local0.shape[1])
+        )
 
-    def get_key_body_idx(self, key_body_names: list[str]) -> list[int]:
-        key_body_idx = []
-        for key_body_name in key_body_names:
-            key_body_idx.append(self._link_names.index(key_body_name))
-        return key_body_idx  # list
+        return (
+            base_pos,
+            base_quat,
+            base_lin_vel,
+            base_ang_vel,
+            dof_pos,
+            dof_vel,
+            link_pos_local,
+            link_quat_local,
+        )
+
+    def get_link_idx_local_by_name(self, name: str) -> int:
+        return self._link_names.index(name)
+
+    def get_joint_idx_by_name(self, name: str) -> int:
+        return self._dof_names.index(name)
 
     def get_motion_length(self, motion_ids: torch.Tensor) -> torch.Tensor:
         return self._motion_lengths[motion_ids]

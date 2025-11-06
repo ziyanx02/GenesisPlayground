@@ -347,6 +347,10 @@ class LeggedRobotBase(BaseGymRobot):
         return self._args.dof_names
 
     @property
+    def link_names(self) -> list[str]:
+        return [link.name for link in self._robot.links]
+
+    @property
     def default_pos(self) -> torch.Tensor:
         return self._default_pos
 
