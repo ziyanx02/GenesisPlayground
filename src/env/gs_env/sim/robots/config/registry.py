@@ -1,3 +1,4 @@
+import math
 from typing import TypeAlias
 
 from gs_env.sim.robots.config.schema import (
@@ -481,7 +482,7 @@ MaterialArgsRegistry["wuji_hand"] = RigidMaterialArgs(
     gravity_compensation=1,  # Fixed hand needs gravity compensation
 )
 
-# Morph configuration for WUJI hand
+# Morph configuration for WUJI hand (fixed base)
 MorphArgsRegistry["wuji_hand"] = URDFMorphArgs(
     pos=(0.0, 0.1, 0.15),  # Position above the ground
     euler=(90, -90, 0),  # Rotate to align properly
@@ -495,6 +496,26 @@ MorphArgsRegistry["wuji_hand"] = URDFMorphArgs(
     convexify=False,
     recompute_inertia=False,
     fixed=True,  # Hand base is fixed
+    prioritize_urdf_material=False,
+    merge_fixed_links=True,
+    links_to_keep=[],
+    decimate=True,
+)
+
+# Morph configuration for WUJI hand with free base
+MorphArgsRegistry["wuji_hand_free_base"] = URDFMorphArgs(
+    pos=(0.0, 0.1, 0.15),  # Initial position above the ground
+    euler=(90, -90, 0),  # Rotate to align properly
+    quat=None,
+    visualization=True,
+    collision=True,
+    requires_jac_and_IK=False,  # No IK needed for direct joint control
+    is_free=True,  # Free base - can move in 6 DOF
+    file="assets/robot/wujihand-urdf/urdf/right.urdf",
+    scale=1.0,
+    convexify=False,
+    recompute_inertia=False,
+    fixed=False,  # Hand base is free to move
     prioritize_urdf_material=False,
     merge_fixed_links=True,
     links_to_keep=[],
@@ -560,7 +581,7 @@ WUJI_default_dof_pos: dict[str, float] = {
     }
 
 # PD gains for WUJI hand
-WUJI_kp_dict: dict[str, float] = {
+WUJI_kp_dict: dict[str, float | list[float]] = {
     "finger1_joint1": 20.0,
     "finger1_joint2": 20.0,
     "finger1_joint3": 20.0,
@@ -581,9 +602,10 @@ WUJI_kp_dict: dict[str, float] = {
     "finger5_joint2": 20.0,
     "finger5_joint3": 20.0,
     "finger5_joint4": 20.0,
+    "root_joint": [200.0, 200.0, 200.0, 20.0, 20.0, 20.0]
 }
 
-WUJI_kd_dict: dict[str, float] = {
+WUJI_kd_dict: dict[str, float | list[float]] = {
     "finger1_joint1": 5.0,
     "finger1_joint2": 5.0,
     "finger1_joint3": 5.0,
@@ -604,6 +626,7 @@ WUJI_kd_dict: dict[str, float] = {
     "finger5_joint2": 5.0,
     "finger5_joint3": 5.0,
     "finger5_joint4": 5.0,
+    "root_joint": [10.0, 10.0, 10.0, 5.0, 5.0, 5.0]
 }
 
 # Fingertip link names for contact sensing
@@ -615,7 +638,7 @@ WUJI_fingertip_link_names: list[str] = [
     "finger5_link4",  # Pinky tip
 ]
 
-# Register WUJI hand robot configuration
+# Register WUJI hand robot configuration (fixed base)
 RobotArgsRegistry["wuji_hand"] = ManipulatorRobotArgs(
     material_args=MaterialArgsRegistry["wuji_hand"],
     morph_args=MorphArgsRegistry["wuji_hand"],
@@ -639,6 +662,38 @@ RobotArgsRegistry["wuji_hand"] = ManipulatorRobotArgs(
     default_gripper_dof=WUJI_default_dof_pos,  # All 20 finger joints
     soft_dof_pos_range=0.95,  # Use 95% of joint range to avoid hitting limits
     action_scale=0.1,  # Scale factor for delta actions (10cm/rad per action unit)
+    decimation=4,  # Run 4 physics steps per action (50Hz control @ 200Hz sim = 4)
+    dof_kp=WUJI_kp_dict,
+    dof_kd=WUJI_kd_dict,
+    dof_max_force=100.0,
+)
+
+# Register WUJI hand robot configuration with free base (6 DOF base + 20 DOF fingers = 26 DOF total)
+RobotArgsRegistry["wuji_hand_free_base"] = ManipulatorRobotArgs(
+    material_args=MaterialArgsRegistry["wuji_hand"],
+    morph_args=MorphArgsRegistry["wuji_hand_free_base"],
+    dr_args=DomainRandomizationArgs(
+        kp_range=(0.8, 1.2),  # ±20% variation in joint stiffness
+        kd_range=(0.8, 1.2),  # ±20% variation in joint damping
+        motor_strength_range=(0.9, 1.1),  # ±10% variation in motor strength
+        motor_offset_range=(-0.01, 0.01),  # ±0.01 rad motor offset
+        friction_range=(0.7, 1.3),  # ±30% variation in cube friction (0.56-1.04)
+        mass_range=(-0.002, 0.01),  # ±10g variation in cube mass
+        com_displacement_range=(-0.005, 0.005),  # ±5mm COM displacement in cube
+    ),
+    visualize_contact=False,
+    vis_mode="collision",  # Use collision geometry for better contact
+    ctrl_type=CtrlType.JOINT_POSITION,  # Direct joint position control
+    ik_solver=IKSolver.GS,  # Not used but required by schema
+    ee_link_name="base",  # Palm as reference link
+    show_target=False,
+    gripper_link_names=WUJI_fingertip_link_names,  # Fingertips for grasping
+    default_arm_dof={
+        "root_joint": [0.0, 0.1, 0.15, math.pi / 2, 0.0, math.pi / 2],
+    },
+    default_gripper_dof=WUJI_default_dof_pos,  # All 20 finger joints
+    soft_dof_pos_range=0.95,  # Use 95% of joint range to avoid hitting limits
+    action_scale=0.1,  # Scale factor for delta actions (fingers only, base handled separately)
     decimation=4,  # Run 4 physics steps per action (50Hz control @ 200Hz sim = 4)
     dof_kp=WUJI_kp_dict,
     dof_kd=WUJI_kd_dict,

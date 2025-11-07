@@ -723,3 +723,81 @@ class EarlyTerminationPenalty(RewardTerm):
         terminated = torch.clamp(is_dropped + is_too_far, 0.0, 1.0)
 
         return -terminated  # Returns -1.0 when terminated, 0.0 when safe
+
+
+### ---- Base Movement Constraints (for free base robots) ---- ###
+
+
+class BasePositionPenalty(RewardTerm):
+    """
+    Penalty for base moving away from initial position.
+    Encourages the base to stay near its starting location.
+
+    Args:
+        base_pos: Base position tensor of shape (B, 3).
+        initial_base_pos: Initial base position tensor of shape (B, 3).
+    """
+
+    required_keys = ("base_pos", "initial_base_pos")
+
+    def _compute(self, base_pos: torch.Tensor, initial_base_pos: torch.Tensor) -> torch.Tensor:  # type: ignore
+        # Penalize squared distance from initial position
+        position_diff = torch.sum((base_pos - initial_base_pos) ** 2, dim=-1)
+        return -position_diff
+
+
+class BaseOrientationPenalty(RewardTerm):
+    """
+    Penalty for base rotating away from initial orientation.
+    Encourages the base to maintain its starting orientation.
+
+    Args:
+        base_quat: Base quaternion tensor of shape (B, 4).
+        initial_base_quat: Initial base quaternion tensor of shape (B, 4).
+    """
+
+    required_keys = ("base_quat", "initial_base_quat")
+
+    def _compute(self, base_quat: torch.Tensor, initial_base_quat: torch.Tensor) -> torch.Tensor:  # type: ignore
+        # Compute quaternion difference using dot product
+        # For unit quaternions, dot product close to 1 means similar orientation
+        quat_dot = torch.sum(base_quat * initial_base_quat, dim=-1)
+        # Convert to angular distance (close to 0 for similar orientations)
+        # Using: angular_distance = 2 * arccos(|dot_product|)
+        # Approximate with squared term for smoothness: (1 - |dot|)^2
+        orientation_diff = (1.0 - torch.abs(quat_dot)) ** 2
+        return -orientation_diff
+
+
+class BaseLinVelPenalty(RewardTerm):
+    """
+    Penalty for excessive base linear velocity.
+    Encourages the base to move slowly or stay still.
+
+    Args:
+        base_lin_vel: Base linear velocity tensor of shape (B, 3).
+    """
+
+    required_keys = ("base_lin_vel",)
+
+    def _compute(self, base_lin_vel: torch.Tensor) -> torch.Tensor:  # type: ignore
+        # Penalize squared velocity magnitude
+        vel_magnitude_sq = torch.sum(base_lin_vel**2, dim=-1)
+        return -vel_magnitude_sq
+
+
+class BaseAngVelPenalty(RewardTerm):
+    """
+    Penalty for excessive base angular velocity.
+    Encourages the base to rotate slowly or stay still.
+
+    Args:
+        base_ang_vel: Base angular velocity tensor of shape (B, 3).
+    """
+
+    required_keys = ("base_ang_vel",)
+
+    def _compute(self, base_ang_vel: torch.Tensor) -> torch.Tensor:  # type: ignore
+        # Penalize squared angular velocity magnitude
+        ang_vel_magnitude_sq = torch.sum(base_ang_vel**2, dim=-1)
+        return -ang_vel_magnitude_sq

@@ -329,7 +329,7 @@ EnvArgsRegistry["wuji_inhand_rotation"] = ManipulationEnvArgs(
     env_name="InHandRotationEnv",
     gs_init_args=GenesisInitArgsRegistry["default"],
     scene_args=SceneArgsRegistry["flat_scene_default"],
-    robot_args=RobotArgsRegistry["wuji_hand"],
+    robot_args=RobotArgsRegistry["wuji_hand"],  # Fixed base (20 DOF)
     objects_args=[],  # Cube is created in environment
     sensors_args=[],
     reward_term="manipulation",
@@ -430,6 +430,133 @@ EnvArgsRegistry["wuji_inhand_rotation"] = ManipulationEnvArgs(
         "action_history_flat",
         # DOF position history (20 * 3 = 60D)
         "dof_pos_history_flat",
+        # Hand velocity (20D)
+        "hand_dof_vel",
+        # Cube state (3 + 4 + 3 + 3 = 13D)
+        "cube_pos",
+        "cube_quat",
+        "cube_lin_vel",
+        "cube_ang_vel",
+    ],
+)
+
+# WUJI Hand with free base (6 DOF base + 20 DOF fingers = 26 DOF total)
+EnvArgsRegistry["wuji_inhand_rotation_free_base"] = ManipulationEnvArgs(
+    env_name="InHandRotationEnv",
+    gs_init_args=GenesisInitArgsRegistry["default"],
+    scene_args=SceneArgsRegistry["flat_scene_default"],
+    robot_args=RobotArgsRegistry["wuji_hand_free_base"],  # Free base (26 DOF: 6 base + 20 fingers)
+    objects_args=[],  # Cube is created in environment
+    sensors_args=[],
+    reward_term="manipulation",
+    # Tactile sensor configuration
+    use_tactile=True,  # Set to True to enable tactile sensing
+    tactile_grid_path="assets/robot/wujihand-urdf/merged_tactile_grid_free.json",
+    tactile_sensor_links=None,  # None = use all links from grid file
+    tactile_kn=2000.0,
+    reward_args={
+        ### Main Task Rewards (Penspin-style) ###
+        "RotateRewardClipped": {
+            "scale": 100.0,  # rotate_reward_scale from penspin
+            "angvel_scale_factor": 10.0,  # New scaling factor for angular velocity
+            "angvel_clip_min": -3.14,  # angvelClipMin from penspin
+            "angvel_clip_max": 3.14,  # angvelClipMax from penspin
+        },
+        "SlowRotationPenalty": {
+            "scale": 500.0,  # Penalty for rotating too slowly
+            "min_angvel_threshold": 0.1,  # Minimum acceptable angular velocity (rad/s)
+        },
+        ### Regularization Penalties ###
+        "ObjectLinVelPenalty": {
+            "scale": 5.0,  # obj_linvel_penalty_scale from penspin (0.3)
+        },
+        "TorquePenalty": {
+            "scale": 0.05,  # torque_penalty_scale from penspin (0.1)
+        },
+        "WorkPenalty": {
+            "scale": 0.01,  # work_penalty_scale from penspin (1.0)
+        },
+        "PositionPenalty": {
+            "scale": 10000.0,  # position_penalty_scale from penspin (0.1)
+            "target_y": 0.0,
+        },
+        "FingertipCubeProximityPenaltySquared": {
+            "scale": 50.0,
+        },
+        "FingertipCubeProximityReward": {
+            "scale": 100.0,
+        },
+        "EarlyTerminationPenalty": {
+            "scale": 5000.0,  # Large one-time penalty at termination
+            "stay_center": [0.0, 0.0, 0.15],
+            "height_threshold": -0.03,
+            "xy_threshold": 0.04,
+        },
+        ### Base Movement Constraints (new for free base) ###
+        "BasePositionPenalty": {
+            "scale": 100.0,  # Penalty for base moving away from initial position
+        },
+        "BaseOrientationPenalty": {
+            "scale": 50.0,  # Penalty for base rotating away from initial orientation
+        },
+        "BaseLinVelPenalty": {
+            "scale": 10.0,  # Penalty for excessive base linear velocity
+        },
+        "BaseAngVelPenalty": {
+            "scale": 10.0,  # Penalty for excessive base angular velocity
+        },
+    },
+    cube_args={
+        "size": 0.04,
+        "position": (0.0, 0.0, 0.20),
+    },
+    img_resolution=(480, 480),
+    action_latency=1,
+    obs_history_len=3,  # 3 timesteps of history
+    obs_scales={
+        "hand_dof_vel": 0.8,
+        "cube_ang_vel": 0.5,
+        "tactile_forces_flat": 8.0,
+        "cube_lin_vel": 10.0,
+        "cube_pos": 10.0,
+        "base_lin_vel": 1.0,  # New: base velocity scaling
+        "base_ang_vel": 1.0,  # New: base angular velocity scaling
+    },
+    obs_noises={
+        "hand_dof_pos": 0.01,
+        "hand_dof_vel": 0.1,
+        "cube_pos": 0.002,
+        "cube_quat": 0.01,
+        "base_pos": 0.002,  # New: base position noise
+        "base_quat": 0.01,  # New: base orientation noise
+    },
+    actor_obs_terms=[
+        # Action history (26 * 3 = 78D for free base vs 60D for fixed)
+        "action_history_flat",  # Flattened action history
+        # DOF position history (26 * 3 = 78D for free base vs 60D for fixed)
+        "dof_pos_history_flat",  # Flattened DOF position history
+        # Base state (new for free base)
+        "base_pos",  # 3D
+        "base_quat",  # 4D
+        "base_lin_vel",  # 3D
+        "base_ang_vel",  # 3D
+        # Hand and cube (privileged information)
+        "hand_dof_vel",
+        "cube_pos",
+        "cube_quat",
+        "cube_lin_vel",
+        "cube_ang_vel",
+    ],
+    critic_obs_terms=[
+        # Action history (26 * 3 = 78D)
+        "action_history_flat",
+        # DOF position history (26 * 3 = 78D)
+        "dof_pos_history_flat",
+        # Base state (new for free base)
+        "base_pos",  # 3D
+        "base_quat",  # 4D
+        "base_lin_vel",  # 3D
+        "base_ang_vel",  # 3D
         # Hand velocity (20D)
         "hand_dof_vel",
         # Cube state (3 + 4 + 3 + 3 = 13D)

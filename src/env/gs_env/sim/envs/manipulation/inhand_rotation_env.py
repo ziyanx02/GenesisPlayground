@@ -189,13 +189,20 @@ class InHandRotationEnv(BaseEnv):
         # Hand palm position (for fall-off detection)
         self.hand_palm_pos = torch.zeros((self.num_envs, 3), device=self._device)
 
+        # Base state buffers (for free base robots)
+        self.base_pos = torch.zeros((self.num_envs, 3), device=self._device)
+        self.base_quat = torch.zeros((self.num_envs, 4), device=self._device)
+        self.base_lin_vel = torch.zeros((self.num_envs, 3), device=self._device)
+        self.base_ang_vel = torch.zeros((self.num_envs, 3), device=self._device)
+
+        # Store initial base pose for penalty calculation
+        self.initial_base_pos = self._robot.base_pos
+        self.initial_base_quat = self._robot.base_quat
+
         # Environment state buffers
         self.time_since_reset = torch.zeros(self.num_envs, device=self._device)
         self.reset_buf = torch.zeros(self.num_envs, dtype=torch.bool, device=self._device)
         self.time_out_buf = torch.zeros(self.num_envs, dtype=torch.bool, device=self._device)
-
-        # Initial cube pose (in hand, above palm)
-        self.initial_cube_height = 0.20  # 20cm above ground (hand palm is at ~15cm)
 
         # Action scale for delta control (from robot args)
         self._action_scale = self._args.robot_args.action_scale
@@ -390,6 +397,12 @@ class InHandRotationEnv(BaseEnv):
 
         self.fingertip_pos[:] = self._robot.fingertip_pos.reshape(self.num_envs, -1)
 
+        # Update base state (for free base robots) - uses properties from ManipulatorBase
+        self.base_pos[:] = self._robot.base_pos
+        self.base_quat[:] = self._robot.base_quat
+        self.base_lin_vel[:] = self._robot.base_lin_vel
+        self.base_ang_vel[:] = self._robot.base_ang_vel
+
         # Update flattened history buffers for observations
         self.action_history_flat[:] = self._action_buf[:, :, -self._action_history_len:].transpose(1, 2).reshape(
             self.num_envs, -1
@@ -453,7 +466,9 @@ class InHandRotationEnv(BaseEnv):
 
     def apply_action(self, action: torch.Tensor) -> None:
         """Apply action to the environment."""
-        # Action is 20D delta for finger joints
+        # Action dimension depends on whether base is free:
+        # - Fixed base: 20D for finger joints only
+        # - Free base: 26D (6D base + 20D fingers)
         action = action.detach().to(self._device)
 
         # Update action history buffer (shift and add new action)
@@ -463,8 +478,22 @@ class InHandRotationEnv(BaseEnv):
         # Get action from history buffer with latency
         exec_action = self._action_buf[:, :, -self._action_latency - 1]
 
-        # Scale the action
-        exec_action *= self._action_scale
+        # Check if base is free (has more DOFs than just fingers)
+        is_free_base = self._args.robot_args.morph_args.is_free
+
+        if is_free_base:
+            # For free base: first 6 DOFs are base (3 pos + 3 rot), rest are fingers
+            # Apply different scaling to base and finger actions
+            base_action_scale = 0.01  # Smaller scale for base position/rotation
+            finger_action_scale = self._action_scale
+
+            # Scale base actions (first 6 DOFs)
+            exec_action[:, :6] *= base_action_scale
+            # Scale finger actions (remaining DOFs)
+            exec_action[:, 6:] *= finger_action_scale
+        else:
+            # For fixed base: all DOFs are fingers
+            exec_action *= self._action_scale
 
         # Target position = current + scaled delta
         target_dof_pos = self.hand_dof_pos + exec_action

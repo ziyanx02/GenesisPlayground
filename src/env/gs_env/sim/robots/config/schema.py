@@ -81,13 +81,13 @@ class ManipulatorRobotArgs(BaseModel):
     ee_link_name: str
     show_target: bool
     gripper_link_names: list[str]
-    default_arm_dof: dict[str, float]
+    default_arm_dof: dict[str, float | list[float]]
     default_gripper_dof: dict[str, float] | None = None
     soft_dof_pos_range: float = 1.0  # Soft limit range multiplier (1.0 = use full range)
     action_scale: float = 0.1  # Scale factor for actions
     decimation: int = 4  # Number of simulation steps per action
-    dof_kp: dict[str, float]
-    dof_kd: dict[str, float]
+    dof_kp: dict[str, float | list[float]]
+    dof_kd: dict[str, float | list[float]]
     dof_max_force: float
 
 

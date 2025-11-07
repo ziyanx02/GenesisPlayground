@@ -38,7 +38,8 @@ class ManipulatorBase(BaseGymRobot):
             merge_fixed_links=True,
             pos=args.morph_args.pos,
             euler=args.morph_args.euler,
-            fixed=True,
+            fixed=args.morph_args.fixed,
+            is_free=args.morph_args.is_free,
         )
         #
         robot_entity = scene.add_entity(
@@ -52,13 +53,68 @@ class ManipulatorBase(BaseGymRobot):
         )
         self._robot_entity = robot_entity
 
+        # == some buffer initialization ==
+        self._init()
+
+    def _init(self) -> None:
+        all_dof_names = list(self._args.default_arm_dof.keys())
+        if self._args.default_gripper_dof is not None:
+            all_dof_names += list(self._args.default_gripper_dof.keys())
+        self._all_dof_names = all_dof_names
+
+        self._arm_dof_dim = sum(
+            [self._robot_entity.get_joint(name).n_dofs for name in self._args.default_arm_dof.keys()]
+        )
+        self._gripper_dof_dim = sum(
+            [self._robot_entity.get_joint(name).n_dofs for name in self._args.default_gripper_dof.keys()]
+        )
+        self._dof_dim = self._arm_dof_dim + self._gripper_dof_dim
+
+        # About torque calculation and domain randomization
+        dof_kp, dof_kd = [], []
+        for dof_name in all_dof_names:
+            if type(self._args.dof_kp[dof_name]) is list:
+                dof_kp += self._args.dof_kp[dof_name]
+                dof_kd += self._args.dof_kd[dof_name]
+            else:
+                dof_kp.append(self._args.dof_kp[dof_name])
+                dof_kd.append(self._args.dof_kd[dof_name])
+        self._dof_kp = torch.tensor(dof_kp, device=self._device)
+        self._dof_kd = torch.tensor(dof_kd, device=self._device)
+        self._batched_dof_kp = self._dof_kp[None, :].repeat(self._num_envs, 1)
+        self._batched_dof_kd = self._dof_kd[None, :].repeat(self._num_envs, 1)
+        self._motor_strength = torch.ones((self._num_envs, self._dof_dim), device=self._device)
+        self._motor_offset = torch.zeros((self._num_envs, self._dof_dim), device=self._device)
+
+        # default_dof_pos = list(self._args.default_arm_dof.values())
+        default_dof_pos = []
+        for dof_name in self._args.default_arm_dof.keys():
+            if type(self._args.default_arm_dof[dof_name]) is list:
+                default_dof_pos += self._args.default_arm_dof[dof_name]
+            else:
+                default_dof_pos.append(self._args.default_arm_dof[dof_name])
+        if self._args.default_gripper_dof is not None:
+            default_dof_pos += list(self._args.default_gripper_dof.values())
+        self._default_dof_pos = torch.tensor(default_dof_pos, dtype=torch.float32, device=self._device)
+
+        # Buffers
+        self._dof_pos = torch.zeros((self._num_envs, self._dof_dim), dtype=torch.float32, device=self._device)
+        self._dof_vel = torch.zeros((self._num_envs, self._dof_dim), dtype=torch.float32, device=self._device)
+        self._torque = torch.zeros((self._num_envs, self._dof_dim), device=self._device)
+
+        # == set up control dispatch ==
+        self._dispatch = {
+            CtrlType.JOINT_POSITION.value: self._apply_joint_pos,
+            CtrlType.EE_POSE_ABS.value: self._apply_ee_pose_abs,
+            CtrlType.EE_POSE_REL.value: self._apply_ee_pose_rel,
+        }
+
         # == action space ==
-        n_dof = len(args.default_arm_dof.keys()) + len(args.default_gripper_dof.keys())
         action_space_dict: dict[str, spaces.Space[Any]] = {}
-        match args.ctrl_type:
+        match self._args.ctrl_type:
             case CtrlType.JOINT_POSITION:
                 action_space_dict.update(
-                    {"joint_pos": spaces.Box(shape=(n_dof,), low=-np.inf, high=np.inf)}
+                    {"joint_pos": spaces.Box(shape=(self._dof_dim,), low=-np.inf, high=np.inf)}
                 )
             case CtrlType.EE_POSE_ABS:
                 action_space_dict.update(
@@ -81,61 +137,15 @@ class ManipulatorBase(BaseGymRobot):
 
         self._action_space = spaces.Dict(action_space_dict)
 
-        # == some buffer initialization ==
-        self._init()
-
-    def _init(self) -> None:
-        self._arm_dof_dim = len(self._args.default_arm_dof.keys())  # total number of joints
-        self._gripper_dof_dim = 0
-        if self._args.default_gripper_dof is not None:
-            self._gripper_dof_dim = len(
-                self._args.default_gripper_dof.keys()
-            )  # number of gripper joints
-        self._dof_dim = self._arm_dof_dim + self._gripper_dof_dim
-
-        all_dof_names = list(self._args.default_arm_dof.keys())
-        if self._args.default_gripper_dof is not None:
-            all_dof_names += list(self._args.default_gripper_dof.keys())
-        self._all_dof_names = all_dof_names
-
-        # About torque calculation and domain randomization
-        dof_kp, dof_kd = [], []
-        for dof_name in all_dof_names:
-            dof_kp.append(self._args.dof_kp[dof_name])
-            dof_kd.append(self._args.dof_kd[dof_name])
-        self._dof_kp = torch.tensor(dof_kp, device=self._device)
-        self._dof_kd = torch.tensor(dof_kd, device=self._device)
-        self._batched_dof_kp = self._dof_kp[None, :].repeat(self._num_envs, 1)
-        self._batched_dof_kd = self._dof_kd[None, :].repeat(self._num_envs, 1)
-        self._motor_strength = torch.ones((self._num_envs, self._dof_dim), device=self._device)
-        self._motor_offset = torch.zeros((self._num_envs, self._dof_dim), device=self._device)
-
-        default_dof_pos = list(self._args.default_arm_dof.values())
-        if self._args.default_gripper_dof is not None:
-            default_dof_pos += list(self._args.default_gripper_dof.values())
-        self._default_dof_pos = torch.tensor(default_dof_pos, dtype=torch.float32, device=self._device)
-
-        # Buffers
-        self._dof_pos = torch.zeros((self._num_envs, self._dof_dim), dtype=torch.float32, device=self._device)
-        self._dof_vel = torch.zeros((self._num_envs, self._dof_dim), dtype=torch.float32, device=self._device)
-        self._torque = torch.zeros((self._num_envs, self._dof_dim), device=self._device)
-
-        # == set up control dispatch ==
-        self._dispatch = {
-            CtrlType.JOINT_POSITION.value: self._apply_joint_pos,
-            CtrlType.EE_POSE_ABS.value: self._apply_ee_pose_abs,
-            CtrlType.EE_POSE_REL.value: self._apply_ee_pose_rel,
-        }
-
     def post_build_init(self, eval_mode: bool = False) -> None:
         """Initialize limits and constraints after scene is built."""
         # Store eval mode flag for later use
         self._eval_mode = eval_mode
 
         # Get DOF indices for all joints
-        all_dofs_idx_local = [
-            self._robot_entity.get_joint(name).dofs_idx_local[0] for name in self._all_dof_names
-        ]
+        all_dofs_idx_local = []
+        for name in self._all_dof_names:
+            all_dofs_idx_local += self._robot_entity.get_joint(name).dofs_idx_local
         self._all_dof_idx_local = all_dofs_idx_local
         all_finger_links_idx_local = [
             self._robot_entity.get_link(name).idx_local for name in self._args.gripper_link_names
@@ -154,6 +164,8 @@ class ManipulatorBase(BaseGymRobot):
         # Apply soft limits (reduce range to avoid hitting hard limits)
         soft_range = self._args.soft_dof_pos_range
         for i in range(self._dof_pos_limits.shape[0]):
+            if np.isinf(self._dof_pos_limits[i, 0].item()) or np.isinf(self._dof_pos_limits[i, 1].item()):
+                continue
             # Calculate midpoint and range
             m = (self._dof_pos_limits[i, 0] + self._dof_pos_limits[i, 1]) / 2
             r = self._dof_pos_limits[i, 1] - self._dof_pos_limits[i, 0]
@@ -185,6 +197,10 @@ class ManipulatorBase(BaseGymRobot):
         min_kd, max_kd = self._args.dr_args.kd_range
         ratios = torch.rand(len(envs_idx), self._dof_dim) * (max_kd - min_kd) + min_kd
         self._batched_dof_kd[envs_idx] = ratios * self._dof_kd[None, :]
+
+        # currently in this version, kp and kd cannot be set for different envs separately
+        self._robot_entity.set_dofs_kp(self._batched_dof_kp[0], envs_idx=envs_idx)
+        self._robot_entity.set_dofs_kv(self._batched_dof_kd[0], envs_idx=envs_idx)
 
         # Randomize motor strength
         min_strength, max_strength = self._args.dr_args.motor_strength_range
@@ -271,40 +287,43 @@ class ManipulatorBase(BaseGymRobot):
                 case CtrlType.DR_JOINT_POSITION:
                     raise RuntimeError("DR control not supported for manipulator.")
         self._dispatch[self._args.ctrl_type](action)
-        # self._torque[:] = self._batched_dof_kp * (action.joint_pos - self._dof_pos + self._motor_offset) - self._batched_dof_kd * self._dof_vel
+        self._torque[:] = torch.clamp(
+            (self._batched_dof_kp * (action.joint_pos - self._dof_pos + self._motor_offset) - self._batched_dof_kd * self._dof_vel) * self._motor_strength,
+            -self._torque_limits, self._torque_limits
+        )
         self._dof_pos[:] = self._robot_entity.get_dofs_position(self._all_dof_idx_local)
         self._dof_vel[:] = self._robot_entity.get_dofs_velocity(self._all_dof_idx_local)
 
     def _apply_joint_pos(self, act: JointPosAction) -> None:
-        # """
-        # Apply joint position control to the robot.
-        # """
-        # assert act.joint_pos.shape == (
-        #     self._num_envs,
-        #     self._dof_dim,
-        # ), "Joint position action must match the number of joints."
-        # self._robot_entity.control_dofs_position(
-        #     position=act.joint_pos,
-        #     dofs_idx_local=self._all_dof_idx_local,
-        # )
-
-
         """
-        Apply noised joint position control to the robot.
+        Apply joint position control to the robot.
         """
         assert act.joint_pos.shape == (
             self._num_envs,
             self._dof_dim,
         ), "Joint position action must match the number of joints."
-        q_force = (
-            self._batched_dof_kp
-            * (act.joint_pos - self._dof_pos + self._motor_offset)
-            - self._batched_dof_kd * self._dof_vel
+        self._robot_entity.control_dofs_position(
+            position=act.joint_pos,
+            dofs_idx_local=self._all_dof_idx_local,
         )
-        q_force = q_force * self._motor_strength
-        q_force = torch.clamp(q_force, -self._torque_limits, self._torque_limits)
-        self._torque[:] = q_force
-        self._robot_entity.control_dofs_force(force=q_force, dofs_idx_local=self._all_dof_idx_local)
+
+
+        # """
+        # Apply noised joint position control to the robot.
+        # """
+        # assert act.joint_pos.shape == (
+        #     self._num_envs,
+        #     self._dof_dim,
+        # ), "Joint position action must match the number of joints."
+        # q_force = (
+        #     self._batched_dof_kp
+        #     * (act.joint_pos - self._dof_pos + self._motor_offset)
+        #     - self._batched_dof_kd * self._dof_vel
+        # )
+        # q_force = q_force * self._motor_strength
+        # q_force = torch.clamp(q_force, -self._torque_limits, self._torque_limits)
+        # self._torque[:] = q_force
+        # self._robot_entity.control_dofs_force(force=q_force, dofs_idx_local=self._all_dof_idx_local)
 
     def _apply_ee_pose_abs(self, act: EEPoseAbsAction) -> None:
         """
@@ -374,6 +393,18 @@ class ManipulatorBase(BaseGymRobot):
     @property
     def base_pos(self) -> torch.Tensor:
         return self._robot_entity.get_pos()
+    
+    @property
+    def base_quat(self) -> torch.Tensor:
+        return self._robot_entity.get_quat()
+    
+    @property
+    def base_lin_vel(self) -> torch.Tensor:
+        return self._robot_entity.get_vel()
+
+    @property
+    def base_ang_vel(self) -> torch.Tensor:
+        return self._robot_entity.get_ang()
 
     @property
     def torque(self) -> torch.Tensor:
