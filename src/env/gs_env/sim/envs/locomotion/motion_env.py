@@ -161,12 +161,15 @@ class MotionEnv(LeggedRobotEnv):
             "tracking_link_pos_error",
         ]
         self._terminate_after_error = {}
+        self._min_terminate_after_error = {}
         self._num_step_since_update_terminate_error = 0
         self._error_mask_buffer = {}
         for error_name in error_list:
-            terminate_after_error = getattr(self._args, f"terminate_after_{error_name}", None)
-            if terminate_after_error is not None:
+            terminate_after_error = self._args.terminate_after_error[error_name][0]
+            min_terminate_after_error = self._args.terminate_after_error[error_name][1]
+            if terminate_after_error and min_terminate_after_error:
                 self._terminate_after_error[error_name] = terminate_after_error
+                self._min_terminate_after_error[error_name] = min_terminate_after_error
                 self._error_mask_buffer[error_name] = []
 
         # initialize once
@@ -337,6 +340,10 @@ class MotionEnv(LeggedRobotEnv):
                     self._terminate_after_error[error_name] *= 1.5
                 elif terminate_by_error_ratio < 0.5 * self._args.adaptive_termination_ratio:  # type: ignore
                     self._terminate_after_error[error_name] /= 1.5
+                    self._min_terminate_after_error[error_name] = max(
+                        self._min_terminate_after_error[error_name],
+                        self._terminate_after_error[error_name],
+                    )
                 self._error_mask_buffer[error_name] = []
 
     def apply_action(self, action: torch.Tensor) -> None:
