@@ -162,14 +162,17 @@ class MotionEnv(LeggedRobotEnv):
         ]
         self._terminate_after_error = {}
         self._min_terminate_after_error = {}
+        self._max_terminate_after_error = {}
         self._num_step_since_update_terminate_error = 0
         self._error_mask_buffer = {}
         for error_name in error_list:
             terminate_after_error = self._args.terminate_after_error[error_name][0]
             min_terminate_after_error = self._args.terminate_after_error[error_name][1]
+            max_terminate_after_error = self._args.terminate_after_error[error_name][0]
             if terminate_after_error and min_terminate_after_error:
                 self._terminate_after_error[error_name] = terminate_after_error
                 self._min_terminate_after_error[error_name] = min_terminate_after_error
+                self._max_terminate_after_error[error_name] = max_terminate_after_error
                 self._error_mask_buffer[error_name] = []
 
         # initialize once
@@ -314,11 +317,17 @@ class MotionEnv(LeggedRobotEnv):
 
         # termination_dict["tilt"] = tilt_mask.clone()
         # termination_dict["height"] = height_mask.clone()
-        termination_dict["motion_end"] = motion_end_mask.clone()
-        termination_dict["terminate_by_error"] = terminate_by_error.clone()
+        # termination_dict["motion_end"] = motion_end_mask.clone()
+        # termination_dict["terminate_by_error"] = terminate_by_error.clone()
         termination_dict["contact_force"] = contact_force_mask.clone()
-        termination_dict["any"] = reset_buf.clone()
+        # termination_dict["any"] = reset_buf.clone()
         self._extra_info["termination"] = termination_dict
+
+        if self._args.adaptive_termination_ratio is not None:
+            for key in self._terminate_after_error.keys():
+                self._extra_info["info"][f"terminate_threshold_{key}"] = (
+                    self._terminate_after_error[key]
+                )
 
         for error_name in error_dict.keys():
             error_dict[error_name] = error_dict[error_name].mean().item()
@@ -340,8 +349,12 @@ class MotionEnv(LeggedRobotEnv):
                     self._terminate_after_error[error_name] *= 1.5
                 elif terminate_by_error_ratio < 0.5 * self._args.adaptive_termination_ratio:  # type: ignore
                     self._terminate_after_error[error_name] /= 1.5
-                    self._min_terminate_after_error[error_name] = max(
+                    self._terminate_after_error[error_name] = max(
                         self._min_terminate_after_error[error_name],
+                        self._terminate_after_error[error_name],
+                    )
+                    self._terminate_after_error[error_name] = min(
+                        self._max_terminate_after_error[error_name],
                         self._terminate_after_error[error_name],
                     )
                 self._error_mask_buffer[error_name] = []

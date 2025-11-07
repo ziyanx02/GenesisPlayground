@@ -275,7 +275,7 @@ EnvArgsRegistry["g1_motion"] = MotionEnvArgs(
     ],
     no_terminate_before_motion_time=1.0,
     no_terminate_after_random_push_time=2.0,
-    # [initial_threshold, min_threshold]
+    # [initial_threshold & max_threshold, min_threshold]
     terminate_after_error={
         "base_pos_error": [0.3, 0.1],
         "base_height_error": [0.15, 0.05],

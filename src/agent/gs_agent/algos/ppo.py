@@ -155,8 +155,8 @@ class PPO(BaseAlgo):
                 # Update termination buffer
                 termination_buffer.append(_extra_infos["termination"])
                 reward_terms_buffer.append(_extra_infos["reward_terms"])
-                if "error" in _extra_infos:
-                    info_buffer.append(_extra_infos["error"])
+                if "info" in _extra_infos:
+                    info_buffer.append(_extra_infos["info"])
                 # Check for episode completions and reset tracking
                 done_mask = terminated.unsqueeze(-1) | truncated.unsqueeze(-1)
                 new_ids = (done_mask > 0).nonzero(as_tuple=False)
