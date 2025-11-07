@@ -322,10 +322,10 @@ class LeggedRobotBase(BaseGymRobot):
         q_err = q_des - self._dof_pos
         qd_err = qd_des - self._dof_vel
         q_force = self._batched_dof_kp * q_err + self._batched_dof_kd * qd_err
-        # q_force_V = (
+        # q_force = (
         #     self._batched_dof_kp
-        #     * (qd_des - self._dof_vel)
-        #     - self._batched_dof_kd * (self._dof_vel - self.last_dof_vel) / self.scene.dt
+        #     * (act.joint_pos + self._default_dof_pos - self._dof_pos + self._motor_offset)
+        #     - self._batched_dof_kd * self._dof_vel
         # )
         q_force = q_force * self._motor_strength
         q_force = torch.clamp(q_force, -self._torque_limits, self._torque_limits)

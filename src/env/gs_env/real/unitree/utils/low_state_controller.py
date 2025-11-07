@@ -1,9 +1,6 @@
-import argparse
-import sys
 import time
 
 import numpy as np
-import yaml
 from unitree_sdk2py.comm.motion_switcher.motion_switcher_client import MotionSwitcherClient
 from unitree_sdk2py.core.channel import ChannelPublisher
 from unitree_sdk2py.idl.default import (
@@ -46,6 +43,7 @@ class LowStateCmdHandler(LowStateMsgHandler):
             default_pos = [self.cfg.default_dof_pos[name] for name in self.dof_names]
             self.reset_dof_pos = np.array(default_pos)
         self.target_pos = self.reset_dof_pos
+        self.target_vel = np.zeros_like(self.target_pos)
 
         self.full_default_dof_pos = np.zeros(self.num_full_dof)
         for i in range(self.num_dof):
@@ -227,7 +225,7 @@ class LowStateCmdHandler(LowStateMsgHandler):
     def set_cmd(self) -> None:
         for i in range(self.num_dof):
             self.low_cmd.motor_cmd[self.dof_index[i]].q = self.target_pos[i]
-            self.low_cmd.motor_cmd[self.dof_index[i]].dq = 0
+            self.low_cmd.motor_cmd[self.dof_index[i]].dq = self.target_vel[i]
             self.low_cmd.motor_cmd[self.dof_index[i]].kp = self.kp[i]
             self.low_cmd.motor_cmd[self.dof_index[i]].kd = self.kd[i]
             self.low_cmd.motor_cmd[self.dof_index[i]].tau = 0
@@ -263,27 +261,3 @@ class LowStateCmdHandler(LowStateMsgHandler):
     @property
     def is_emergency_stop(self) -> bool:
         return self._emergency_stop
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-r", "--robot", type=str, default="go2")
-    parser.add_argument("-n", "--name", type=str, default="default")
-    parser.add_argument("-c", "--cfg", type=str, default=None)
-    args = parser.parse_args()
-
-    cfg = yaml.safe_load(open(f"../{args.robot}.yaml"))
-    if args.cfg is not None:
-        cfg = yaml.safe_load(open(f"../{args.robot}/{args.cfg}.yaml"))
-
-    # Run steta publisher
-    low_state_handler = LowStateCmdHandler(cfg)
-    low_state_handler.init()
-    low_state_handler.start()
-    try:
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        if low_state_handler.robot_name == "go2":
-            low_state_handler.recover()
-        sys.exit()

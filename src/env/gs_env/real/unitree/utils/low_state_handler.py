@@ -1,11 +1,9 @@
-import argparse
 import struct
 import threading
 import time
 from typing import Any
 
 import numpy as np
-import yaml
 from unitree_sdk2py.core.channel import ChannelFactoryInitialize, ChannelSubscriber
 from unitree_sdk2py.idl.unitree_go.msg.dds_ import LowState_ as LowState_go
 from unitree_sdk2py.idl.unitree_hg.msg.dds_ import LowState_ as LowState_hg
@@ -181,23 +179,6 @@ class LowStateMsgHandler:
         self.msg = msg
         self.msg_received = True
 
-        t_ns = time.perf_counter_ns()  # monotonic timestamp
-        ms = msg.motor_state
-        nj = self.num_full_dof
-
-        q = [0.0] * nj
-        dq = [0.0] * nj
-        tau = [0.0] * nj
-
-        for i in range(nj):
-            m = ms[self.dof_index[i]]
-            q[i] = m.q
-            dq[i] = m.dq
-            tau[i] = m.tau_est
-
-        if self.logger:  # background writer, non-blocking
-            self.logger.push(t_ns, q, dq, tau)
-
     def main_loop(self) -> None:
         total_publish_cnt = 0  # noqa: F841
         start_time = time.time()  # noqa: F841
@@ -237,7 +218,6 @@ class LowStateMsgHandler:
                 print(f"Joint {self.dof_index[i]} Error Code: {error_code}")
         for i in range(self.num_full_dof):
             self.full_joint_pos[i] = motor_state[i].q
-        # print(self.joint_pos)
         # print("low_state_big_flag", self.robot_low_state.bit_flag)
 
     def parse_botton(self, data1: int, data2: int) -> None:
@@ -295,22 +275,3 @@ class LowStateMsgHandler:
         # print("F1:", self.F1)
         # print("F3:", self.F3)
         # print("Start:", self.Start)
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-r", "--robot", type=str, default="go2")
-    parser.add_argument("-n", "--name", type=str, default="default")
-    parser.add_argument("-c", "--cfg", type=str, default=None)
-    args = parser.parse_args()
-
-    cfg = yaml.safe_load(open(f"../{args.robot}.yaml"))
-    if args.cfg is not None:
-        cfg = yaml.safe_load(open(f"./cfgs/{args.robot}/{args.cfg}.yaml"))
-
-    # Run steta publisher
-    low_state_handler = LowStateMsgHandler(cfg)
-    low_state_handler.init()
-    while True:
-        time.sleep(1)
-        print(low_state_handler.joint_pos)

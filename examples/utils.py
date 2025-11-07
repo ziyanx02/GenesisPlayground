@@ -10,39 +10,36 @@ def load_and_align_hf_npz_vel(
     npz_path: str | Path,
     target_pos: list[float] | np.ndarray,
     dof_idx: int,
-    dt: float = 0.02,  # control loop period (s), e.g., 50 Hz
+    control_dt: float = 0.02,
+    out_rate_hz: float = 500.0,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """
-    Returns (steps, target_vel, dq_interp)
-
-    - target_vel: finite-difference of the commanded target positions using the known control dt
-    - dq_interp:  HF-measured joint velocity resampled onto the control time grid
-    - steps:      0..N-1 (index axis), to avoid breaking existing plotting code
-                  (you can switch to a time axis by returning t_ctrl instead)
-    """
     npz_path = Path(npz_path)
     data = np.load(npz_path)
 
-    # High-rate timestamps and measured joint velocity (rad/s)
-    t_ns = data["t_ns"]  # shape [N_meas]
-    dq_meas = data["dq"][:, dof_idx]  # shape [N_meas]
+    # HF data
+    t_ns = data["t_ns"]
+    dq_meas = data["dq"][:, dof_idx].astype(float)
+    t_hf = (t_ns - t_ns[0]).astype(float) * 1e-9
 
-    # HF time in seconds, starting at 0
-    t_meas = (t_ns - t_ns[0]) * 1e-9  # [0 .. T_meas]
-
-    # Control grid from command length
-    target_pos = np.asarray(target_pos, dtype=np.float64)
+    # Control timestamps
+    target_pos = np.asarray(target_pos, float)
     N = len(target_pos)
-    t_ctrl = np.arange(N, dtype=np.float64) * dt
+    t_ctrl = np.arange(N, dtype=float) * control_dt  # <-- FIXED
+    target_vel_ctrl = np.gradient(target_pos, control_dt, edge_order=2)
 
-    target_vel = np.gradient(target_pos, dt, edge_order=2)
+    # Output grid
+    dt_out = 1.0 / float(out_rate_hz)
+    t_start = max(t_ctrl[0], t_hf[0])
+    t_end = min(t_ctrl[-1], t_hf[-1])
+    if t_end <= t_start:
+        raise ValueError("No time overlap between HF and control streams.")
+    t_out = np.arange(t_start, t_end, dt_out)
 
-    # np.interp extrapolates by holding edge values; that’s fine for minor
-    # start/stop misalignments. If you prefer clipping, you could clip t_ctrl.
-    dq_interp = np.interp(t_ctrl, t_meas, dq_meas)
+    # Interpolate both to output
+    target_vel_out = np.interp(t_out, t_ctrl, target_vel_ctrl)
+    dq_out = np.interp(t_out, t_hf, dq_meas)
 
-    steps = np.arange(N, dtype=np.int64)
-    return steps, target_vel, dq_interp
+    return t_out, target_vel_out, dq_out
 
 
 def plot_metric_on_axis(

@@ -87,14 +87,16 @@ def run_single_dof_wave_diagnosis(
     action = torch.zeros((1, num_dofs), device=env.device)
     action[:, dof_idx] = offset / env.action_scale
 
-    last_update_time = time.time()
-
+    last_update_time = time.time()  # HF log clock (1 kHz)
+    last_controller_time = time.time()  # control clock (50 Hz)
     current_dof_pos = env.dof_pos[0] - env.default_dof_pos
     TOTAL_RESET_STEPS = 50
+    logger = getattr(env.robot, "logger", None)
+
     for i in range(TOTAL_RESET_STEPS):
-        while time.time() - last_update_time < 0.02:
+        while time.time() - last_controller_time < 0.02:
             time.sleep(0.001)
-        last_update_time = time.time()
+        last_controller_time = time.time()
         env.apply_action(
             current_dof_pos / env.action_scale * (1 - i / TOTAL_RESET_STEPS)
             + action * (i / TOTAL_RESET_STEPS)
@@ -104,10 +106,21 @@ def run_single_dof_wave_diagnosis(
     dof_pos_list = []
 
     for i in range(period * NUM_TOTAL_PERIODS):
-        while time.time() - last_update_time < 0.02:
-            time.sleep(0.001)
-        last_update_time = time.time()
+        while time.time() - last_controller_time < 0.02:
+            now = time.time()
+            if now - last_update_time >= 0.001:
+                last_update_time = now
+                t_ns = time.perf_counter_ns()
+                nj = env.robot.num_full_dof
+                q = [env.robot.joint_pos[k] for k in range(nj)]
+                dq = [env.robot.joint_vel[k] for k in range(nj)]
+                tau = [env.robot.torque[k] for k in range(nj)]
+                if logger:
+                    logger.push(t_ns, q, dq, tau)
+            else:
+                time.sleep(0.0001)
 
+        last_controller_time = time.time()
         target_dof_pos = wave_func(i) + offset
         action[:, dof_idx] = target_dof_pos / env.action_scale
         dof_pos = env.dof_pos[0, dof_idx].cpu().item() - env.robot.default_dof_pos[dof_idx]
@@ -132,7 +145,7 @@ def run_single_dof_diagnosis(
     log_dir: Path = Path(__file__).parent / "logs" / "pd_test",
 ) -> None:
     fig, axes = plt.subplots(6, 1, figsize=(12, 12))
-    for i, wave_type in enumerate(["SIN", "FM-SIN"]):
+    for i, wave_type in enumerate(["SIN"]):
         logger = None
         if isinstance(env, UnitreeLeggedEnv):
             log_path = log_dir / f"{dof_name}_{wave_type}"
@@ -152,7 +165,7 @@ def run_single_dof_diagnosis(
         )
         plot_metric_on_axis(
             axes[i],
-            np.arange(len(target_dof_pos_list)),
+            np.arange(len(target_dof_pos_list)) * 0.02,
             [target_dof_pos_list, dof_pos_list],
             ["Target", "Dof Pos"],
             "Dof Pos",
@@ -182,15 +195,17 @@ def run_single_dof_diagnosis(
             npz_path = SimpleHFBinLogger.export_npz(str(log_path) + ".bin")
             print(f"[HF LOG] Exported to {npz_path}")
             # Align HF measured data with the target and plot using your helper
-            steps, target_vel, dq_interp = load_and_align_hf_npz_vel(
-                npz_path, target_dof_pos_list, dof_idx
+            # steps, _, dq_interp = load_and_align_hf_npz_vel(
+            #     npz_path, target_dof_pos_list, dof_idx, dt=0.02
+            # )
+            steps, _, dq_interp = load_and_align_hf_npz_vel(
+                npz_path, target_dof_pos_list, dof_idx, control_dt=0.02, out_rate_hz=200.0
             )
-
             plot_metric_on_axis(
-                axes[i + 3],
+                axes[i],
                 steps,
-                [target_vel.tolist(), dq_interp.tolist()],
-                ["Target Vel", "Measured Vel (HF)"],
+                [dq_interp.tolist()],
+                ["Measured Vel (HF)"],
                 ylabel="Joint Velocity (rad/s)",
                 title=f"{wave_type} (aligned HF velocity)",
                 yscale="linear",
@@ -267,7 +282,7 @@ def main(
         if sim:
             log_dir = Path(__file__).parent / "logs" / "pd_test" / "sim-V"
         else:
-            log_dir = Path(__file__).parent / "logs" / "pd_test" / "real-first-order-v1"
+            log_dir = Path(__file__).parent / "logs" / "pd_test" / "real-first-order"
 
         for dof_name, (lower_bound, upper_bound) in test_dofs.items():
             dof_idx = -1
