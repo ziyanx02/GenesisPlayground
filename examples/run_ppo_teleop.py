@@ -249,6 +249,8 @@ def evaluate_policy(
                 ),
                 motion_id,
             )
+            env.time_since_reset[0] = 0.0
+            env.hard_sync_motion(torch.IntTensor([0]))
             obs, _ = wrapped_env.get_observations()
             while env.motion_times[0] < env.motion_lib.get_motion_length(motion_id):
                 # Get action from policy
@@ -273,7 +275,7 @@ def evaluate_policy(
                     ref_link_pos = env.ref_link_pos_local_yaw[:, link_name_to_idx[link_name]]
                     ref_link_quat = env.ref_link_quat_local_yaw[:, link_name_to_idx[link_name]]
                     ref_link_pos = quat_apply(ref_quat_yaw, ref_link_pos)
-                    ref_link_pos[:, :2] += env.base_pos[:, :2]
+                    ref_link_pos[:, :2] += env.ref_base_pos[:, :2]
                     ref_link_quat = quat_mul(ref_quat_yaw, ref_link_quat)
                     env.scene.set_obj_pose(link_name, pos=ref_link_pos, quat=ref_link_quat)
 
@@ -428,6 +430,8 @@ def view_motion(env_args: Any, show_viewer: bool = False) -> None:
         motion_id = 0
         while True:
             env.hard_reset_motion(torch.IntTensor([0]), motion_id)
+            env.time_since_reset[0] = 0.0
+            env.hard_sync_motion(torch.IntTensor([0]))
             last_update_time = time.time()
             while env.motion_times[0] < env.motion_lib.get_motion_length(motion_id):
                 env.scene.scene.step(refresh_visualizer=False)
