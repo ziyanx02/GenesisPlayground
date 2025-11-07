@@ -2,9 +2,6 @@ import argparse
 import time
 from pathlib import Path
 
-import matplotlib
-
-matplotlib.use("Agg")  # headless plotting like g1_pd_test
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -61,7 +58,11 @@ def main(args: argparse.Namespace) -> None:
     gs_joint_order = real_env_args.robot_args.dof_names
     num_dofs = real_env.action_dim
     dof_idx = gs_joint_order.index(dof_name)
-    lower_bound, upper_bound = test_dofs[dof_name]
+    lower_bound, upper_bound = [0.0, 0.0]
+    for name in test_dofs:
+        if name in dof_name:
+            lower_bound, upper_bound = test_dofs[name]
+            break
     amplitude = (upper_bound - lower_bound) / 2
     offset = (upper_bound + lower_bound) / 2
 
@@ -126,7 +127,9 @@ def main(args: argparse.Namespace) -> None:
     b = link_pos_arr - link_pos_arr.mean()
     corr = np.correlate(a, b, mode="full")
     lags = np.arange(-len(a) + 1, len(a))
-    best_lag = lags[np.argmax(corr)]
+    best_lag_pos = lags[np.argmax(corr)]
+    best_lag_neg = lags[np.argmin(corr)]
+    best_lag = best_lag_pos if abs(best_lag_pos) < abs(best_lag_neg) else best_lag_neg
     time_shift = best_lag * DT
     print(f"[EST] Mocap time offset (mocap delay positive) = {time_shift:+.4f} s")
 
