@@ -6,11 +6,14 @@ from pydantic import BaseModel
 
 class GAEBufferKey(str, Enum):
     ACTOR_OBS = "ACTOR_OBS"
+    CRITIC_OBS = "CRITIC_OBS"
     ACTIONS = "ACTIONS"
     REWARDS = "REWARDS"
     DONES = "DONES"
     VALUES = "VALUES"
     ACTION_LOGPROBS = "ACTION_LOGPROBS"
+    MU = "MU"
+    SIGMA = "SIGMA"
     ADVANTAGES = "ADVANTAGES"
     RETURNS = "RETURNS"
 

@@ -11,7 +11,7 @@ class GaussianPolicy(Policy):
     def __init__(self, policy_backbone: NetworkBackbone, action_dim: int) -> None:
         super().__init__(policy_backbone, action_dim)
         self.mu = nn.Linear(self.backbone.output_dim, self.action_dim)
-        self.log_std = nn.Parameter(torch.ones(self.action_dim) * 1.0)
+        self.log_std = nn.Parameter(torch.ones(self.action_dim) * 0.0)
         Normal.set_default_validate_args(False)
 
         self._init_params()
@@ -33,10 +33,10 @@ class GaussianPolicy(Policy):
             deterministic: Whether to use deterministic action.
 
         Returns:
-            GaussianPolicyOutput: Policy output.
+            tuple: (action, log_prob)
         """
         # Convert observation to tensor format
-        dist = self._dist_from_obs(obs)
+        dist = self.dist_from_obs(obs)
         if deterministic:
             action = dist.mean
         else:
@@ -45,7 +45,37 @@ class GaussianPolicy(Policy):
         log_prob = dist.log_prob(action).sum(-1, keepdim=True)
         return action, log_prob
 
-    def _dist_from_obs(self, obs: torch.Tensor) -> Normal:
+    def forward_with_dist_params(
+        self,
+        obs: torch.Tensor,
+        *,
+        deterministic: bool = False,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Forward pass of the policy with distribution parameters.
+
+        Args:
+            obs: Typed observation batch.
+            deterministic: Whether to use deterministic action.
+
+        Returns:
+            tuple: (action, log_prob, mu, sigma)
+        """
+        # Convert observation to tensor format
+        dist = self.dist_from_obs(obs)
+        if deterministic:
+            action = dist.mean
+        else:
+            action = dist.sample()
+        # Compute log probability with tanh transformation
+        log_prob = dist.log_prob(action).sum(-1, keepdim=True)
+
+        # Extract mu and sigma from the distribution
+        mu = dist.mean
+        sigma = dist.stddev
+
+        return action, log_prob, mu, sigma
+
+    def dist_from_obs(self, obs: torch.Tensor) -> Normal:
         feature = self.backbone(obs)
         action_mu = self.mu(feature)
         action_std = torch.exp(self.log_std)
@@ -61,7 +91,7 @@ class GaussianPolicy(Policy):
         Returns:
             Log probability of the action.
         """
-        dist = self._dist_from_obs(obs)
+        dist = self.dist_from_obs(obs)
         return dist.log_prob(act).sum(-1, keepdim=True)
 
     def entropy_on(self, obs: torch.Tensor) -> torch.Tensor:
@@ -73,11 +103,15 @@ class GaussianPolicy(Policy):
         Returns:
             Entropy of the action distribution.
         """
-        dist = self._dist_from_obs(obs)
+        dist = self.dist_from_obs(obs)
         return dist.entropy().sum(-1)
 
     def get_action_shape(self) -> tuple[int, ...]:
         return (self.action_dim,)
+
+    @property
+    def action_std(self) -> torch.Tensor:
+        return self.log_std.exp()
 
 
 class DeterministicPolicy(Policy):

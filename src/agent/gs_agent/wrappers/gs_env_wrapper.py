@@ -32,12 +32,6 @@ class GenesisEnvWrapper(BaseEnvWrapper):
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, dict[str, Any]]:
         # apply action
         self.env.apply_action(action)
-        # get observations
-        next_obs = self.env.get_observations()
-        # get reward
-        reward, reward_terms = self.env.get_reward()
-        if reward.dim() == 1:
-            reward = reward.unsqueeze(-1)
         # get terminated
         terminated = self.env.get_terminated()
         if terminated.dim() == 1:
@@ -46,13 +40,21 @@ class GenesisEnvWrapper(BaseEnvWrapper):
         truncated = self.env.get_truncated()
         if truncated.dim() == 1:
             truncated = truncated.unsqueeze(-1)
+        # get reward
+        reward, reward_terms = self.env.get_reward()
+        if reward.dim() == 1:
+            reward = reward.unsqueeze(-1)
+        # update history
+        self.env.update_history()
+        # get extra infos
+        extra_infos = self.env.get_extra_infos()
+        extra_infos["reward_terms"] = reward_terms
         # reset if terminated or truncated
         done_idx = terminated.nonzero(as_tuple=True)[0]
         if len(done_idx) > 0:
             self.env.reset_idx(done_idx)
-        # get extra infos
-        extra_infos = self.env.get_extra_infos()
-        extra_infos["reward_terms"] = reward_terms
+        # get observations
+        next_obs, _ = self.env.get_observations()
         return next_obs, reward, terminated, truncated, extra_infos
 
     def get_observations(self) -> torch.Tensor:
