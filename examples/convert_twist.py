@@ -10,8 +10,6 @@ from gs_env.sim.envs.config.registry import EnvArgsRegistry
 from gs_env.sim.envs.config.schema import MotionEnvArgs
 from gs_env.sim.scenes.config.registry import SceneArgsRegistry
 
-#
-
 
 def twist_to_motion_data(
     env: gs_envs.MotionEnv, data: dict[str, Any], show_viewer: bool = False
