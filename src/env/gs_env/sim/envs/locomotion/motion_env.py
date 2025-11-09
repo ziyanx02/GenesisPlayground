@@ -113,23 +113,6 @@ class MotionEnv(LeggedRobotEnv):
             self.num_envs, self._robot.n_links, 4, device=self._device
         )
 
-        tracking_link_names = self._args.tracking_link_names
-        self.tracking_link_pos_local_yaw = torch.zeros(
-            self.num_envs, len(tracking_link_names), 3, device=self._device
-        )
-        self.tracking_link_quat_local_yaw = torch.zeros(
-            self.num_envs, len(tracking_link_names), 4, device=self._device
-        )
-        self.ref_tracking_link_pos_local_yaw = torch.zeros(
-            self.num_envs, len(tracking_link_names), 3, device=self._device
-        )
-        self.ref_tracking_link_quat_local_yaw = torch.zeros(
-            self.num_envs, len(tracking_link_names), 4, device=self._device
-        )
-
-        # Let base class set up common buffers, spaces, and rendering
-        super()._init()
-
         # Motion library and reference buffers
         self._motion_lib = MotionLib(motion_file=self._args.motion_file, device=self._device)
         if self._args.motion_file is not None:
@@ -141,9 +124,25 @@ class MotionEnv(LeggedRobotEnv):
             ]
 
         # tracking link indices
-        self.tracking_link_idx_local = [
-            self._motion_lib.get_link_idx_local_by_name(name) for name in tracking_link_names
-        ]
+        tracking_link_names = self._args.tracking_link_names
+        self.tracking_link_idx_local = (
+            [self._motion_lib.get_link_idx_local_by_name(name) for name in tracking_link_names]
+            if self._args.motion_file is not None
+            else []
+        )
+
+        self.tracking_link_pos_local_yaw = torch.zeros(
+            self.num_envs, len(self.tracking_link_idx_local), 3, device=self._device
+        )
+        self.tracking_link_quat_local_yaw = torch.zeros(
+            self.num_envs, len(self.tracking_link_idx_local), 4, device=self._device
+        )
+        self.ref_tracking_link_pos_local_yaw = torch.zeros(
+            self.num_envs, len(self.tracking_link_idx_local), 3, device=self._device
+        )
+        self.ref_tracking_link_quat_local_yaw = torch.zeros(
+            self.num_envs, len(self.tracking_link_idx_local), 4, device=self._device
+        )
 
         # per-env motion selection and time offset
         self._motion_ids = torch.zeros(self.num_envs, device=self._device, dtype=torch.long)
@@ -174,6 +173,9 @@ class MotionEnv(LeggedRobotEnv):
                 self._min_terminate_after_error[error_name] = min_terminate_after_error
                 self._max_terminate_after_error[error_name] = max_terminate_after_error
                 self._error_mask_buffer[error_name] = []
+
+        # Let base class set up common buffers, spaces, and rendering
+        super()._init()
 
         # initialize once
         self.reset_idx(torch.IntTensor(range(self.num_envs)))
