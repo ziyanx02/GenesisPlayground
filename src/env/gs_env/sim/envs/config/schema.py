@@ -65,7 +65,7 @@ class MotionEnvArgs(LeggedRobotEnvArgs):
 
     no_terminate_before_motion_time: float = 1.0
     no_terminate_after_random_push_time: float = 2.0
-    terminate_after_error: dict[str, list[float]] = {}
+    terminate_after_error: dict[str, list[float | list[float]]] = {}
     adaptive_termination_ratio: None | float = None
 
     reset_to_default_pose_ratio: float = 0.1

@@ -167,12 +167,11 @@ class MotionEnv(LeggedRobotEnv):
         self._error_mask_buffer = {}
         for error_name in error_list:
             terminate_after_error = self._args.terminate_after_error[error_name][0]
-            min_terminate_after_error = self._args.terminate_after_error[error_name][1]
-            max_terminate_after_error = self._args.terminate_after_error[error_name][0]
-            if terminate_after_error and min_terminate_after_error:
-                self._terminate_after_error[error_name] = terminate_after_error
+            min_terminate_after_error, max_terminate_after_error = self._args.terminate_after_error[error_name][1]
+            if terminate_after_error:
                 self._min_terminate_after_error[error_name] = min_terminate_after_error
                 self._max_terminate_after_error[error_name] = max_terminate_after_error
+                self._terminate_after_error[error_name] = self._args.terminate_after_error[error_name][0]
                 self._error_mask_buffer[error_name] = []
 
         # initialize once
@@ -325,7 +324,7 @@ class MotionEnv(LeggedRobotEnv):
 
         if self._args.adaptive_termination_ratio is not None:
             for key in self._terminate_after_error.keys():
-                self._extra_info["info"][f"terminate_threshold_{key}"] = (
+                self._extra_info["info"][f"threshold_{key}"] = (
                     self._terminate_after_error[key]
                 )
 
@@ -339,22 +338,22 @@ class MotionEnv(LeggedRobotEnv):
         for error_name in self._terminate_after_error.keys():
             self._error_mask_buffer[error_name].append(error_mask[error_name].float())
         self._num_step_since_update_terminate_error += 1
-        if self._num_step_since_update_terminate_error >= 20:
+        if self._num_step_since_update_terminate_error >= 24:
             self._num_step_since_update_terminate_error = 0
             for error_name in self._terminate_after_error.keys():
                 terminate_by_error_ratio = torch.mean(
                     torch.stack(self._error_mask_buffer[error_name])
                 ).item()
-                if terminate_by_error_ratio > 1.5 * self._args.adaptive_termination_ratio:  # type: ignore
-                    self._terminate_after_error[error_name] *= 1.5
-                elif terminate_by_error_ratio < 0.5 * self._args.adaptive_termination_ratio:  # type: ignore
-                    self._terminate_after_error[error_name] /= 1.5
-                    self._terminate_after_error[error_name] = max(
-                        self._min_terminate_after_error[error_name],
-                        self._terminate_after_error[error_name],
-                    )
+                if terminate_by_error_ratio > 2.0 * self._args.adaptive_termination_ratio:  # type: ignore
+                    self._terminate_after_error[error_name] *= 1.2
                     self._terminate_after_error[error_name] = min(
                         self._max_terminate_after_error[error_name],
+                        self._terminate_after_error[error_name],
+                    )
+                elif terminate_by_error_ratio < 0.5 * self._args.adaptive_termination_ratio:  # type: ignore
+                    self._terminate_after_error[error_name] /= 1.2
+                    self._terminate_after_error[error_name] = max(
+                        self._min_terminate_after_error[error_name],
                         self._terminate_after_error[error_name],
                     )
                 self._error_mask_buffer[error_name] = []
