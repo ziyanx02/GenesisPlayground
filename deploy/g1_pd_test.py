@@ -120,7 +120,7 @@ def run_single_dof_wave_diagnosis(
             tau = list(env.robot.torque[:nj])
             return nj, q, dq, tau
     else:
-        # LeggedRobotEnv
+
         def get_state() -> tuple[int, list[float], list[float], list[float]]:
             nj = env.robot.action_dim
             q = list(env.robot.dof_pos[0][:nj])
@@ -166,6 +166,7 @@ def run_single_dof_diagnosis(
     log_dir: Path = Path(__file__).parent / "logs" / "pd_test",
 ) -> None:
     fig, axes = plt.subplots(6, 1, figsize=(12, 12))
+    hf_logger = None
     for i, wave_type in enumerate(["SIN"]):
         if hf_logging:
             hf_logger = AsyncHFLogger(nj=env.action_dim, max_seconds=10.0, rate_hz=1000)
@@ -208,7 +209,7 @@ def run_single_dof_diagnosis(
         if hf_logging:
             hf_logger.stop()
             t_ns, _, dq_arr, _ = hf_logger.get()
-            steps, _, dq_interp = align_hf_arrays_vel_from_logger(
+            steps, target_vel_out, dq_interp = align_hf_arrays_vel_from_logger(
                 t_ns=t_ns,
                 dq_arr=dq_arr,
                 dof_idx=dof_idx,
@@ -217,10 +218,10 @@ def run_single_dof_diagnosis(
                 out_rate_hz=200.0,
             )
             plot_metric_on_axis(
-                axes[i],
+                axes[i + 1],
                 steps,
-                [dq_interp.tolist()],
-                ["Measured Vel (HF)"],
+                [target_vel_out.tolist(), dq_interp.tolist()],
+                ["Target Vel (HF)", "Measured Vel (HF)"],
                 ylabel="Joint Velocity (rad/s)",
                 title=f"{wave_type} (aligned HF velocity)",
                 yscale="linear",
@@ -273,22 +274,22 @@ def main(
 
     # DoF names, lower bound, upper bound
     test_dofs = {
-        "hip_roll": [0.0, 0.8],
-        "hip_pitch": [-0.5, 0.5],
-        "hip_yaw": [-0.5, 0.5],
+        # "hip_roll": [0.0, 0.8],
+        # "hip_pitch": [-0.5, 0.5],
+        # "hip_yaw": [-0.5, 0.5],
         "knee": [0.0, 1.0],
-        "ankle_roll": [-0.2, 0.2],
-        "ankle_pitch": [-0.5, 0.5],
-        "waist_yaw": [-1.0, 1.0],
-        "waist_roll": [-0.3, 0.3],
-        "waist_pitch": [-0.3, 0.3],
-        "shoulder_roll": [0.0, 1.0],
-        "shoulder_pitch": [-0.5, 0.5],
-        "shoulder_yaw": [0.0, 1.0],
-        "elbow": [0.0, 1.0],
-        "wrist_roll": [-1.0, 1.0],
-        "wrist_pitch": [-1.0, 1.0],
-        "wrist_yaw": [0.0, 1.0],
+        # "ankle_roll": [-0.2, 0.2],
+        # "ankle_pitch": [-0.5, 0.5],
+        # "waist_yaw": [-1.0, 1.0],
+        # "waist_roll": [-0.3, 0.3],
+        # "waist_pitch": [-0.3, 0.3],
+        # "shoulder_roll": [0.0, 1.0],
+        # "shoulder_pitch": [-0.5, 0.5],
+        # "shoulder_yaw": [0.0, 1.0],
+        # "elbow": [0.0, 1.0],
+        # "wrist_roll": [-1.0, 1.0],
+        # "wrist_pitch": [-1.0, 1.0],
+        # "wrist_yaw": [0.0, 1.0],
     }
 
     def run_dof_diagnosis_fixed() -> None:
@@ -296,9 +297,9 @@ def main(
         dof_names = env.dof_names
 
         if sim:
-            log_dir = Path(__file__).parent / "logs" / "pd_test" / "sim-v1"
+            log_dir = Path(__file__).parent / "logs" / "pd_test" / "sim" / f"{env.robot.ctrl_type}"
         else:
-            log_dir = Path(__file__).parent / "logs" / "pd_test" / "real-first-order-v2"
+            log_dir = Path(__file__).parent / "logs" / "pd_test" / "real" / f"{env.ctrl_type}"
 
         for dof_name, (lower_bound, upper_bound) in test_dofs.items():
             dof_idx = -1

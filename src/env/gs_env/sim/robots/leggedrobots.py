@@ -316,7 +316,7 @@ class LeggedRobotBase(BaseGymRobot):
             self._dof_dim,
         ), "Joint position action must match the number of joints."
         q_des = act.joint_pos + self._default_dof_pos + self._motor_offset
-        qd_des = (q_des - self._prev_q_des) / self.scene.dt
+        qd_des = (q_des - self._prev_q_des) / (self.scene.dt * self._args.decimation)
         # qd_des = torch.clamp(qd_des, -0.95, 0.95)
         self._prev_q_des = q_des.clone()
         q_err = q_des - self._dof_pos

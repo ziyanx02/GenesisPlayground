@@ -12,7 +12,7 @@ from gs_env.sim.envs.config.schema import LeggedRobotEnvArgs
 from gs_env.sim.robots.config.schema import (
     BaseAction,
     CtrlType,
-    HYBRIDJointVelocityAction,
+    HYBRIDJoint_Pos_Vel_Action,
     JointPosAction,
 )
 
@@ -45,7 +45,7 @@ class UnitreeLeggedEnv(BaseGymRobot):
         # == set up control dispatch ==
         self._dispatch: dict[CtrlType, Callable[[BaseAction], None]] = {  # type: ignore
             CtrlType.JOINT_POSITION.value: self._apply_joint_pos,
-            CtrlType.HYBRID_JOINT_VELOCITY.value: self._apply_hybrid_joint_velocity,
+            CtrlType.HYBRID_JOINT_VELOCITY.value: self._apply_hybrid_joint_pos_vel,
         }
 
     def reset(self, envs_idx: torch.IntTensor | None = None) -> None:
@@ -57,7 +57,7 @@ class UnitreeLeggedEnv(BaseGymRobot):
             case CtrlType.JOINT_POSITION:
                 action = JointPosAction(joint_pos=action, gripper_width=0.0)
             case CtrlType.HYBRID_JOINT_VELOCITY:
-                action = HYBRIDJointVelocityAction(joint_pos=action)
+                action = HYBRIDJoint_Pos_Vel_Action(joint_pos=action)
             case _:
                 raise ValueError(f"Unsupported control type: {self._args.robot_args.ctrl_type}")
 
@@ -67,9 +67,8 @@ class UnitreeLeggedEnv(BaseGymRobot):
         action_np = action.joint_pos[0].detach().cpu().numpy()
         target_pos = self.robot.default_dof_pos + action_np * self._action_scale
         self.robot.target_pos = target_pos
-        self.robot.target_vel = np.zeros_like(target_pos)  # hold still in vel
 
-    def _apply_hybrid_joint_velocity(self, action: torch.Tensor) -> None:
+    def _apply_hybrid_joint_pos_vel(self, action: torch.Tensor) -> None:
         action_np = action.joint_pos[0].detach().cpu().numpy()
         target_pos = self.robot.default_dof_pos + action_np * self._action_scale
         target_vel = (target_pos - self.prev_target_pos) / self.dt
@@ -142,3 +141,7 @@ class UnitreeLeggedEnv(BaseGymRobot):
     @property
     def device(self) -> torch.device:
         return self._device
+
+    @property
+    def ctrl_type(self) -> int:
+        return self._args.robot_args.ctrl_type

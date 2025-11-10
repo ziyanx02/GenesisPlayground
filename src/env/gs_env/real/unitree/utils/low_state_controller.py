@@ -115,7 +115,7 @@ class LowStateCmdHandler(LowStateMsgHandler):
                 60,
                 60,
                 60,
-                100,
+                100,  # left knee
                 40,
                 40,
                 # Right Leg

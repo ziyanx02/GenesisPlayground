@@ -154,7 +154,7 @@ class DRJointPosAction(BaseModel):
     joint_pos: torch.Tensor  # (n_dof,)
 
 
-class HYBRIDJointVelocityAction(BaseModel):
+class HYBRIDJoint_Pos_Vel_Action(BaseModel):
     model_config = genesis_pydantic_config(frozen=True, arbitrary_types_allowed=True)
 
     joint_pos: torch.Tensor  # (n_dof,)
@@ -165,5 +165,5 @@ BaseAction: TypeAlias = (
     | EEPoseAbsAction
     | EEPoseRelAction
     | DRJointPosAction
-    | HYBRIDJointVelocityAction
+    | HYBRIDJoint_Pos_Vel_Action
 )
