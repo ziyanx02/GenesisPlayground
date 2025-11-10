@@ -89,8 +89,8 @@ class MotionEnv(LeggedRobotEnv):
         self.link_quat_local_yaw = torch.zeros(
             self.num_envs, self._robot.n_links, 4, device=self._device
         )
-        self.body_lin_vel = torch.zeros(self.num_envs, self._robot.n_links, 3, device=self._device)
-        self.body_ang_vel = torch.zeros(self.num_envs, self._robot.n_links, 3, device=self._device)
+        self.body_lin_vel = torch.zeros(self.num_envs, 3, device=self._device)
+        self.body_ang_vel = torch.zeros(self.num_envs, 3, device=self._device)
 
         # reference trajectories (current frame)
         self.ref_base_pos = torch.zeros(self.num_envs, 3, device=self._device)
@@ -163,6 +163,21 @@ class MotionEnv(LeggedRobotEnv):
             self.num_envs, len(self.tracking_link_idx_local), 4, device=self._device
         )
 
+        # differences to reference (used for observations)
+        self.diff_dof_pos = torch.zeros(self.num_envs, self._robot.dof_dim, device=self._device)
+        self.diff_dof_vel = torch.zeros(self.num_envs, self._robot.dof_dim, device=self._device)
+        self.diff_base_euler = torch.zeros(
+            self.num_envs, 3, device=self._device, dtype=torch.float32
+        )
+        self.diff_base_lin_vel_local = torch.zeros(self.num_envs, 3, device=self._device)
+        self.diff_base_ang_vel_local = torch.zeros(self.num_envs, 3, device=self._device)
+        self.diff_base_rotation_6D = torch.zeros(
+            self.num_envs, 6, device=self._device, dtype=torch.float32
+        )
+        self.diff_tracking_link_pos_local_yaw = torch.zeros(
+            self.num_envs, len(self.tracking_link_idx_local), 3, device=self._device
+        )
+
         # per-env motion selection and time offset
         self._motion_ids = torch.zeros(self.num_envs, device=self._device, dtype=torch.long)
         self._motion_time_offsets = torch.zeros(
@@ -185,11 +200,15 @@ class MotionEnv(LeggedRobotEnv):
         self._error_mask_buffer = {}
         for error_name in error_list:
             terminate_after_error = self._args.terminate_after_error[error_name][0]
-            min_terminate_after_error, max_terminate_after_error = self._args.terminate_after_error[error_name][1]
+            min_terminate_after_error, max_terminate_after_error = self._args.terminate_after_error[
+                error_name
+            ][1]
             if terminate_after_error:
                 self._min_terminate_after_error[error_name] = min_terminate_after_error
                 self._max_terminate_after_error[error_name] = max_terminate_after_error
-                self._terminate_after_error[error_name] = self._args.terminate_after_error[error_name][0]
+                self._terminate_after_error[error_name] = self._args.terminate_after_error[
+                    error_name
+                ][0]
                 self._error_mask_buffer[error_name] = []
 
         # Let base class set up common buffers, spaces, and rendering
@@ -303,7 +322,9 @@ class MotionEnv(LeggedRobotEnv):
         base_pos_error = torch.norm(self.base_pos - self.ref_base_pos, dim=-1)
         base_height_error = torch.abs(self.base_height - self.ref_base_height)
         base_quat_error = quat_error_magnitude(self.base_quat, self.ref_base_quat)
-        dof_pos_error = torch.sum(self.dof_weights * torch.abs(self.dof_pos - self.ref_dof_pos), dim=-1)
+        dof_pos_error = torch.sum(
+            self.dof_weights * torch.abs(self.dof_pos - self.ref_dof_pos), dim=-1
+        )
         tracking_link_pos_error = torch.norm(
             self.tracking_link_pos_local_yaw - self.ref_tracking_link_pos_local_yaw, dim=-1
         ).mean(dim=-1)
@@ -345,9 +366,7 @@ class MotionEnv(LeggedRobotEnv):
 
         if self._args.adaptive_termination_ratio is not None:
             for key in self._terminate_after_error.keys():
-                self._extra_info["info"][f"threshold_{key}"] = (
-                    self._terminate_after_error[key]
-                )
+                self._extra_info["info"][f"threshold_{key}"] = self._terminate_after_error[key]
 
         for error_name in error_dict.keys():
             error_dict[error_name] = error_dict[error_name].mean().item()
@@ -498,6 +517,17 @@ class MotionEnv(LeggedRobotEnv):
         self.ref_tracking_link_quat_local_yaw[envs_idx] = self.ref_link_quat_local_yaw[envs_idx][
             :, self.tracking_link_idx_local
         ]
+
+        self.diff_dof_pos[:] = self.dof_pos - self.ref_dof_pos
+        self.diff_dof_vel[:] = self.dof_vel - self.ref_dof_vel
+        self.diff_base_euler[:] = self.base_euler - self.ref_base_euler
+        self.diff_base_lin_vel_local[:] = self.base_lin_vel_local - self.ref_base_lin_vel_local
+        self.diff_base_ang_vel_local[:] = self.base_ang_vel_local - self.ref_base_ang_vel_local
+        self.diff_base_rotation_6D[:] = self.base_rotation_6D - self.ref_base_rotation_6D
+        if len(self.tracking_link_idx_local) > 0:
+            self.diff_tracking_link_pos_local_yaw[:] = (
+                self.tracking_link_pos_local_yaw - self.ref_tracking_link_pos_local_yaw
+            )
 
     def hard_sync_motion(self, envs_idx: torch.Tensor) -> None:
         self._update_ref_motion()

@@ -8,6 +8,7 @@ from .leggedrobot_terms import (
     AngVelXYPenalty,  # noqa
     AngVelZReward,  # noqa
     BaseHeightPenalty,
+    BodyAngVelXYPenalty,  # noqa
     DofPosLimitPenalty,  # noqa
     DofVelPenalty,  # noqa
     FeetAirTimePenalty,  # noqa
@@ -77,7 +78,8 @@ class MotionFeetAirTimePenalty(RewardTerm):
         self, feet_first_contact: torch.Tensor, feet_air_time: torch.Tensor
     ) -> torch.Tensor:  # type: ignore
         pen_air_time = torch.sum(
-            torch.clamp(self.target_feet_air_time - feet_air_time, min=0.0) * feet_first_contact, dim=1
+            torch.clamp(self.target_feet_air_time - feet_air_time, min=0.0) * feet_first_contact,
+            dim=1,
         )
         return -pen_air_time
 
