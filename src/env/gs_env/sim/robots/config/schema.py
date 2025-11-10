@@ -61,6 +61,7 @@ class CtrlType(GenesisEnum):
     EE_POSE_REL = "EE_POSE_REL"  # Delta pose from current EE pose
     # Legged Control Types
     DR_JOINT_POSITION = "DR_JOINT_POSITION"  # Noised position control for legged robots
+    HYBRID_JOINT_VELOCITY = "HYBRID_JOINT_VELOCITY"  # Joint velocity control for legs
 
 
 class IKSolver(GenesisEnum):
@@ -153,4 +154,16 @@ class DRJointPosAction(BaseModel):
     joint_pos: torch.Tensor  # (n_dof,)
 
 
-BaseAction: TypeAlias = JointPosAction | EEPoseAbsAction | EEPoseRelAction | DRJointPosAction
+class HYBRIDJointVelocityAction(BaseModel):
+    model_config = genesis_pydantic_config(frozen=True, arbitrary_types_allowed=True)
+
+    joint_pos: torch.Tensor  # (n_dof,)
+
+
+BaseAction: TypeAlias = (
+    JointPosAction
+    | EEPoseAbsAction
+    | EEPoseRelAction
+    | DRJointPosAction
+    | HYBRIDJointVelocityAction
+)

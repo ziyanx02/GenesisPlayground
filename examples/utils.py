@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -6,38 +7,57 @@ import numpy as np
 import yaml
 
 
-def load_and_align_hf_npz_vel(
-    npz_path: str | Path,
-    target_pos: list[float] | np.ndarray,
-    dof_idx: int,
+def align_hf_arrays_vel_from_logger(
+    t_ns: np.ndarray,  # int64 nanoseconds from logger.get()
+    dq_arr: np.ndarray,  # (N, nj)
+    dof_idx: int,  # which joint to plot/compare
+    target_pos: Sequence[float],  # controller targets at control_dt
     control_dt: float = 0.02,
     out_rate_hz: float = 500.0,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    npz_path = Path(npz_path)
-    data = np.load(npz_path)
+    """
+    Aligns HF measured joint velocity (dq_arr[:, dof_idx]) and the control-target
+    velocity (d/dt of target_pos) onto a common output grid.
 
-    # HF data
-    t_ns = data["t_ns"]
-    dq_meas = data["dq"][:, dof_idx].astype(float)
-    t_hf = (t_ns - t_ns[0]).astype(float) * 1e-9
+    Returns:
+        t_out [s], target_vel_out, dq_out  (all shape (M,))
+    """
+    # basic guards
+    if t_ns.size == 0 or dq_arr.size == 0 or len(target_pos) == 0:
+        return np.array([]), np.array([]), np.array([])
 
-    # Control timestamps
-    target_pos = np.asarray(target_pos, float)
-    N = len(target_pos)
-    t_ctrl = np.arange(N, dtype=float) * control_dt  # <-- FIXED
-    target_vel_ctrl = np.gradient(target_pos, control_dt, edge_order=2)
+    # 1) HF time in seconds relative to first sample (monotonic-ish)
+    t_hf = (t_ns - t_ns[0]).astype(np.float64) * 1e-9
+    dq_joint = np.asarray(dq_arr[:, dof_idx], dtype=np.float64)
 
-    # Output grid
+    # 2) Dedup/sort guard (rare but safe)
+    order = np.argsort(t_hf)
+    t_hf = t_hf[order]
+    dq_joint = dq_joint[order]
+    keep = np.r_[True, np.diff(t_hf) > 0.0]
+    t_hf = t_hf[keep]
+    dq_joint = dq_joint[keep]
+
+    # 3) Controller time base (starts at 0 by convention)
+    target_pos = np.asarray(target_pos, dtype=np.float64)
+    N = target_pos.shape[0]
+    t_ctrl = np.arange(N, dtype=np.float64) * float(control_dt)
+
+    # 4) Target velocity from target_pos
+    target_vel_ctrl = np.gradient(target_pos, float(control_dt), edge_order=2)
+
+    # 5) Output grid over the overlap
     dt_out = 1.0 / float(out_rate_hz)
     t_start = max(t_ctrl[0], t_hf[0])
     t_end = min(t_ctrl[-1], t_hf[-1])
-    if t_end <= t_start:
-        raise ValueError("No time overlap between HF and control streams.")
-    t_out = np.arange(t_start, t_end, dt_out)
+    if not (t_end > t_start):
+        return np.array([]), np.array([]), np.array([])
 
-    # Interpolate both to output
+    t_out = np.arange(t_start, t_end, dt_out, dtype=np.float64)
+
+    # 6) Interpolate both streams onto t_out
     target_vel_out = np.interp(t_out, t_ctrl, target_vel_ctrl)
-    dq_out = np.interp(t_out, t_hf, dq_meas)
+    dq_out = np.interp(t_out, t_hf, dq_joint)
 
     return t_out, target_vel_out, dq_out
 

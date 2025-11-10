@@ -102,7 +102,6 @@ JointID = {
 class LowStateMsgHandler:
     def __init__(self, cfg: HumanoidRobotArgs, freq: int = 1000) -> None:
         self.cfg = cfg
-        self.logger = None  # type: Optional[SimpleHFBinLogger]
         self.update_interval = 1.0 / freq
         if "g1" in cfg.morph_args.file:
             self.robot_name = "g1"

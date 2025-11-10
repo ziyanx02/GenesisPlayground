@@ -12,13 +12,17 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from gs_env.real import UnitreeLeggedEnv
-from gs_env.real.unitree.utils.hf_logger import SimpleHFBinLogger
+from gs_env.real.unitree.utils.hf_logger import AsyncHFLogger
 from gs_env.sim.envs.config.registry import EnvArgsRegistry
 from gs_env.sim.envs.config.schema import LeggedRobotEnvArgs
 
 # Add examples to path to import utils
 sys.path.insert(0, str(Path(__file__).parent.parent / "examples"))
-from utils import load_and_align_hf_npz_vel, plot_metric_on_axis, yaml_to_config  # type: ignore
+from utils import (  # type: ignore
+    align_hf_arrays_vel_from_logger,
+    plot_metric_on_axis,
+    yaml_to_config,
+)
 
 
 def load_env_args(exp_name: str) -> LeggedRobotEnvArgs:
@@ -54,6 +58,7 @@ def run_single_dof_wave_diagnosis(
     period: int = 1,
     amplitude: float = 1.0,
     offset: float = 0.0,
+    hf_logger: AsyncHFLogger | None = None,
 ) -> tuple[list[float], list[float]]:
     """Run single DoF diagnosis."""
     print(f"Running DoF diagnosis for {wave_type}")
@@ -91,7 +96,6 @@ def run_single_dof_wave_diagnosis(
     last_controller_time = time.time()  # control clock (50 Hz)
     current_dof_pos = env.dof_pos[0] - env.default_dof_pos
     TOTAL_RESET_STEPS = 50
-    logger = getattr(env.robot, "logger", None)
 
     for i in range(TOTAL_RESET_STEPS):
         while time.time() - last_controller_time < 0.02:
@@ -105,20 +109,36 @@ def run_single_dof_wave_diagnosis(
     target_dof_pos_list = []
     dof_pos_list = []
 
+    # BEFORE the control loop:
+    if isinstance(env, UnitreeLeggedEnv):
+
+        def get_state() -> tuple[int, list[float], list[float], list[float]]:
+            nj = env.robot.num_full_dof
+            # Avoid per-element indexing if these are sequences already
+            q = list(env.robot.joint_pos[:nj])
+            dq = list(env.robot.joint_vel[:nj])
+            tau = list(env.robot.torque[:nj])
+            return nj, q, dq, tau
+    else:
+        # LeggedRobotEnv
+        def get_state() -> tuple[int, list[float], list[float], list[float]]:
+            nj = env.robot.action_dim
+            q = list(env.robot.dof_pos[0][:nj])
+            dq = list(env.robot.dof_vel[0][:nj])
+            tau = list(env.robot.torque[0][:nj])
+            return nj, q, dq, tau
+
     for i in range(period * NUM_TOTAL_PERIODS):
         while time.time() - last_controller_time < 0.02:
             now = time.time()
             if now - last_update_time >= 0.001:
                 last_update_time = now
                 t_ns = time.perf_counter_ns()
-                nj = env.robot.num_full_dof
-                q = [env.robot.joint_pos[k] for k in range(nj)]
-                dq = [env.robot.joint_vel[k] for k in range(nj)]
-                tau = [env.robot.torque[k] for k in range(nj)]
-                if logger:
-                    logger.push(t_ns, q, dq, tau)
+                _, q, dq, tau = get_state()
+                if hf_logger:
+                    hf_logger.push(t_ns, q, dq, tau)
             else:
-                time.sleep(0.0001)
+                time.sleep(0.0002)
 
         last_controller_time = time.time()
         target_dof_pos = wave_func(i) + offset
@@ -142,17 +162,14 @@ def run_single_dof_diagnosis(
     period: int = 100,
     amplitude: float = 1.0,
     offset: float = 0.0,
+    hf_logging: bool = False,
     log_dir: Path = Path(__file__).parent / "logs" / "pd_test",
 ) -> None:
     fig, axes = plt.subplots(6, 1, figsize=(12, 12))
     for i, wave_type in enumerate(["SIN"]):
-        logger = None
-        if isinstance(env, UnitreeLeggedEnv):
-            log_path = log_dir / f"{dof_name}_{wave_type}"
-            logger = SimpleHFBinLogger(str(log_path), nj=env.action_dim)
-            env.robot.logger = logger  # attach to robot
-            logger.start()
-            print(f"[HF LOG] Logging to {log_path}")
+        if hf_logging:
+            hf_logger = AsyncHFLogger(nj=env.action_dim, max_seconds=10.0, rate_hz=1000)
+            hf_logger.start()
 
         target_dof_pos_list, dof_pos_list = run_single_dof_wave_diagnosis(
             env,
@@ -162,6 +179,7 @@ def run_single_dof_diagnosis(
             period=period,
             amplitude=amplitude,
             offset=offset,
+            hf_logger=hf_logger,
         )
         plot_metric_on_axis(
             axes[i],
@@ -187,19 +205,16 @@ def run_single_dof_diagnosis(
                 show_mean=False,
             )
 
-        if logger:
-            logger.stop()
-            print("[HF LOG] Stopped logger")
-
-            # Convert to npz for plotting later
-            npz_path = SimpleHFBinLogger.export_npz(str(log_path) + ".bin")
-            print(f"[HF LOG] Exported to {npz_path}")
-            # Align HF measured data with the target and plot using your helper
-            # steps, _, dq_interp = load_and_align_hf_npz_vel(
-            #     npz_path, target_dof_pos_list, dof_idx, dt=0.02
-            # )
-            steps, _, dq_interp = load_and_align_hf_npz_vel(
-                npz_path, target_dof_pos_list, dof_idx, control_dt=0.02, out_rate_hz=200.0
+        if hf_logging:
+            hf_logger.stop()
+            t_ns, _, dq_arr, _ = hf_logger.get()
+            steps, _, dq_interp = align_hf_arrays_vel_from_logger(
+                t_ns=t_ns,
+                dq_arr=dq_arr,
+                dof_idx=dof_idx,
+                target_pos=target_dof_pos_list,  # the list you already build each control tick
+                control_dt=0.02,
+                out_rate_hz=200.0,
             )
             plot_metric_on_axis(
                 axes[i],
@@ -226,6 +241,7 @@ def main(
     show_viewer: bool = False,
     device: str = "cpu",
     sim: bool = True,
+    hf_logging: bool = False,
 ) -> None:
     # Load checkpoint and env_args
     env_args = EnvArgsRegistry["g1_fixed"]
@@ -280,9 +296,9 @@ def main(
         dof_names = env.dof_names
 
         if sim:
-            log_dir = Path(__file__).parent / "logs" / "pd_test" / "sim-V"
+            log_dir = Path(__file__).parent / "logs" / "pd_test" / "sim-v1"
         else:
-            log_dir = Path(__file__).parent / "logs" / "pd_test" / "real-first-order"
+            log_dir = Path(__file__).parent / "logs" / "pd_test" / "real-first-order-v2"
 
         for dof_name, (lower_bound, upper_bound) in test_dofs.items():
             dof_idx = -1
@@ -303,6 +319,7 @@ def main(
                 period=100,
                 amplitude=amplitude,
                 offset=offset,
+                hf_logging=hf_logging,
                 log_dir=log_dir,
             )
 
