@@ -433,7 +433,9 @@ def view_motion(env_args: Any, show_viewer: bool = False) -> None:
             env.time_since_reset[0] = 0.0
             env.hard_sync_motion(torch.IntTensor([0]))
             last_update_time = time.time()
-            while env.motion_times[0] < env.motion_lib.get_motion_length(motion_id):
+            while env.motion_times[0] + 0.02 < env.motion_lib.get_motion_length(
+                torch.IntTensor([motion_id])
+            ):
                 env.scene.scene.step(refresh_visualizer=False)
                 env.time_since_reset[0] += 0.1
                 env.hard_sync_motion(torch.IntTensor([0]))

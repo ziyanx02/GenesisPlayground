@@ -5,18 +5,17 @@ from pathlib import Path
 from typing import Any, cast
 
 import gs_env.sim.envs as gs_envs
-import numpy as np
 import torch
 from gs_env.sim.envs.config.registry import EnvArgsRegistry
 from gs_env.sim.envs.config.schema import MotionEnvArgs
 from gs_env.sim.scenes.config.registry import SceneArgsRegistry
 
 
-def lafan_to_motion_data(
-    env: gs_envs.MotionEnv, data: torch.Tensor, show_viewer: bool = False
+def twist_to_motion_data(
+    env: gs_envs.MotionEnv, data: dict[str, Any], show_viewer: bool = False
 ) -> None | dict[str, Any]:
     """
-    Convert LAFAN data to motion data
+    Convert TWIST data to motion data
     If show_viewer is True, the environment will be rendered in a separate thread.
     Returns:
         motion_data: The motion data
@@ -27,8 +26,37 @@ def lafan_to_motion_data(
     link_names = [link.name for link in links]
     dof_names = env.dof_names
 
+    twist_order = [
+        "left_hip_pitch_joint",
+        "left_hip_roll_joint",
+        "left_hip_yaw_joint",
+        "left_knee_joint",
+        "left_ankle_pitch_joint",
+        "left_ankle_roll_joint",
+        "right_hip_pitch_joint",
+        "right_hip_roll_joint",
+        "right_hip_yaw_joint",
+        "right_knee_joint",
+        "right_ankle_pitch_joint",
+        "right_ankle_roll_joint",
+        "waist_yaw_joint",
+        "waist_roll_joint",
+        "waist_pitch_joint",
+        "left_shoulder_pitch_joint",
+        "left_shoulder_roll_joint",
+        "left_shoulder_yaw_joint",
+        "left_elbow_joint",
+        "right_shoulder_pitch_joint",
+        "right_shoulder_roll_joint",
+        "right_shoulder_yaw_joint",
+        "right_elbow_joint",
+    ]
+    dof_index = []
+    for dof_name in twist_order:
+        dof_index.append(dof_names.index(dof_name))
+
     motion_data = {}
-    motion_data["fps"] = 30
+    motion_data["fps"] = data["fps"]
     motion_data["link_names"] = link_names
     motion_data["dof_names"] = dof_names
     pos_list = []
@@ -38,14 +66,13 @@ def lafan_to_motion_data(
     link_quat_list = []
 
     def run() -> dict[str, Any]:
-        nonlocal env, data, motion_data, show_viewer
+        nonlocal env, data, motion_data, show_viewer, dof_index
         last_update_time = time.time()
-        for i in range(len(data)):
-            sliced_data = data[i]
-            pos = sliced_data[:3]
-            pos[2] -= 0.02
-            quat = sliced_data[[6, 3, 4, 5]]
-            dof_pos = sliced_data[7:]
+        for i in range(len(data["root_pos"])):
+            pos = torch.tensor(data["root_pos"][i], dtype=torch.float32)
+            quat = torch.tensor(data["root_rot"][i], dtype=torch.float32)[[3, 0, 1, 2]]
+            dof_pos = torch.zeros(29, dtype=torch.float32)
+            dof_pos[dof_index] = torch.tensor(data["dof_pos"][i], dtype=torch.float32)
             env.robot.set_state(pos=pos, quat=quat, dof_pos=dof_pos)
             env.update_buffers()
             pos_list.append(env.base_pos[0].clone())
@@ -82,14 +109,13 @@ def lafan_to_motion_data(
 if __name__ == "__main__":
     show_viewer = False
 
-    csv_file = "/Users/xiongziyan/Python/GenesisPlayground/assets/lafan/dance2_subject3.csv"
-    # csv_file = "/Users/xiongziyan/Python/GenesisPlayground/assets/lafan/jumps1_subject1.csv"
-    data = np.genfromtxt(csv_file, delimiter=",")
-    data = torch.from_numpy(data).to(torch.float32)
+    pickle_file = "/Users/xiongziyan/Python/GenesisPlayground/assets/motion/cmu/01_01.pkl"
+    with open(pickle_file, "rb") as f:
+        data = pickle.load(f)
 
-    log_dir = Path("./assets/motion/lafan")
+    log_dir = Path("./assets/motion/amass") / os.path.dirname(pickle_file).split("/")[-1]
     os.makedirs(log_dir, exist_ok=True)
-    motion_name = os.path.basename(csv_file).split(".")[0]
+    motion_name = os.path.basename(pickle_file).split(".")[0]
     motion_path = log_dir / (motion_name + ".pkl")
 
     env_args = cast(MotionEnvArgs, EnvArgsRegistry["g1_motion"]).model_copy(
@@ -104,7 +130,7 @@ if __name__ == "__main__":
     )
     env.reset()
 
-    motion_data = lafan_to_motion_data(env=env, data=data, show_viewer=show_viewer)
+    motion_data = twist_to_motion_data(env=env, data=data, show_viewer=show_viewer)
     if motion_data is not None:
         print(f"Saving motion data to {motion_path}")
         with open(motion_path, "wb") as f:
