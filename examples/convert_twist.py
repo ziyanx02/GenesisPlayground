@@ -109,7 +109,8 @@ def twist_to_motion_data(
 if __name__ == "__main__":
     show_viewer = False
 
-    pickle_file = "/Users/xiongziyan/Python/GenesisPlayground/assets/motion/cmu/01_01.pkl"
+    # pickle_file = "/Users/xiongziyan/Python/GenesisPlayground/assets/motion/cmu/01_01.pkl"
+    pickle_file = "/Users/xiongziyan/Python/GenesisPlayground/assets/motion/kit/squat04.pkl"
     with open(pickle_file, "rb") as f:
         data = pickle.load(f)
 
