@@ -332,7 +332,7 @@ def evaluate_policy(
 def train_policy(
     exp_name: str | None = None,
     show_viewer: bool = False,
-    num_envs: int = 4096,
+    num_envs: int = 8192,
     device: str = "cuda",
     use_wandb: bool = True,
     env_args: Any = None,
@@ -485,7 +485,7 @@ def view_motion(env_args: Any, show_viewer: bool = False) -> None:
 
 
 def main(
-    num_envs: int = 4096,
+    num_envs: int = 8192,
     show_viewer: bool = False,
     device: str = "cuda",
     eval: bool = False,

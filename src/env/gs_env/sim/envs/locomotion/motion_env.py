@@ -89,6 +89,8 @@ class MotionEnv(LeggedRobotEnv):
         self.link_quat_local_yaw = torch.zeros(
             self.num_envs, self._robot.n_links, 4, device=self._device
         )
+        self.body_lin_vel = torch.zeros(self.num_envs, self._robot.n_links, 3, device=self._device)
+        self.body_ang_vel = torch.zeros(self.num_envs, self._robot.n_links, 3, device=self._device)
 
         # reference trajectories (current frame)
         self.ref_base_pos = torch.zeros(self.num_envs, 3, device=self._device)
@@ -112,6 +114,23 @@ class MotionEnv(LeggedRobotEnv):
         self.ref_link_quat_local_yaw = torch.zeros(
             self.num_envs, self._robot.n_links, 4, device=self._device
         )
+
+        if self._args.dof_weights is not None:
+            dof_weights_list = []
+            for dof_name in self.robot.dof_names:
+                if dof_name in self._args.dof_weights:
+                    dof_weights_list.append(self._args.dof_weights[dof_name])
+                else:
+                    dof_weights_list.append(1.0)
+            self.dof_weights = torch.tensor(
+                dof_weights_list, device=self._device, dtype=torch.float32
+            )
+        else:
+            self.dof_weights = torch.ones(
+                self._robot.dof_dim, device=self._device, dtype=torch.float32
+            )
+        self.dof_pos_error_weighted = torch.zeros(self.num_envs, device=self._device)
+        self.dof_vel_error_weighted = torch.zeros(self.num_envs, device=self._device)
 
         # Motion library and reference buffers
         self._motion_lib = MotionLib(motion_file=self._args.motion_file, device=self._device)
@@ -284,7 +303,7 @@ class MotionEnv(LeggedRobotEnv):
         base_pos_error = torch.norm(self.base_pos - self.ref_base_pos, dim=-1)
         base_height_error = torch.abs(self.base_height - self.ref_base_height)
         base_quat_error = quat_error_magnitude(self.base_quat, self.ref_base_quat)
-        dof_pos_error = torch.sum(torch.abs(self.dof_pos - self.ref_dof_pos), dim=-1)
+        dof_pos_error = torch.sum(self.dof_weights * torch.abs(self.dof_pos - self.ref_dof_pos), dim=-1)
         tracking_link_pos_error = torch.norm(
             self.tracking_link_pos_local_yaw - self.ref_tracking_link_pos_local_yaw, dim=-1
         ).mean(dim=-1)
@@ -346,13 +365,13 @@ class MotionEnv(LeggedRobotEnv):
                 terminate_by_error_ratio = torch.mean(
                     torch.stack(self._error_mask_buffer[error_name])
                 ).item()
-                if terminate_by_error_ratio > 2.0 * self._args.adaptive_termination_ratio:  # type: ignore
+                if terminate_by_error_ratio > 3.0 * self._args.adaptive_termination_ratio:  # type: ignore
                     self._terminate_after_error[error_name] *= 1.2
                     self._terminate_after_error[error_name] = min(
                         self._max_terminate_after_error[error_name],
                         self._terminate_after_error[error_name],
                     )
-                elif terminate_by_error_ratio < 0.5 * self._args.adaptive_termination_ratio:  # type: ignore
+                elif terminate_by_error_ratio < 0.3 * self._args.adaptive_termination_ratio:  # type: ignore
                     self._terminate_after_error[error_name] /= 1.2
                     self._terminate_after_error[error_name] = max(
                         self._min_terminate_after_error[error_name],
@@ -379,6 +398,8 @@ class MotionEnv(LeggedRobotEnv):
         self.base_ang_vel[:] = self._robot.get_ang()
         self.base_lin_vel_local[:] = self.global_to_local(self.base_lin_vel)
         self.base_ang_vel_local[:] = self.global_to_local(self.base_ang_vel)
+        self.body_lin_vel[:] = self._robot.body_link.get_vel()
+        self.body_ang_vel[:] = self._robot.body_link.get_ang()
 
         self.link_contact_forces[:] = self._robot.link_contact_forces
         self.link_positions[:] = self._robot.link_positions
@@ -400,6 +421,13 @@ class MotionEnv(LeggedRobotEnv):
         self.tracking_link_quat_local_yaw[:] = self.link_quat_local_yaw[
             :, self.tracking_link_idx_local
         ]
+
+        self.dof_pos_error_weighted[:] = torch.sum(
+            self.dof_weights * torch.square(self.dof_pos - self.ref_dof_pos), dim=-1
+        )
+        self.dof_vel_error_weighted[:] = torch.sum(
+            self.dof_weights * torch.square(self.dof_vel - self.ref_dof_vel), dim=-1
+        )
 
         # contacts
         self.feet_contact_force[:] = self.link_contact_forces[:, self._robot.foot_links_idx, 2]

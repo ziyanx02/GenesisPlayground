@@ -61,6 +61,34 @@ class AngVelXYPenalty(RewardTerm):
         return -torch.sum(torch.square(base_ang_vel[:, :2]), dim=-1)
 
 
+class BodyLinVelZPenalty(RewardTerm):
+    """
+    Penalize the linear velocity in the Z direction.
+
+    Args:
+        body_lin_vel: Linear velocity tensor of shape (B, 3) where B is the batch size.
+    """
+
+    required_keys = ("body_lin_vel",)
+
+    def _compute(self, body_lin_vel: torch.Tensor) -> torch.Tensor:  # type: ignore
+        return -torch.square(body_lin_vel[:, 2])
+
+
+class BodyAngVelXYPenalty(RewardTerm):
+    """
+    Penalize the angular velocity in the X and Y directions.
+
+    Args:
+        body_ang_vel: Angular velocity tensor of shape (B, 3) where B is the batch size.
+    """
+
+    required_keys = ("body_ang_vel",)
+
+    def _compute(self, body_ang_vel: torch.Tensor) -> torch.Tensor:  # type: ignore
+        return -torch.sum(torch.square(body_ang_vel[:, :2]), dim=-1)
+
+
 class OrientationPenalty(RewardTerm):
     """
     Penalize the orientation deviation from upright.

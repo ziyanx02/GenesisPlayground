@@ -61,6 +61,27 @@ class UpperBodyActionPenalty(RewardTerm):
         return -torch.sum(torch.square(action[:, 15:]), dim=-1)
 
 
+class MotionFeetAirTimePenalty(RewardTerm):
+    """
+    Penalize the feet air time.
+
+    Args:
+        feet_air_time: Feet air time tensor of shape (B, 2) where B is the batch size.
+        feet_first_contact: Feet first contact tensor of shape (B, 2) where B is the batch size.
+    """
+
+    required_keys = ("feet_first_contact", "feet_air_time")
+    target_feet_air_time = 0.2
+
+    def _compute(
+        self, feet_first_contact: torch.Tensor, feet_air_time: torch.Tensor
+    ) -> torch.Tensor:  # type: ignore
+        pen_air_time = torch.sum(
+            torch.clamp(self.target_feet_air_time - feet_air_time, min=0.0) * feet_first_contact, dim=1
+        )
+        return -pen_air_time
+
+
 class WaistDofPenalty(RewardTerm):
     """
     Penalize the waist DoF position.
@@ -101,6 +122,20 @@ class HipRollPenalty(RewardTerm):
 
     def _compute(self, dof_pos: torch.Tensor) -> torch.Tensor:  # type: ignore
         return -torch.sum(torch.square(dof_pos[:, [0, 6]]), dim=-1)
+
+
+class WaistVelPenalty(RewardTerm):
+    """
+    Penalize the waist DoF velocity.
+
+    Args:
+        dof_vel: DoF velocity tensor of shape (B, D) where B is the batch size and D is the number of DoFs.
+    """
+
+    required_keys = ("dof_vel",)
+
+    def _compute(self, dof_vel: torch.Tensor) -> torch.Tensor:  # type: ignore
+        return -torch.sum(torch.square(dof_vel[:, [12, 13, 14]]), dim=-1)
 
 
 class AnkleTorquePenalty(RewardTerm):
@@ -191,17 +226,13 @@ class DofPosReward(RewardTerm):
     Reward the DoF position.
 
     Args:
-        dof_pos: DoF position tensor of shape (B, D) where B is the batch size and D is the number of DoFs.
-        ref_dof_pos: Reference DoF position tensor of shape (B, D) where B is the batch size and D is the number of DoFs.
+        dof_pos_error_weighted: DoF position tensor of shape (B,) where B is the batch size.
     """
 
-    required_keys = ("dof_pos", "ref_dof_pos")
+    required_keys = ("dof_pos_error_weighted",)
 
-    def _compute(self, dof_pos: torch.Tensor, ref_dof_pos: torch.Tensor) -> torch.Tensor:  # type: ignore
-        # dof pos err weights
-        dof_pos_error = torch.square(dof_pos - ref_dof_pos).sum(dim=-1)
-        # print("dof_pos_error", dof_pos_error, torch.exp(-dof_pos_error * 0.15))
-        return torch.exp(-dof_pos_error * 0.15)
+    def _compute(self, dof_pos_error_weighted: torch.Tensor) -> torch.Tensor:  # type: ignore
+        return torch.exp(-dof_pos_error_weighted * 0.15)
 
 
 class DofVelReward(RewardTerm):
@@ -209,17 +240,13 @@ class DofVelReward(RewardTerm):
     Reward the DoF velocity.
 
     Args:
-        dof_vel: DoF velocity tensor of shape (B, D) where B is the batch size and D is the number of DoFs.
-        ref_dof_vel: Reference DoF velocity tensor of shape (B, D) where B is the batch size and D is the number of DoFs.
+        dof_vel_error_weighted: DoF velocity tensor of shape (B,) where B is the batch size .
     """
 
-    required_keys = ("dof_vel", "ref_dof_vel")
+    required_keys = ("dof_vel_error_weighted",)
 
-    def _compute(self, dof_vel: torch.Tensor, ref_dof_vel: torch.Tensor) -> torch.Tensor:  # type: ignore
-        # dof pos err weights
-        dof_vel_error = torch.square(dof_vel - ref_dof_vel).sum(dim=-1)
-        # print("dof_vel_error", dof_vel_error, torch.exp(-dof_vel_error * 0.01))
-        return torch.exp(-dof_vel_error * 0.01)
+    def _compute(self, dof_vel_error_weighted: torch.Tensor) -> torch.Tensor:  # type: ignore
+        return torch.exp(-dof_vel_error_weighted * 0.01)
 
 
 class BaseHeightReward(RewardTerm):

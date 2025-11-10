@@ -63,6 +63,8 @@ class MotionEnvArgs(LeggedRobotEnvArgs):
     motion_file: str | None = None
     tracking_link_names: list[str] = []
 
+    dof_weights: dict[str, float] | None = None
+
     no_terminate_before_motion_time: float = 1.0
     no_terminate_after_random_push_time: float = 2.0
     terminate_after_error: dict[str, list[float | list[float]]] = {}
