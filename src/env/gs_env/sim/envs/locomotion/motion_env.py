@@ -57,6 +57,16 @@ class MotionEnv(LeggedRobotEnv):
 
     def _init(self) -> None:
         # Pre-parent: allocate feet-related buffers optionally used by rewards
+        self.feet_height = torch.zeros(
+            (self.num_envs, len(self._robot.foot_links_idx)),
+            device=self._device,
+            dtype=torch.float32,
+        )
+        self.feet_velocity = torch.zeros(
+            (self.num_envs, len(self._robot.foot_links_idx), 3),
+            device=self._device,
+            dtype=torch.float32,
+        )
         self.feet_contact = torch.zeros(
             (self.num_envs, len(self._robot.foot_links_idx)),
             device=self._device,
@@ -449,6 +459,8 @@ class MotionEnv(LeggedRobotEnv):
         )
 
         # contacts
+        self.feet_height[:] = self.link_positions[:, self._robot.foot_links_idx, 2]
+        self.feet_velocity[:] = self.link_velocities[:, self._robot.foot_links_idx]
         self.feet_contact_force[:] = self.link_contact_forces[:, self._robot.foot_links_idx, 2]
         self.feet_contact[:] = self.feet_contact_force > 1.0
 

@@ -187,7 +187,7 @@ EnvArgsRegistry["g1_motion"] = MotionEnvArgs(
         "BaseQuatReward": 5.0,
         "BaseLinVelReward": 5.0,
         "BaseAngVelReward": 5.0,
-        "TrackingLinkPosReward": 1.0,
+        "TrackingLinkPosReward": 5.0,
         ### Regularization ###
         "TorquePenalty": 0.0001,
         "ActionRatePenalty": 0.1,
@@ -197,6 +197,7 @@ EnvArgsRegistry["g1_motion"] = MotionEnvArgs(
         "AngVelXYPenalty": 0.1,
         "BodyAngVelXYPenalty": 0.1,
         # "G1FeetContactForceLimitPenalty": 1e-4,
+        "G1FeetSlidePenalty": 10.0,
         "MotionFeetAirTimePenalty": 100.0,
     },
     dof_weights={

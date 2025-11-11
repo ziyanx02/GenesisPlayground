@@ -239,9 +239,7 @@ class MotionLib:
         torch.Tensor,
     ]:
         assert motion_times.min() >= 0.0, "motion_times must be non-negative"
-        assert (motion_times <= self._motion_lengths[motion_ids]).all(), (
-            "motion_times must be less than motion length"
-        )
+        motion_times = torch.min(motion_times, self._motion_lengths[motion_ids])
 
         frame_idx0, frame_idx1, blend = self._calc_frame_blend(motion_ids, motion_times)
 
