@@ -190,6 +190,27 @@ class G1FeetContactForcePenalty(RewardTerm):
         return -torch.square(contact_force_diff / 200)
 
 
+class G1FeetSlidePenalty(RewardTerm):
+    """
+    Penalize the feet slide.
+
+    Args:
+        feet_height: Feet height tensor of shape (B, 2) where B is the batch size.
+        feet_contact: Feet contact tensor of shape (B, 2) where B is the batch size.
+        feet_velocity: Feet velocity tensor of shape (B, 2, 3) where B is the batch size.
+    """
+
+    required_keys = ("feet_height", "feet_contact", "feet_velocity")
+    feet_slide_height_threshold = 0.1
+
+    def _compute(
+        self, feet_height: torch.Tensor, feet_contact: torch.Tensor, feet_velocity: torch.Tensor
+    ) -> torch.Tensor:  # type: ignore
+        feet_contact_mask = feet_contact + (feet_height < self.feet_slide_height_threshold).float()
+        feet_vel_xy = torch.square(feet_velocity[:, :, :2]).sum(dim=-1)
+        return -torch.sum(feet_vel_xy * feet_contact_mask, dim=-1)
+
+
 class FeetOrientationPenalty(RewardTerm):
     """
     Penalize the feet orientation.
@@ -280,7 +301,7 @@ class BasePosReward(RewardTerm):
 
     def _compute(self, base_pos: torch.Tensor, ref_base_pos: torch.Tensor) -> torch.Tensor:  # type: ignore
         base_pos_error = torch.square(base_pos - ref_base_pos).sum(dim=-1)
-        # print("base_pos_error", base_pos_error, torch.exp(-base_pos_error * 5))
+        # print("base_pos_error", base_pos_error * 5)
         return torch.exp(-base_pos_error * 5)
 
 
@@ -297,7 +318,7 @@ class BaseQuatReward(RewardTerm):
 
     def _compute(self, base_quat: torch.Tensor, ref_base_quat: torch.Tensor) -> torch.Tensor:  # type: ignore
         base_quat_error = quat_to_angle_axis(quat_diff(base_quat, ref_base_quat)).norm(dim=-1)
-        # print("base_quat_error", base_quat_error, torch.exp(-(base_quat_error**2) * 5))
+        # print("base_quat_error", (base_quat_error**2) * 5)
         return torch.exp(-(base_quat_error**2) * 5)
 
 
@@ -314,7 +335,7 @@ class BaseLinVelReward(RewardTerm):
 
     def _compute(self, base_lin_vel: torch.Tensor, ref_base_lin_vel: torch.Tensor) -> torch.Tensor:  # type: ignore
         base_lin_vel_error = torch.square(base_lin_vel - ref_base_lin_vel).sum(dim=-1)
-        # print("base_lin_vel_error", base_lin_vel_error, torch.exp(-base_lin_vel_error * 1))
+        # print("base_lin_vel_error", base_lin_vel_error * 1)
         return torch.exp(-base_lin_vel_error * 1)
 
 
@@ -331,7 +352,7 @@ class BaseAngVelReward(RewardTerm):
 
     def _compute(self, base_ang_vel: torch.Tensor, ref_base_ang_vel: torch.Tensor) -> torch.Tensor:  # type: ignore
         base_ang_vel_error = torch.square(base_ang_vel - ref_base_ang_vel).sum(dim=-1)
-        # print("base_ang_vel_error", base_ang_vel_error, torch.exp(-base_ang_vel_error * 1))
+        # print("base_ang_vel_error", base_ang_vel_error * 1)
         return torch.exp(-base_ang_vel_error * 1)
 
 
@@ -356,4 +377,5 @@ class TrackingLinkPosReward(RewardTerm):
             .sum(dim=-1)
             .sum(dim=-1)
         )
+        # print("tracking_link_pos_error", tracking_link_pos_error * 1)
         return torch.exp(-tracking_link_pos_error * 2)
