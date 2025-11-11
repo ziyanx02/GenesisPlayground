@@ -324,10 +324,10 @@ EnvArgsRegistry["g1_motion"] = MotionEnvArgs(
         "base_pos_error": [0.3, [0.1, 0.3]],
         "base_height_error": [0.15, [0.05, 0.15]],
         "base_quat_error": [0.3, [0.1, 0.3]],
-        "dof_pos_error": [10.0, [1.0, 10.0]],
+        "dof_pos_error": [6.0, [1.0, 6.0]],
         "tracking_link_pos_error": [0.3, [0.03, 0.3]],
     },
-    adaptive_termination_ratio=0.001,
+    adaptive_termination_ratio=None,
     motion_file=None,
 )
 
