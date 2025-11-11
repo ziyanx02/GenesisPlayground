@@ -344,7 +344,7 @@ G1_kp_dict: dict[str, float] = {
     "hip_roll": 200.0,
     "hip_pitch": 200.0,
     "hip_yaw": 200.0,
-    "knee": 100.0,
+    "knee": 200.0,
     "ankle_roll": 40.0,
     "ankle_pitch": 40.0,
     "waist_roll": 300.0,
@@ -408,7 +408,7 @@ RobotArgsRegistry["g1_fixed"] = HumanoidRobotArgs(
     dr_args=DRArgsRegistry["default"],
     visualize_contact=False,
     vis_mode="visual",
-    ctrl_type=CtrlType.HYBRID_JOINT_VELOCITY,
+    ctrl_type=CtrlType.DR_JOINT_POSITION,
     body_link_name="torso_link",
     foot_link_names=[
         "left_ankle_roll_link",

@@ -19,6 +19,7 @@ from gs_env.sim.envs.config.schema import LeggedRobotEnvArgs
 # Add examples to path to import utils
 sys.path.insert(0, str(Path(__file__).parent.parent / "examples"))
 from utils import (  # type: ignore
+    align_hf_arrays_pos_from_logger,
     align_hf_arrays_vel_from_logger,
     plot_metric_on_axis,
     yaml_to_config,
@@ -59,7 +60,7 @@ def run_single_dof_wave_diagnosis(
     amplitude: float = 1.0,
     offset: float = 0.0,
     hf_logger: AsyncHFLogger | None = None,
-) -> tuple[list[float], list[float]]:
+) -> list[float]:
     """Run single DoF diagnosis."""
     print(f"Running DoF diagnosis for {wave_type}")
     NUM_TOTAL_PERIODS = 3
@@ -92,8 +93,8 @@ def run_single_dof_wave_diagnosis(
     action = torch.zeros((1, num_dofs), device=env.device)
     action[:, dof_idx] = offset / env.action_scale
 
-    last_update_time = time.time()  # HF log clock (1 kHz)
-    last_controller_time = time.time()  # control clock (50 Hz)
+    last_update_time = time.time()
+    last_controller_time = time.time()
     current_dof_pos = env.dof_pos[0] - env.default_dof_pos
     TOTAL_RESET_STEPS = 50
 
@@ -107,7 +108,6 @@ def run_single_dof_wave_diagnosis(
         )
 
     target_dof_pos_list = []
-    dof_pos_list = []
 
     # BEFORE the control loop:
     if isinstance(env, UnitreeLeggedEnv):
@@ -128,30 +128,32 @@ def run_single_dof_wave_diagnosis(
             tau = list(env.robot.torque[0][:nj])
             return nj, q, dq, tau
 
+    default_np = np.asarray(env.robot.default_dof_pos[:29].cpu().numpy(), dtype=np.float64)
     for i in range(period * NUM_TOTAL_PERIODS):
         while time.time() - last_controller_time < 0.02:
             now = time.time()
             if now - last_update_time >= 0.001:
                 last_update_time = now
                 t_ns = time.perf_counter_ns()
-                _, q, dq, tau = get_state()
+                nj, q, dq, tau = get_state()
+                default_np = env.robot.default_dof_pos[:nj].cpu().numpy()
                 if hf_logger:
-                    hf_logger.push(t_ns, q, dq, tau)
+                    hf_logger.push(t_ns, q, dq, tau, (np.asarray(q) - default_np).tolist())
             else:
-                time.sleep(0.0002)
+                time.sleep(0.0005)
 
         last_controller_time = time.time()
         target_dof_pos = wave_func(i) + offset
         action[:, dof_idx] = target_dof_pos / env.action_scale
-        dof_pos = env.dof_pos[0, dof_idx].cpu().item() - env.robot.default_dof_pos[dof_idx]
+        # dof_pos = env.dof_pos[0, dof_idx].cpu().item() - env.robot.default_dof_pos[dof_idx]
         target_dof_pos_list.append(target_dof_pos)
-        dof_pos_list.append(dof_pos)
+        # dof_pos_list.append(dof_pos)
         env.apply_action(action)
 
         if i % period == 0:
             print(f"Step {i} of {period * NUM_TOTAL_PERIODS}")
 
-    return target_dof_pos_list, dof_pos_list
+    return target_dof_pos_list
 
 
 def run_single_dof_diagnosis(
@@ -172,7 +174,7 @@ def run_single_dof_diagnosis(
             hf_logger = AsyncHFLogger(nj=env.action_dim, max_seconds=10.0, rate_hz=1000)
             hf_logger.start()
 
-        target_dof_pos_list, dof_pos_list = run_single_dof_wave_diagnosis(
+        target_dof_pos_list = run_single_dof_wave_diagnosis(
             env,
             dof_idx=dof_idx,
             num_dofs=num_dofs,
@@ -182,33 +184,46 @@ def run_single_dof_diagnosis(
             offset=offset,
             hf_logger=hf_logger,
         )
-        plot_metric_on_axis(
-            axes[i],
-            np.arange(len(target_dof_pos_list)) * 0.02,
-            [target_dof_pos_list, dof_pos_list],
-            ["Target", "Dof Pos"],
-            "Dof Pos",
-            wave_type,
-            yscale="linear",
-        )
-
-        if wave_type == "SQ":
-            truncated_dof_pos_list = dof_pos_list[-period : -period + 10]
-            truncated_target_dof_pos_list = target_dof_pos_list[-period : -period + 10]
-            plot_metric_on_axis(
-                axes[3],
-                np.arange(len(truncated_target_dof_pos_list)),
-                [truncated_target_dof_pos_list, truncated_dof_pos_list],
-                ["Target", "Dof Pos"],
-                "Dof Pos",
-                "Truncated",
-                yscale="linear",
-                show_mean=False,
-            )
 
         if hf_logging:
             hf_logger.stop()
-            t_ns, _, dq_arr, _ = hf_logger.get()
+            t_ns, _, _, _, dof_pos_arr = hf_logger.get()
+            steps, target_pos_out, q_out = align_hf_arrays_pos_from_logger(
+                t_ns=t_ns,
+                q_arr=dof_pos_arr,
+                dof_idx=dof_idx,
+                target_pos=target_dof_pos_list,
+                control_dt=0.02,  # estimated or configured
+                out_rate_hz=200.0,
+                pos_offset=0.0,  # centers both streams
+            )
+
+            plot_metric_on_axis(
+                axes[i],
+                steps,
+                [target_pos_out.tolist(), q_out.tolist()],
+                ["Target", "Dof Pos"],
+                "Dof Pos",
+                wave_type,
+                yscale="linear",
+            )
+
+        # if wave_type == "SQ":
+        #     truncated_dof_pos_list = dof_pos_list[-period : -period + 10]
+        #     truncated_target_dof_pos_list = target_dof_pos_list[-period : -period + 10]
+        #     plot_metric_on_axis(
+        #         axes[3],
+        #         np.arange(len(truncated_target_dof_pos_list)),
+        #         [truncated_target_dof_pos_list, truncated_dof_pos_list],
+        #         ["Target", "Dof Pos"],
+        #         "Dof Pos",
+        #         "Truncated",
+        #         yscale="linear",
+        #         show_mean=False,
+        #     )
+
+        if hf_logging:
+            t_ns, _, dq_arr, _, _ = hf_logger.get()
             steps, target_vel_out, dq_interp = align_hf_arrays_vel_from_logger(
                 t_ns=t_ns,
                 dq_arr=dq_arr,
@@ -297,9 +312,17 @@ def main(
         dof_names = env.dof_names
 
         if sim:
-            log_dir = Path(__file__).parent / "logs" / "pd_test" / "sim" / f"{env.robot.ctrl_type}"
+            log_dir = (
+                Path(__file__).parent
+                / "logs"
+                / "pd_test"
+                / "sim"
+                / f"{env.robot.ctrl_type}-kp_200-v1"
+            )
         else:
-            log_dir = Path(__file__).parent / "logs" / "pd_test" / "real" / f"{env.ctrl_type}"
+            log_dir = (
+                Path(__file__).parent / "logs" / "pd_test" / "real" / f"{env.ctrl_type}-kp_200-v1"
+            )
 
         for dof_name, (lower_bound, upper_bound) in test_dofs.items():
             dof_idx = -1

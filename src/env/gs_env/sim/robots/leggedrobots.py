@@ -421,6 +421,10 @@ class LeggedRobotBase(BaseGymRobot):
     def ctrl_type(self) -> CtrlType:
         return self._args.ctrl_type
 
+    @property
+    def ctrl_freq(self) -> float:
+        return self._args.ctrl_freq
+
 
 class HumanoidRobotBase(LeggedRobotBase):
     def __init__(

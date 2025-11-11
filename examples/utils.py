@@ -7,10 +7,66 @@ import numpy as np
 import yaml
 
 
+def align_hf_arrays_pos_from_logger(
+    t_ns: np.ndarray,  # int64 nanoseconds from logger.get()
+    q_arr: np.ndarray,  # (N, nj) measured joint positions (HF)
+    dof_idx: int,  # joint index to compare
+    target_pos: Sequence[float],  # controller target positions (uniform control_dt)
+    control_dt: float = 0.02,  # same semantics as vel aligner
+    out_rate_hz: float = 500.0,
+    pos_offset: float = 0.0,  # subtract from BOTH streams (optional)
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Aligns HF measured joint position (q_arr[:, dof_idx]) and the control-target
+    position (target_pos) onto a common output time grid.
+
+    Returns:
+        t_out [s], target_pos_out, q_out  (all shape (M,))
+    """
+    if t_ns.size == 0 or q_arr.size == 0 or len(target_pos) == 0:
+        return np.array([]), np.array([]), np.array([])
+
+    # HF time base (s) relative to first sample + select the joint
+    t_hf = (t_ns - t_ns[0]).astype(np.float64) * 1e-9
+    q_joint = np.asarray(q_arr[:, dof_idx], dtype=np.float64)
+
+    # Sort & dedup
+    order = np.argsort(t_hf)
+    t_hf = t_hf[order]
+    q_joint = q_joint[order]
+    keep = np.r_[True, np.diff(t_hf) > 0.0]
+    t_hf = t_hf[keep]
+    q_joint = q_joint[keep]
+
+    # Controller time base (uniform dt)
+    target_pos = np.asarray(target_pos, dtype=np.float64)
+    N = target_pos.shape[0]
+    t_ctrl = np.arange(N, dtype=np.float64) * float(control_dt)
+
+    # Output grid over overlap
+    dt_out = 1.0 / float(out_rate_hz)
+    t_start = max(t_ctrl[0], t_hf[0])
+    t_end = min(t_ctrl[-1], t_hf[-1])
+    if not (t_end > t_start):
+        return np.array([]), np.array([]), np.array([])
+
+    t_out = np.arange(t_start, t_end, dt_out, dtype=np.float64)
+
+    # Optional baseline offset
+    if pos_offset != 0.0:
+        target_pos = target_pos - pos_offset
+        q_joint = q_joint - pos_offset
+
+    # Interpolate onto t_out
+    target_pos_out = np.interp(t_out, t_ctrl, target_pos)
+    q_out = np.interp(t_out, t_hf, q_joint)
+    return t_out, target_pos_out, q_out
+
+
 def align_hf_arrays_vel_from_logger(
     t_ns: np.ndarray,  # int64 nanoseconds from logger.get()
-    dq_arr: np.ndarray,  # (N, nj)
-    dof_idx: int,  # which joint to plot/compare
+    dq_arr: np.ndarray,  # (N, nj) measured joint velocities (HF)
+    dof_idx: int,  # joint index to compare
     target_pos: Sequence[float],  # controller targets at control_dt
     control_dt: float = 0.02,
     out_rate_hz: float = 500.0,
@@ -22,15 +78,14 @@ def align_hf_arrays_vel_from_logger(
     Returns:
         t_out [s], target_vel_out, dq_out  (all shape (M,))
     """
-    # basic guards
     if t_ns.size == 0 or dq_arr.size == 0 or len(target_pos) == 0:
         return np.array([]), np.array([]), np.array([])
 
-    # 1) HF time in seconds relative to first sample (monotonic-ish)
+    # HF time base (s) relative to first sample
     t_hf = (t_ns - t_ns[0]).astype(np.float64) * 1e-9
     dq_joint = np.asarray(dq_arr[:, dof_idx], dtype=np.float64)
 
-    # 2) Dedup/sort guard (rare but safe)
+    # Sort & dedup
     order = np.argsort(t_hf)
     t_hf = t_hf[order]
     dq_joint = dq_joint[order]
@@ -38,15 +93,15 @@ def align_hf_arrays_vel_from_logger(
     t_hf = t_hf[keep]
     dq_joint = dq_joint[keep]
 
-    # 3) Controller time base (starts at 0 by convention)
+    # Controller time base (uniform dt)
     target_pos = np.asarray(target_pos, dtype=np.float64)
     N = target_pos.shape[0]
     t_ctrl = np.arange(N, dtype=np.float64) * float(control_dt)
 
-    # 4) Target velocity from target_pos
+    # Target velocity from target_pos
     target_vel_ctrl = np.gradient(target_pos, float(control_dt), edge_order=2)
 
-    # 5) Output grid over the overlap
+    # Output grid over overlap
     dt_out = 1.0 / float(out_rate_hz)
     t_start = max(t_ctrl[0], t_hf[0])
     t_end = min(t_ctrl[-1], t_hf[-1])
@@ -55,7 +110,7 @@ def align_hf_arrays_vel_from_logger(
 
     t_out = np.arange(t_start, t_end, dt_out, dtype=np.float64)
 
-    # 6) Interpolate both streams onto t_out
+    # Interpolate onto t_out
     target_vel_out = np.interp(t_out, t_ctrl, target_vel_ctrl)
     dq_out = np.interp(t_out, t_hf, dq_joint)
 

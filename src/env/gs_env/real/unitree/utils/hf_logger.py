@@ -1,32 +1,39 @@
 import queue
 import threading
 from collections import deque
+from collections.abc import Sequence
 
 import numpy as np
 
 
 class AsyncHFLogger:
     """
-    Async logger with a *bounded* ring buffer of size max_seconds * rate_hz.
-    Real-time thread does only queue.put().
-    Consumer thread drains and stores into bounded deques.
+    Async logger with a bounded ring buffer of size max_seconds * rate_hz.
+    Producer (RT thread) just queue.put(); consumer drains into deques.
+    Stores q, dq, tau, and "relative dof positions" that you compute upstream.
     """
 
     def __init__(self, nj: int, max_seconds: float = 10.0, rate_hz: int = 1000) -> None:
-        self.nj = nj
+        self.nj = int(nj)
         self.running = False
 
-        # how many samples we allow
         self.maxlen = int(max_seconds * rate_hz)
 
-        # store final results here
-        self.t_buf = deque(maxlen=self.maxlen)
-        self.q_buf = deque(maxlen=self.maxlen)
-        self.dq_buf = deque(maxlen=self.maxlen)
-        self.tau_buf = deque(maxlen=self.maxlen)
+        self.t_buf = deque(maxlen=self.maxlen)  # int64 ns
+        self.q_buf = deque(maxlen=self.maxlen)  # (nj,)
+        self.dq_buf = deque(maxlen=self.maxlen)  # (nj,)
+        self.tau_buf = deque(maxlen=self.maxlen)  # (nj,)
+        self.dof_pos_buf = deque(maxlen=self.maxlen)  # (nj,) - typically q - q_default
 
-        # IPC queue between the 1 kHz producer and async consumer
-        self.q = queue.SimpleQueue()
+        self.queue = queue.SimpleQueue()
+        self.thread: threading.Thread | None = None
+
+        # numpy views filled on stop()
+        self.t_s = np.zeros((0,), dtype=np.int64)
+        self.q_arr = np.zeros((0, self.nj), dtype=np.float32)
+        self.dq_arr = np.zeros((0, self.nj), dtype=np.float32)
+        self.tau_arr = np.zeros((0, self.nj), dtype=np.float32)
+        self.dof_pos_arr = np.zeros((0, self.nj), dtype=np.float32)
 
     def start(self) -> None:
         self.running = True
@@ -35,32 +42,41 @@ class AsyncHFLogger:
 
     def stop(self) -> None:
         self.running = False
-        self.q.put(None)  # sentinel
-        self.thread.join()
+        self.queue.put(None)  # sentinel
+        if self.thread is not None:
+            self.thread.join()
 
         # convert to numpy once
         self.t_s = np.asarray(self.t_buf, dtype=np.int64)
         self.q_arr = np.asarray(self.q_buf, dtype=np.float32)
         self.dq_arr = np.asarray(self.dq_buf, dtype=np.float32)
         self.tau_arr = np.asarray(self.tau_buf, dtype=np.float32)
+        self.dof_pos_arr = np.asarray(self.dof_pos_buf, dtype=np.float32)
 
-    def push(self, t_ns: int, q: list[float], dq: list[float], tau: list[float]) -> None:
-        # real-time thread: only queue.put()
+    def push(
+        self,
+        t_ns: int,
+        q: Sequence[float],
+        dq: Sequence[float],
+        tau: Sequence[float],
+        dof_pos: Sequence[float],
+    ) -> None:
+        """Producer-side push (very lightweight)."""
         if self.running:
-            self.q.put((t_ns, tuple(q), tuple(dq), tuple(tau)))
+            self.queue.put((int(t_ns), tuple(q), tuple(dq), tuple(tau), tuple(dof_pos)))
 
     def _consumer(self) -> None:
         while True:
-            item = self.q.get()
+            item = self.queue.get()
             if item is None:
                 break
-            t_ns, q, dq, tau = item
-
-            # append to ring buffers (bounded size)
+            t_ns, q, dq, tau, dof_pos = item
             self.t_buf.append(t_ns)
             self.q_buf.append(q)
             self.dq_buf.append(dq)
             self.tau_buf.append(tau)
+            self.dof_pos_buf.append(dof_pos)
 
-    def get(self) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        return self.t_s, self.q_arr, self.dq_arr, self.tau_arr
+    def get(self) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """Returns (t_ns, q_arr, dq_arr, tau_arr, dof_pos_arr)."""
+        return self.t_s, self.q_arr, self.dq_arr, self.tau_arr, self.dof_pos_arr

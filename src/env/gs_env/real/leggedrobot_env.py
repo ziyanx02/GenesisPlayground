@@ -145,3 +145,7 @@ class UnitreeLeggedEnv(BaseGymRobot):
     @property
     def ctrl_type(self) -> int:
         return self._args.robot_args.ctrl_type
+
+    @property
+    def ctrl_freq(self) -> int:
+        return self._args.robot_args.ctrl_freq
