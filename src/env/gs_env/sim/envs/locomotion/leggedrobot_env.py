@@ -409,15 +409,20 @@ class LeggedRobotEnv(BaseEnv):
         reward_total_neg = torch.zeros(self.num_envs, device=self._device)
         reward_dict = {}
 
+        exist_positive_reward = False
         state_dict = {key: getattr(self, key) for key in self.reward_required_keys}
         for key, func in self._reward_functions.items():
             reward = func(state_dict)
             if reward.sum() >= 0:
                 reward_total_pos += reward
+                exist_positive_reward = True
             else:
                 reward_total_neg += reward
             reward_dict[f"{key}"] = reward.clone()
-        reward_total = reward_total_pos * torch.exp(reward_total_neg)
+        if exist_positive_reward:
+            reward_total = reward_total_pos * torch.exp(reward_total_neg)
+        else:
+            reward_total = torch.exp(reward_total_neg)
         reward_dict["Total"] = reward_total
         reward_dict["TotalPositive"] = reward_total_pos
         reward_dict["TotalNegative"] = reward_total_neg

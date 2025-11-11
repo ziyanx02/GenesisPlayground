@@ -255,7 +255,8 @@ class DofPosReward(RewardTerm):
     required_keys = ("dof_pos_error_weighted",)
 
     def _compute(self, dof_pos_error_weighted: torch.Tensor) -> torch.Tensor:  # type: ignore
-        return torch.exp(-dof_pos_error_weighted * 0.15)
+        # return torch.exp(-dof_pos_error_weighted * 0.15)
+        return -dof_pos_error_weighted
 
 
 class DofVelReward(RewardTerm):
@@ -269,7 +270,8 @@ class DofVelReward(RewardTerm):
     required_keys = ("dof_vel_error_weighted",)
 
     def _compute(self, dof_vel_error_weighted: torch.Tensor) -> torch.Tensor:  # type: ignore
-        return torch.exp(-dof_vel_error_weighted * 0.01)
+        # return torch.exp(-dof_vel_error_weighted * 0.01)
+        return -dof_vel_error_weighted
 
 
 class BaseHeightReward(RewardTerm):
@@ -302,7 +304,8 @@ class BasePosReward(RewardTerm):
     def _compute(self, base_pos: torch.Tensor, ref_base_pos: torch.Tensor) -> torch.Tensor:  # type: ignore
         base_pos_error = torch.square(base_pos - ref_base_pos).sum(dim=-1)
         # print("base_pos_error", base_pos_error * 5)
-        return torch.exp(-base_pos_error * 5)
+        # return torch.exp(-base_pos_error * 5)
+        return -base_pos_error
 
 
 class BaseQuatReward(RewardTerm):
@@ -319,7 +322,8 @@ class BaseQuatReward(RewardTerm):
     def _compute(self, base_quat: torch.Tensor, ref_base_quat: torch.Tensor) -> torch.Tensor:  # type: ignore
         base_quat_error = quat_to_angle_axis(quat_diff(base_quat, ref_base_quat)).norm(dim=-1)
         # print("base_quat_error", (base_quat_error**2) * 5)
-        return torch.exp(-(base_quat_error**2) * 5)
+        # return torch.exp(-(base_quat_error**2) * 5)
+        return -(base_quat_error**2)
 
 
 class BaseLinVelReward(RewardTerm):
@@ -336,7 +340,8 @@ class BaseLinVelReward(RewardTerm):
     def _compute(self, base_lin_vel: torch.Tensor, ref_base_lin_vel: torch.Tensor) -> torch.Tensor:  # type: ignore
         base_lin_vel_error = torch.square(base_lin_vel - ref_base_lin_vel).sum(dim=-1)
         # print("base_lin_vel_error", base_lin_vel_error * 1)
-        return torch.exp(-base_lin_vel_error * 1)
+        # return torch.exp(-base_lin_vel_error * 1)
+        return -base_lin_vel_error
 
 
 class BaseAngVelReward(RewardTerm):
@@ -353,7 +358,8 @@ class BaseAngVelReward(RewardTerm):
     def _compute(self, base_ang_vel: torch.Tensor, ref_base_ang_vel: torch.Tensor) -> torch.Tensor:  # type: ignore
         base_ang_vel_error = torch.square(base_ang_vel - ref_base_ang_vel).sum(dim=-1)
         # print("base_ang_vel_error", base_ang_vel_error * 1)
-        return torch.exp(-base_ang_vel_error * 1)
+        # return torch.exp(-base_ang_vel_error * 1)
+        return -base_ang_vel_error
 
 
 class TrackingLinkPosReward(RewardTerm):
@@ -378,4 +384,5 @@ class TrackingLinkPosReward(RewardTerm):
             .sum(dim=-1)
         )
         # print("tracking_link_pos_error", tracking_link_pos_error * 1)
-        return torch.exp(-tracking_link_pos_error * 2)
+        # return torch.exp(-tracking_link_pos_error * 2)
+        return -tracking_link_pos_error

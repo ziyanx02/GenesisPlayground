@@ -80,9 +80,9 @@ def lafan_to_motion_data(
 
 
 if __name__ == "__main__":
-    show_viewer = False
+    show_viewer = True
 
-    csv_file = "/Users/xiongziyan/Python/GenesisPlayground/assets/lafan/dance2_subject3.csv"
+    csv_file = "/Users/xiongziyan/Python/GenesisPlayground/assets/lafan/jumps1_subject1.csv"
     # csv_file = "/Users/xiongziyan/Python/GenesisPlayground/assets/lafan/jumps1_subject1.csv"
     data = np.genfromtxt(csv_file, delimiter=",")
     data = torch.from_numpy(data).to(torch.float32)
