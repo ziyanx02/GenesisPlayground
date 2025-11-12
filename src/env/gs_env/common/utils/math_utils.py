@@ -515,11 +515,15 @@ def cross_correlation(
     Handles both normal and flipped correlation (max or min peak).
     Returns lag in samples (positive means b lags behind a).
     """
-    assert a.ndim == 1 and b.ndim == 1, "Inputs must be 1D arrays"
+    assert a.ndim == 1 and b.ndim == 1 and len(a) == len(b), (
+        "Inputs must be 1D arrays of the same length"
+    )
     a = a - np.mean(a)
     b = b - np.mean(b)
     corr = np.correlate(a, b, mode="full")
     lags = np.arange(-len(a) + 1, len(a))
+    overlap = len(a) - np.abs(lags)
+    corr_unbiased = corr / overlap
     k_max = np.argmax(corr)
     k_min = np.argmin(corr)
     k_peak = k_min if abs(corr[k_min]) > abs(corr[k_max]) and allow_flip else k_max
@@ -527,9 +531,9 @@ def cross_correlation(
 
     # Parabolic interpolation: use corr[k-1], corr[k], corr[k+1]
     if 0 < k_peak < len(corr) - 1:
-        c_minus = corr[k_peak - 1]
-        c_0 = corr[k_peak]
-        c_plus = corr[k_peak + 1]
+        c_minus = corr_unbiased[k_peak - 1]
+        c_0 = corr_unbiased[k_peak]
+        c_plus = corr_unbiased[k_peak + 1]
 
         denom = -2 * c_0 + c_minus + c_plus
         if denom != 0:
