@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Any, Literal
 
 import numpy as np
 import torch
@@ -505,3 +505,39 @@ def get_RT_between(
     R_out = np.array(gu.transform_quat_by_quat(R2, gu.inv_quat(R1)))
     T_out = np.array(gu.transform_by_quat(T2 - T1, gu.inv_quat(R1)))
     return R_out, T_out
+
+
+def cross_correlation(
+    a: np.typing.NDArray[Any], b: np.typing.NDArray[Any], allow_flip: bool = False
+) -> float:
+    """
+    Compute the sub-sample cross-correlation lag between two 1D signals a and b.
+    Handles both normal and flipped correlation (max or min peak).
+    Returns lag in samples (positive means b lags behind a).
+    """
+    assert a.ndim == 1 and b.ndim == 1, "Inputs must be 1D arrays"
+    a = a - np.mean(a)
+    b = b - np.mean(b)
+    corr = np.correlate(a, b, mode="full")
+    lags = np.arange(-len(a) + 1, len(a))
+    k_max = np.argmax(corr)
+    k_min = np.argmin(corr)
+    k_peak = k_min if abs(corr[k_min]) > abs(corr[k_max]) and allow_flip else k_max
+    lag_int = lags[k_peak]
+
+    # Parabolic interpolation: use corr[k-1], corr[k], corr[k+1]
+    if 0 < k_peak < len(corr) - 1:
+        c_minus = corr[k_peak - 1]
+        c_0 = corr[k_peak]
+        c_plus = corr[k_peak + 1]
+
+        denom = -2 * c_0 + c_minus + c_plus
+        if denom != 0:
+            delta = 0.5 * (c_minus - c_plus) / denom
+        else:
+            delta = 0.0
+    else:
+        delta = 0.0
+
+    lag_subsample = lag_int + delta
+    return -lag_subsample
