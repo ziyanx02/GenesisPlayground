@@ -13,6 +13,28 @@ from gs_env.sim.robots.config.schema import (
 )
 
 # ------------------------------------------------------------
+# CFG Constants
+# ------------------------------------------------------------
+
+ARMATURE_5020 = 0.003609725
+ARMATURE_7520_14 = 0.010177520
+ARMATURE_7520_22 = 0.025101925
+ARMATURE_4010 = 0.00425
+
+NATURAL_FREQ = 10 * 2.0 * 3.1415926535
+DAMPING_RATIO = 2.0
+
+STIFFNESS_5020 = ARMATURE_5020 * NATURAL_FREQ**2
+STIFFNESS_7520_14 = ARMATURE_7520_14 * NATURAL_FREQ**2
+STIFFNESS_7520_22 = ARMATURE_7520_22 * NATURAL_FREQ**2
+STIFFNESS_4010 = ARMATURE_4010 * NATURAL_FREQ**2
+
+DAMPING_5020 = 2.0 * DAMPING_RATIO * ARMATURE_5020 * NATURAL_FREQ
+DAMPING_7520_14 = 2.0 * DAMPING_RATIO * ARMATURE_7520_14 * NATURAL_FREQ
+DAMPING_7520_22 = 2.0 * DAMPING_RATIO * ARMATURE_7520_22 * NATURAL_FREQ
+DAMPING_4010 = 2.0 * DAMPING_RATIO * ARMATURE_4010 * NATURAL_FREQ
+
+# ------------------------------------------------------------
 # Material
 # ------------------------------------------------------------
 
@@ -376,7 +398,42 @@ G1_kd_dict: dict[str, float] = {
     "wrist_pitch": 2.4,
     "wrist_yaw": 1.8,
 }
-
+G1_beyound_mimic_kp_dict: dict[str, float] = {
+    "hip_roll": STIFFNESS_7520_22,
+    "hip_pitch": STIFFNESS_7520_14,
+    "hip_yaw": STIFFNESS_7520_14,
+    "knee": STIFFNESS_7520_22,
+    "ankle_roll": 2.0 * STIFFNESS_5020,
+    "ankle_pitch": 2.0 * STIFFNESS_5020,
+    "waist_roll": 2.0 * STIFFNESS_5020,
+    "waist_pitch": 2.0 * STIFFNESS_5020,
+    "waist_yaw": STIFFNESS_7520_14,
+    "shoulder_roll": STIFFNESS_5020,
+    "shoulder_pitch": STIFFNESS_5020,
+    "shoulder_yaw": STIFFNESS_5020,
+    "elbow": STIFFNESS_5020,
+    "wrist_roll": STIFFNESS_5020,
+    "wrist_pitch": STIFFNESS_4010,
+    "wrist_yaw": STIFFNESS_4010,
+}
+G1_beyound_mimic_kd_dict: dict[str, float] = {
+    "hip_roll": DAMPING_7520_22,
+    "hip_pitch": DAMPING_7520_14,
+    "hip_yaw": DAMPING_7520_14,
+    "knee": DAMPING_7520_22,
+    "ankle_roll": 2.0 * DAMPING_5020,
+    "ankle_pitch": 2.0 * DAMPING_5020,
+    "waist_roll": 2.0 * DAMPING_5020,
+    "waist_pitch": 2.0 * DAMPING_5020,
+    "waist_yaw": DAMPING_7520_14,
+    "shoulder_roll": DAMPING_5020,
+    "shoulder_pitch": DAMPING_5020,
+    "shoulder_yaw": DAMPING_5020,
+    "elbow": DAMPING_5020,
+    "wrist_roll": DAMPING_5020,
+    "wrist_pitch": DAMPING_4010,
+    "wrist_yaw": DAMPING_4010,
+}
 
 RobotArgsRegistry["g1_default"] = HumanoidRobotArgs(
     material_args=MaterialArgsRegistry["g1_default"],
@@ -421,7 +478,7 @@ RobotArgsRegistry["g1_fixed"] = HumanoidRobotArgs(
     dof_kp=G1_kp_dict,
     dof_kd=G1_kd_dict,
     action_scale=0.15,
-    ctrl_freq=100,
+    ctrl_freq=50,
     decimation=4,
 )
 

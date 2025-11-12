@@ -335,13 +335,9 @@ def main(
         dof_names = env.dof_names
 
         if sim:
-            log_dir = (
-                Path(__file__).parent / "logs" / "pd_test" / "sim" / f"{env.robot.ctrl_type}-kp_200"
-            )
+            log_dir = Path(__file__).parent / "logs" / "pd_test" / "sim" / f"{env.robot.ctrl_type}"
         else:
-            log_dir = (
-                Path(__file__).parent / "logs" / "pd_test" / "real" / f"{env.ctrl_type}-kp_200-v1"
-            )
+            log_dir = Path(__file__).parent / "logs" / "pd_test" / "real" / f"{env.ctrl_type}"
 
         for dof_name, (lower_bound, upper_bound) in test_dofs.items():
             dof_idx = -1
