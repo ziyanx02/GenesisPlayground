@@ -413,7 +413,7 @@ class LeggedRobotEnv(BaseEnv):
         state_dict = {key: getattr(self, key) for key in self.reward_required_keys}
         for key, func in self._reward_functions.items():
             reward = func(state_dict)
-            if reward.sum() >= 0:
+            if reward.sum() > 0:
                 reward_total_pos += reward
                 exist_positive_reward = True
             else:

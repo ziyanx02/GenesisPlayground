@@ -128,10 +128,11 @@ class MotionEnv(LeggedRobotEnv):
         if self._args.dof_weights is not None:
             dof_weights_list = []
             for dof_name in self.robot.dof_names:
-                if dof_name in self._args.dof_weights:
-                    dof_weights_list.append(self._args.dof_weights[dof_name])
-                else:
-                    dof_weights_list.append(1.0)
+                dof_weights_list.append(1.0)
+                for key in self._args.dof_weights.keys():
+                    if key in dof_name:
+                        dof_weights_list[-1] = self._args.dof_weights[key]
+                        break
             self.dof_weights = torch.tensor(
                 dof_weights_list, device=self._device, dtype=torch.float32
             )
@@ -200,7 +201,7 @@ class MotionEnv(LeggedRobotEnv):
             "base_pos_error",
             "base_height_error",
             "base_quat_error",
-            "dof_pos_error",
+            # "dof_pos_error",
             "tracking_link_pos_error",
         ]
         self._terminate_after_error = {}
