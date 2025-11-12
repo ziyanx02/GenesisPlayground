@@ -18,6 +18,7 @@ from gs_env.sim.robots.config.schema import (
     CtrlType,
     DRJointPosAction,
     HumanoidRobotArgs,
+    HYBRIDJoint_Pos_Vel_Action,
     JointPosAction,
     LeggedRobotArgs,
     ManipulatorRobotArgs,
@@ -124,6 +125,7 @@ class LeggedRobotBase(BaseGymRobot):
         self._dispatch: dict[CtrlType, Callable[[BaseAction], None]] = {  # type: ignore
             CtrlType.JOINT_POSITION.value: self._apply_joint_pos,
             CtrlType.DR_JOINT_POSITION.value: self._apply_dr_joint_pos,
+            CtrlType.HYBRID_JOINT_VELOCITY.value: self._apply_hybrid_joint_pos_vel,
         }
 
     def post_build_init(self, eval_mode: bool = False) -> None:
@@ -290,6 +292,8 @@ class LeggedRobotBase(BaseGymRobot):
                     action = DRJointPosAction(joint_pos=action)
                 case CtrlType.JOINT_POSITION:
                     action = JointPosAction(joint_pos=action, gripper_width=0.0)
+                case CtrlType.HYBRID_JOINT_VELOCITY:
+                    action = HYBRIDJoint_Pos_Vel_Action(joint_pos=action)
                 case _:
                     raise ValueError(f"Unsupported control type: {self.ctrl_type}")
         self._dispatch[self._args.ctrl_type](action)
@@ -315,18 +319,31 @@ class LeggedRobotBase(BaseGymRobot):
             self._num_envs,
             self._dof_dim,
         ), "Joint position action must match the number of joints."
+        q_force = (
+            self._batched_dof_kp
+            * (act.joint_pos + self._default_dof_pos - self._dof_pos + self._motor_offset)
+            - self._batched_dof_kd * self._dof_vel
+        )
+        q_force = q_force * self._motor_strength
+        q_force = torch.clamp(q_force, -self._torque_limits, self._torque_limits)
+        self._torque[:] = q_force
+        self._robot.control_dofs_force(force=q_force, dofs_idx_local=self._dofs_idx_local)
+
+    def _apply_hybrid_joint_pos_vel(self, act: HYBRIDJoint_Pos_Vel_Action) -> None:
+        """
+        Apply hybrid joint position and velocity control to the robot.
+        """
+        assert act.joint_pos.shape == (
+            self._num_envs,
+            self._dof_dim,
+        ), "Joint position action must match the number of joints."
         q_des = act.joint_pos + self._default_dof_pos + self._motor_offset
-        qd_des = (q_des - self._prev_q_des) / (self.scene.dt * self._args.decimation)
-        # qd_des = torch.clamp(qd_des, -0.95, 0.95)
+        qd_des = (q_des - self._prev_q_des) / self.scene.dt
         self._prev_q_des = q_des.clone()
+        # qd_des = (act.joint_pos - self.last_action) / (self._scene.dt * self._args.decimation)
         q_err = q_des - self._dof_pos
         qd_err = qd_des - self._dof_vel
         q_force = self._batched_dof_kp * q_err + self._batched_dof_kd * qd_err
-        # q_force = (
-        #     self._batched_dof_kp
-        #     * (act.joint_pos + self._default_dof_pos - self._dof_pos + self._motor_offset)
-        #     - self._batched_dof_kd * self._dof_vel
-        # )
         q_force = q_force * self._motor_strength
         q_force = torch.clamp(q_force, -self._torque_limits, self._torque_limits)
         self._torque[:] = q_force

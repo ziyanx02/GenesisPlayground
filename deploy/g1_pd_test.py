@@ -93,28 +93,10 @@ def run_single_dof_wave_diagnosis(
     action = torch.zeros((1, num_dofs), device=env.device)
     action[:, dof_idx] = offset / env.action_scale
 
-    last_update_time = time.time()
-    last_controller_time = time.time()
-    current_dof_pos = env.dof_pos[0] - env.default_dof_pos
-    TOTAL_RESET_STEPS = 50
-
-    for i in range(TOTAL_RESET_STEPS):
-        while time.time() - last_controller_time < 0.02:
-            time.sleep(0.001)
-        last_controller_time = time.time()
-        env.apply_action(
-            current_dof_pos / env.action_scale * (1 - i / TOTAL_RESET_STEPS)
-            + action * (i / TOTAL_RESET_STEPS)
-        )
-
-    target_dof_pos_list = []
-
-    # BEFORE the control loop:
     if isinstance(env, UnitreeLeggedEnv):
 
         def get_state() -> tuple[int, list[float], list[float], list[float]]:
             nj = env.robot.num_full_dof
-            # Avoid per-element indexing if these are sequences already
             q = list(env.robot.joint_pos[:nj])
             dq = list(env.robot.joint_vel[:nj])
             tau = list(env.robot.torque[:nj])
@@ -123,37 +105,68 @@ def run_single_dof_wave_diagnosis(
 
         def get_state() -> tuple[int, list[float], list[float], list[float]]:
             nj = env.robot.action_dim
-            q = list(env.robot.dof_pos[0][:nj])
-            dq = list(env.robot.dof_vel[0][:nj])
-            tau = list(env.robot.torque[0][:nj])
+            q = env.robot.dof_pos[0][:nj].detach().cpu().numpy()
+            dq = env.robot.dof_vel[0][:nj].detach().cpu().numpy()
+            tau = env.robot.torque[0][:nj].detach().cpu().numpy()
             return nj, q, dq, tau
 
-    default_np = np.asarray(env.robot.default_dof_pos[:29].cpu().numpy(), dtype=np.float64)
+    last_controller_time = time.time()
+    current_dof_pos = env.dof_pos[0] - env.default_dof_pos
+    TOTAL_RESET_STEPS = 50
+
+    ctrl_dt = 0.02
+    hf_rate = 1000.0
+    hf_dt = 1.0 / hf_rate
+
+    for i in range(TOTAL_RESET_STEPS):
+        while time.time() - last_controller_time < ctrl_dt:
+            time.sleep(0.001)
+        last_controller_time = time.time()
+        env.apply_action(
+            current_dof_pos / env.action_scale * (1 - i / TOTAL_RESET_STEPS)
+            + action * (i / TOTAL_RESET_STEPS)
+        )
+
+    target_dof_pos_list = []
+    dof_pos_list = []
+
+    t0 = time.perf_counter()
+    next_ctrl = t0 + ctrl_dt
+    next_hf = t0 + hf_dt
+
     for i in range(period * NUM_TOTAL_PERIODS):
-        while time.time() - last_controller_time < 0.02:
-            now = time.time()
-            if now - last_update_time >= 0.001:
-                last_update_time = now
+        while True:
+            now = time.perf_counter()
+
+            # Flush HF ticks
+            while now >= next_hf:
                 t_ns = time.perf_counter_ns()
                 nj, q, dq, tau = get_state()
-                default_np = env.robot.default_dof_pos[:nj].cpu().numpy()
-                if hf_logger:
-                    hf_logger.push(t_ns, q, dq, tau, (np.asarray(q) - default_np).tolist())
-            else:
-                time.sleep(0.0005)
 
-        last_controller_time = time.time()
+                if hf_logger:
+                    hf_logger.push(t_ns, q, dq, tau)
+
+                next_hf += hf_dt
+
+            # Control tick
+            if now >= next_ctrl:
+                break
+            time.sleep(max(0.0, min(next_hf, next_ctrl) - now))
+
+        # last_controller_time = time.perf_counter()
         target_dof_pos = wave_func(i) + offset
         action[:, dof_idx] = target_dof_pos / env.action_scale
-        # dof_pos = env.dof_pos[0, dof_idx].cpu().item() - env.robot.default_dof_pos[dof_idx]
+        dof_pos = env.dof_pos[0, dof_idx].cpu().item() - env.robot.default_dof_pos[dof_idx]
         target_dof_pos_list.append(target_dof_pos)
-        # dof_pos_list.append(dof_pos)
+        dof_pos_list.append(dof_pos)
         env.apply_action(action)
+
+        next_ctrl += ctrl_dt
 
         if i % period == 0:
             print(f"Step {i} of {period * NUM_TOTAL_PERIODS}")
 
-    return target_dof_pos_list
+    return target_dof_pos_list, dof_pos_list
 
 
 def run_single_dof_diagnosis(
@@ -174,7 +187,7 @@ def run_single_dof_diagnosis(
             hf_logger = AsyncHFLogger(nj=env.action_dim, max_seconds=10.0, rate_hz=1000)
             hf_logger.start()
 
-        target_dof_pos_list = run_single_dof_wave_diagnosis(
+        target_dof_pos_list, dof_pos_list = run_single_dof_wave_diagnosis(
             env,
             dof_idx=dof_idx,
             num_dofs=num_dofs,
@@ -187,10 +200,11 @@ def run_single_dof_diagnosis(
 
         if hf_logging:
             hf_logger.stop()
-            t_ns, _, _, _, dof_pos_arr = hf_logger.get()
+            t_ns, q, _, _ = hf_logger.get()
+            q_arr = q - np.asarray(env.robot.default_dof_pos)
             steps, target_pos_out, q_out = align_hf_arrays_pos_from_logger(
                 t_ns=t_ns,
-                q_arr=dof_pos_arr,
+                q_arr=q_arr,
                 dof_idx=dof_idx,
                 target_pos=target_dof_pos_list,
                 control_dt=0.02,  # estimated or configured
@@ -202,6 +216,35 @@ def run_single_dof_diagnosis(
                 axes[i],
                 steps,
                 [target_pos_out.tolist(), q_out.tolist()],
+                ["Target", "Dof Pos"],
+                "Dof Pos",
+                wave_type,
+                yscale="linear",
+            )
+
+            t_ns, _, dq_arr, _ = hf_logger.get()
+            steps, target_vel_out, dq_interp = align_hf_arrays_vel_from_logger(
+                t_ns=t_ns,
+                dq_arr=dq_arr,
+                dof_idx=dof_idx,
+                target_pos=target_dof_pos_list,  # the list you already build each control tick
+                control_dt=0.02,
+                out_rate_hz=200.0,
+            )
+            plot_metric_on_axis(
+                axes[i + 1],
+                steps,
+                [target_vel_out.tolist(), dq_interp.tolist()],
+                ["Target Vel (HF)", "Measured Vel (HF)"],
+                ylabel="Joint Velocity (rad/s)",
+                title=f"{wave_type} (aligned HF velocity)",
+                yscale="linear",
+            )
+        else:
+            plot_metric_on_axis(
+                axes[i],
+                np.arange(len(target_dof_pos_list)),
+                [target_dof_pos_list, dof_pos_list],
                 ["Target", "Dof Pos"],
                 "Dof Pos",
                 wave_type,
@@ -221,26 +264,6 @@ def run_single_dof_diagnosis(
         #         yscale="linear",
         #         show_mean=False,
         #     )
-
-        if hf_logging:
-            t_ns, _, dq_arr, _, _ = hf_logger.get()
-            steps, target_vel_out, dq_interp = align_hf_arrays_vel_from_logger(
-                t_ns=t_ns,
-                dq_arr=dq_arr,
-                dof_idx=dof_idx,
-                target_pos=target_dof_pos_list,  # the list you already build each control tick
-                control_dt=0.02,
-                out_rate_hz=200.0,
-            )
-            plot_metric_on_axis(
-                axes[i + 1],
-                steps,
-                [target_vel_out.tolist(), dq_interp.tolist()],
-                ["Target Vel (HF)", "Measured Vel (HF)"],
-                ylabel="Joint Velocity (rad/s)",
-                title=f"{wave_type} (aligned HF velocity)",
-                yscale="linear",
-            )
 
     # Save plot
     log_dir.mkdir(parents=True, exist_ok=True)
@@ -313,11 +336,7 @@ def main(
 
         if sim:
             log_dir = (
-                Path(__file__).parent
-                / "logs"
-                / "pd_test"
-                / "sim"
-                / f"{env.robot.ctrl_type}-kp_200-v1"
+                Path(__file__).parent / "logs" / "pd_test" / "sim" / f"{env.robot.ctrl_type}-kp_200"
             )
         else:
             log_dir = (

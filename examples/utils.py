@@ -8,56 +8,44 @@ import yaml
 
 
 def align_hf_arrays_pos_from_logger(
-    t_ns: np.ndarray,  # int64 nanoseconds from logger.get()
-    q_arr: np.ndarray,  # (N, nj) measured joint positions (HF)
-    dof_idx: int,  # joint index to compare
-    target_pos: Sequence[float],  # controller target positions (uniform control_dt)
-    control_dt: float = 0.02,  # same semantics as vel aligner
-    out_rate_hz: float = 500.0,
-    pos_offset: float = 0.0,  # subtract from BOTH streams (optional)
+    t_ns: np.ndarray,
+    q_arr: np.ndarray,
+    dof_idx: int,
+    target_pos: Sequence[float],
+    control_dt: float = 0.02,
+    out_rate_hz: float = 200.0,
+    pos_offset: float = 0.0,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """
-    Aligns HF measured joint position (q_arr[:, dof_idx]) and the control-target
-    position (target_pos) onto a common output time grid.
-
-    Returns:
-        t_out [s], target_pos_out, q_out  (all shape (M,))
-    """
-    if t_ns.size == 0 or q_arr.size == 0 or len(target_pos) == 0:
-        return np.array([]), np.array([]), np.array([])
-
-    # HF time base (s) relative to first sample + select the joint
+    # HF absolute time base (s)
     t_hf = (t_ns - t_ns[0]).astype(np.float64) * 1e-9
     q_joint = np.asarray(q_arr[:, dof_idx], dtype=np.float64)
 
-    # Sort & dedup
+    # sort + dedup
     order = np.argsort(t_hf)
-    t_hf = t_hf[order]
-    q_joint = q_joint[order]
+    t_hf, q_joint = t_hf[order], q_joint[order]
     keep = np.r_[True, np.diff(t_hf) > 0.0]
-    t_hf = t_hf[keep]
-    q_joint = q_joint[keep]
+    t_hf, q_joint = t_hf[keep], q_joint[keep]
 
-    # Controller time base (uniform dt)
+    # controller absolute base aligned to HF start
     target_pos = np.asarray(target_pos, dtype=np.float64)
     N = target_pos.shape[0]
-    t_ctrl = np.arange(N, dtype=np.float64) * float(control_dt)
+    t_ctrl0 = t_hf[0]
+    t_ctrl = t_ctrl0 + np.arange(N) * float(control_dt)
 
-    # Output grid over overlap
+    # choose overlap window (inclusive end!)
     dt_out = 1.0 / float(out_rate_hz)
     t_start = max(t_ctrl[0], t_hf[0])
     t_end = min(t_ctrl[-1], t_hf[-1])
     if not (t_end > t_start):
         return np.array([]), np.array([]), np.array([])
 
-    t_out = np.arange(t_start, t_end, dt_out, dtype=np.float64)
+    # inclusive last point to avoid trimming ~one step
+    t_out = np.arange(t_start, t_end + 1e-12, dt_out, dtype=np.float64)
 
-    # Optional baseline offset
-    if pos_offset != 0.0:
+    if pos_offset:
         target_pos = target_pos - pos_offset
         q_joint = q_joint - pos_offset
 
-    # Interpolate onto t_out
     target_pos_out = np.interp(t_out, t_ctrl, target_pos)
     q_out = np.interp(t_out, t_hf, q_joint)
     return t_out, target_pos_out, q_out
@@ -69,7 +57,7 @@ def align_hf_arrays_vel_from_logger(
     dof_idx: int,  # joint index to compare
     target_pos: Sequence[float],  # controller targets at control_dt
     control_dt: float = 0.02,
-    out_rate_hz: float = 500.0,
+    out_rate_hz: float = 200.0,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Aligns HF measured joint velocity (dq_arr[:, dof_idx]) and the control-target

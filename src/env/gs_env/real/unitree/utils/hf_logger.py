@@ -23,7 +23,6 @@ class AsyncHFLogger:
         self.q_buf = deque(maxlen=self.maxlen)  # (nj,)
         self.dq_buf = deque(maxlen=self.maxlen)  # (nj,)
         self.tau_buf = deque(maxlen=self.maxlen)  # (nj,)
-        self.dof_pos_buf = deque(maxlen=self.maxlen)  # (nj,) - typically q - q_default
 
         self.queue = queue.SimpleQueue()
         self.thread: threading.Thread | None = None
@@ -33,7 +32,6 @@ class AsyncHFLogger:
         self.q_arr = np.zeros((0, self.nj), dtype=np.float32)
         self.dq_arr = np.zeros((0, self.nj), dtype=np.float32)
         self.tau_arr = np.zeros((0, self.nj), dtype=np.float32)
-        self.dof_pos_arr = np.zeros((0, self.nj), dtype=np.float32)
 
     def start(self) -> None:
         self.running = True
@@ -51,7 +49,6 @@ class AsyncHFLogger:
         self.q_arr = np.asarray(self.q_buf, dtype=np.float32)
         self.dq_arr = np.asarray(self.dq_buf, dtype=np.float32)
         self.tau_arr = np.asarray(self.tau_buf, dtype=np.float32)
-        self.dof_pos_arr = np.asarray(self.dof_pos_buf, dtype=np.float32)
 
     def push(
         self,
@@ -59,24 +56,22 @@ class AsyncHFLogger:
         q: Sequence[float],
         dq: Sequence[float],
         tau: Sequence[float],
-        dof_pos: Sequence[float],
     ) -> None:
         """Producer-side push (very lightweight)."""
         if self.running:
-            self.queue.put((int(t_ns), tuple(q), tuple(dq), tuple(tau), tuple(dof_pos)))
+            self.queue.put((int(t_ns), tuple(q), tuple(dq), tuple(tau)))
 
     def _consumer(self) -> None:
         while True:
             item = self.queue.get()
             if item is None:
                 break
-            t_ns, q, dq, tau, dof_pos = item
+            t_ns, q, dq, tau = item
             self.t_buf.append(t_ns)
             self.q_buf.append(q)
             self.dq_buf.append(dq)
             self.tau_buf.append(tau)
-            self.dof_pos_buf.append(dof_pos)
 
-    def get(self) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        """Returns (t_ns, q_arr, dq_arr, tau_arr, dof_pos_arr)."""
-        return self.t_s, self.q_arr, self.dq_arr, self.tau_arr, self.dof_pos_arr
+    def get(self) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """Returns (t_ns, q_arr, dq_arr, tau_arr)."""
+        return self.t_s, self.q_arr, self.dq_arr, self.tau_arr

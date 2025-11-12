@@ -331,10 +331,9 @@ class LeggedRobotEnv(BaseEnv):
             self._pre_step()
 
             self._robot.apply_action(action=exec_action)
-            self._robot.last_action = exec_action.clone()
             self._scene.scene.step(refresh_visualizer=self._refresh_visualizer)
             self.torque = torch.max(self.torque, torch.abs(self._robot.torque))
-
+        self._robot.last_action = exec_action.clone()
         self.update_buffers()
 
         # Render if rendering is enabled
