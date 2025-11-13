@@ -114,6 +114,7 @@ class LeggedRobotArgs(BaseModel):
     soft_dof_pos_range: float
     dof_kp: dict[str, float]
     dof_kd: dict[str, float]
+    dof_armature: dict[str, float] | None = None
     action_scale: float
     ctrl_freq: int
     decimation: int

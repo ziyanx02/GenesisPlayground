@@ -434,6 +434,24 @@ G1_beyound_mimic_kd_dict: dict[str, float] = {
     "wrist_pitch": DAMPING_4010,
     "wrist_yaw": DAMPING_4010,
 }
+G1_beyound_mimic_armature_dict: dict[str, float] = {
+    "hip_roll": ARMATURE_7520_22,
+    "hip_pitch": ARMATURE_7520_14,
+    "hip_yaw": ARMATURE_7520_14,
+    "knee": ARMATURE_7520_22,
+    "ankle_roll": 2.0 * ARMATURE_5020,
+    "ankle_pitch": 2.0 * ARMATURE_5020,
+    "waist_roll": 2.0 * ARMATURE_5020,
+    "waist_pitch": 2.0 * ARMATURE_5020,
+    "waist_yaw": ARMATURE_7520_14,
+    "shoulder_roll": ARMATURE_5020,
+    "shoulder_pitch": ARMATURE_5020,
+    "shoulder_yaw": ARMATURE_5020,
+    "elbow": ARMATURE_5020,
+    "wrist_roll": ARMATURE_5020,
+    "wrist_pitch": ARMATURE_4010,
+    "wrist_yaw": ARMATURE_4010,
+}
 
 RobotArgsRegistry["g1_default"] = HumanoidRobotArgs(
     material_args=MaterialArgsRegistry["g1_default"],
@@ -477,6 +495,30 @@ RobotArgsRegistry["g1_fixed"] = HumanoidRobotArgs(
     soft_dof_pos_range=0.9,
     dof_kp=G1_kp_dict,
     dof_kd=G1_kd_dict,
+    action_scale=0.15,
+    ctrl_freq=50,
+    decimation=4,
+)
+
+RobotArgsRegistry["g1_beyond_mimic"] = HumanoidRobotArgs(
+    material_args=MaterialArgsRegistry["g1_fixed"],
+    morph_args=MorphArgsRegistry["g1_fixed"],
+    dr_args=DRArgsRegistry["default"],
+    visualize_contact=False,
+    vis_mode="visual",
+    ctrl_type=CtrlType.HYBRID_JOINT_VELOCITY,
+    body_link_name="torso_link",
+    foot_link_names=[
+        "left_ankle_roll_link",
+        "right_ankle_roll_link",
+    ],
+    show_target=True,
+    dof_names=G1_dof_names,
+    default_dof_pos=G1_default_dof_pos,
+    soft_dof_pos_range=0.9,
+    dof_kp=G1_beyound_mimic_kp_dict,
+    dof_kd=G1_beyound_mimic_kd_dict,
+    dof_armature=G1_beyound_mimic_armature_dict,
     action_scale=0.15,
     ctrl_freq=50,
     decimation=4,

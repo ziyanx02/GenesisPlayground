@@ -335,7 +335,13 @@ def main(
         dof_names = env.dof_names
 
         if sim:
-            log_dir = Path(__file__).parent / "logs" / "pd_test" / "sim" / f"{env.robot.ctrl_type}"
+            log_dir = (
+                Path(__file__).parent
+                / "logs"
+                / "pd_test"
+                / "sim"
+                / f"{env.robot.ctrl_type}-beyond-mimic"
+            )
         else:
             log_dir = Path(__file__).parent / "logs" / "pd_test" / "real" / f"{env.ctrl_type}"
 

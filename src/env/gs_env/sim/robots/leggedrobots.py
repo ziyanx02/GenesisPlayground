@@ -87,6 +87,14 @@ class LeggedRobotBase(BaseGymRobot):
                     dof_kd.append(self._args.dof_kd[key])
         self._dof_kp = torch.tensor(dof_kp, device=self._device)
         self._dof_kd = torch.tensor(dof_kd, device=self._device)
+        self._dof_armature = None
+        if hasattr(self._args, "dof_armature") and self._args.dof_armature is not None:
+            dof_armature = []
+            for dof_name in self.dof_names:
+                for key in self._args.dof_armature.keys():
+                    if key in dof_name:
+                        dof_armature.append(self._args.dof_armature[key])
+            self._dof_armature = torch.tensor(dof_armature, device=self._device)
         self._batched_dof_kp = self._dof_kp[None, :].repeat(self._num_envs, 1)
         self._batched_dof_kd = self._dof_kd[None, :].repeat(self._num_envs, 1)
         self._motor_strength = torch.ones(
@@ -131,6 +139,12 @@ class LeggedRobotBase(BaseGymRobot):
     def post_build_init(self, eval_mode: bool = False) -> None:
         if not eval_mode:
             self._init_domain_randomization()
+
+        if getattr(self, "_dof_armature", None) is not None:
+            self._robot.set_dofs_armature(
+                self._dof_armature,
+                dofs_idx_local=self._dofs_idx_local,
+            )
 
         # limits
         self._dof_pos_limits = torch.stack(self._robot.get_dofs_limit(self._dofs_idx_local), dim=1)
