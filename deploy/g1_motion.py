@@ -121,7 +121,6 @@ def main(
 
         # Initialize tracking variables
         last_action_t = torch.zeros(1, env.action_dim, device=device_t)
-        commands_t = torch.zeros(1, 3, device=device_t)
         last_update_time = time.time()
         total_inference_time = 0
         step_id = 0
@@ -149,16 +148,6 @@ def main(
                 continue
             last_update_time = time.time()
 
-            if not sim:
-                commands_t[0, 0] = env.robot.Ly  # forward velocity (m/s)
-                commands_t[0, 1] = -env.robot.Lx  # lateral velocity (m/s)
-                commands_t[0, 2] = -env.robot.Rx  # angular velocity (rad/s)
-            else:
-                # Update commands (can be modified for different behaviors)
-                commands_t[0, 0] = 0.0  # forward velocity (m/s)
-                commands_t[0, 1] = 0.0  # lateral velocity (m/s)
-                commands_t[0, 2] = 0.0  # angular velocity (rad/s)
-
             # Advance motion time and compute reference frame (looping)
             t_val += 0.02
             motion_time_t = torch.tensor([t_val], dtype=torch.float32, device=device_t)
@@ -171,18 +160,20 @@ def main(
                 ref_dof_vel,
                 ref_link_pos_local,
                 ref_link_quat_local,
-            ) = motion_lib.get_motion_frame(motion_ids=motion_id_t, motion_times=motion_time_t)
+                motion_obs,
+            ) = motion_lib.get_ref_motion_frame(
+                motion_ids=motion_id_t, motion_times=motion_time_t, motion_obs=True
+            )
 
             _ = ref_link_pos_local
             _ = ref_link_quat_local
+            _ = motion_obs
 
             # Construct observation (matching training observation structure)
             obs_components = []
             for key in env_args.actor_obs_terms:
                 if key == "last_action":
                     obs_gt = last_action_t
-                elif key == "commands":
-                    obs_gt = commands_t
                 elif key.startswith("ref_"):
                     if key == "ref_base_pos":
                         obs_gt = ref_base_pos

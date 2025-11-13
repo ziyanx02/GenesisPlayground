@@ -255,8 +255,7 @@ class MotionEnv(LeggedRobotEnv):
 
         # set reference motion first
         self.time_since_reset[envs_idx] = 0.0
-        self._reset_ref_motion(envs_idx=envs_idx)
-        self.hard_sync_motion(envs_idx=envs_idx)
+        self._reset_motion(envs_idx=envs_idx)
 
         num_selected = int(self._args.reset_to_default_pose_ratio * len(envs_idx))
         if num_selected > 0:
@@ -488,7 +487,10 @@ class MotionEnv(LeggedRobotEnv):
         self._update_ref_motion()
 
     # ---------- Motion utilities ----------
-    def _reset_ref_motion(self, envs_idx: torch.Tensor) -> None:
+    def _reset_motion(self, envs_idx: torch.Tensor) -> None:
+        """
+        Reset the motion ids and times for the given environments.
+        """
         assert self._motion_lib is not None
         n = len(envs_idx)
         motion_ids = self._motion_lib.sample_motion_ids(n)
@@ -499,7 +501,25 @@ class MotionEnv(LeggedRobotEnv):
         self._motion_ids[envs_idx] = motion_ids
         self._motion_time_offsets[envs_idx] = motion_times
         self._motion_lengths[envs_idx] = self._motion_lib.get_motion_length(motion_ids)
-        self._update_ref_motion(envs_idx=envs_idx, motion_ids=motion_ids, motion_times=motion_times)
+        self.hard_sync_motion(envs_idx=envs_idx)
+
+    def hard_reset_motion(self, envs_idx: torch.Tensor, motion_id: int) -> None:
+        """
+        Reset motion ids to given motion id and reset the motion time to 0.0.
+        Hard sync the robot state to current motion frame.
+        """
+        if motion_id > self.motion_lib.num_motions:
+            print(
+                f"Motion ID {motion_id} is out of range. Valid range is 0 to {self.motion_lib.num_motions - 1}"
+            )
+            return
+        print(f"Hard resetting motion to {self.motion_lib.motion_names[motion_id]}")
+        self._motion_ids[envs_idx] = motion_id
+        self._motion_time_offsets[envs_idx] = 0.0
+        self._motion_lengths[envs_idx] = self._motion_lib.get_motion_length(
+            self._motion_ids[envs_idx]
+        )
+        self.hard_sync_motion(envs_idx=envs_idx)
 
     def _update_ref_motion(
         self,
@@ -507,12 +527,15 @@ class MotionEnv(LeggedRobotEnv):
         motion_ids: torch.Tensor | None = None,
         motion_times: torch.Tensor | None = None,
     ) -> None:
+        """
+        Update the reference motion (next motion frame) and motion_obs for the given environments.
+        """
         if envs_idx is None:
             envs_idx = torch.arange(self.num_envs, device=self._device, dtype=torch.long)
         if motion_ids is None:
-            motion_ids = self.motion_ids
+            motion_ids = self.motion_ids[envs_idx]
         if motion_times is None:
-            motion_times = self.motion_times
+            motion_times = self.motion_times[envs_idx]
         (
             base_pos,
             base_quat,
@@ -523,7 +546,7 @@ class MotionEnv(LeggedRobotEnv):
             link_pos_local,
             link_quat_local,
             motion_obs,
-        ) = self._motion_lib.get_motion_frame(motion_ids, motion_times)
+        ) = self._motion_lib.get_ref_motion_frame(motion_ids, motion_times)
 
         # Post-process motion future observations into motion_obs buffer if available
         if len(motion_obs) > 0:
@@ -561,7 +584,7 @@ class MotionEnv(LeggedRobotEnv):
                     base_lin_obs,
                     base_ang_obs,
                     dof_pos_obs,
-                    dof_vel_obs,
+                    0.1 * dof_vel_obs,
                     link_pos_obs,
                     link_quat_obs,
                 ],
@@ -616,30 +639,29 @@ class MotionEnv(LeggedRobotEnv):
             )
 
     def hard_sync_motion(self, envs_idx: torch.Tensor) -> None:
-        self._update_ref_motion()
+        """
+        Hard sync the robot state to current motion frame for the given environments.
+        """
+        motion_ids = self._motion_ids[envs_idx]
+        motion_times = self.motion_times[envs_idx]
+        self._update_ref_motion(envs_idx=envs_idx, motion_ids=motion_ids, motion_times=motion_times)
+        (
+            base_pos,
+            base_quat,
+            base_lin_vel,
+            base_ang_vel,
+            dof_pos,
+            dof_vel,
+        ) = self._motion_lib.get_motion_frame(motion_ids, motion_times)
         self._robot.set_state(
-            pos=self.ref_base_pos[envs_idx],
-            quat=self.ref_base_quat[envs_idx],
-            dof_pos=self.ref_dof_pos[envs_idx],
+            pos=base_pos,
+            quat=base_quat,
+            dof_pos=dof_pos,
             envs_idx=envs_idx,
-            lin_vel=self.ref_base_lin_vel[envs_idx],
-            ang_vel=self.ref_base_ang_vel[envs_idx],
-            dof_vel=self.ref_dof_vel[envs_idx],
+            lin_vel=base_lin_vel,
+            ang_vel=base_ang_vel,
+            dof_vel=dof_vel,
         )
-
-    def hard_reset_motion(self, envs_idx: torch.Tensor, motion_id: int) -> None:
-        if motion_id > self.motion_lib.num_motions:
-            print(
-                f"Motion ID {motion_id} is out of range. Valid range is 0 to {self.motion_lib.num_motions - 1}"
-            )
-            return
-        print(f"Hard resetting motion to {self.motion_lib.motion_names[motion_id]}")
-        self._motion_ids[envs_idx] = motion_id
-        self._motion_time_offsets[envs_idx] = 0.0
-        self._motion_lengths[envs_idx] = self._motion_lib.get_motion_length(
-            self._motion_ids[envs_idx]
-        )
-        self.hard_sync_motion(envs_idx=envs_idx)
 
     @property
     def motion_lib(self) -> MotionLib:

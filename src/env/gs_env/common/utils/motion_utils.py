@@ -610,7 +610,47 @@ class MotionLib:
                 )
 
     def get_motion_frame(
-        self, motion_ids: torch.Tensor, motion_times: torch.Tensor
+        self,
+        motion_ids: torch.Tensor,
+        motion_times: torch.Tensor,
+    ) -> tuple[
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+    ]:
+        assert motion_times.min() >= 0.0, "motion_times must be non-negative"
+        # snap to discrete frame grid using unified fps and clamp within motion length
+        fps = self.fps
+        motion_len = self._motion_lengths[motion_ids]  # unchanged logical length
+        motion_times = torch.min(motion_times, motion_len)
+        steps = torch.round(motion_times * fps).long()
+
+        frame_start_idx = self._motion_start_idx[motion_ids]
+        frame_idx = frame_start_idx + steps + 1
+
+        base_pos = self._motion_base_pos[frame_idx]
+        base_quat = self._motion_base_quat[frame_idx]
+        base_lin_vel = self._motion_base_lin_vel[frame_idx]
+        base_ang_vel = self._motion_base_ang_vel[frame_idx]
+        dof_pos = self._motion_dof_pos[frame_idx]
+        dof_vel = self._motion_dof_vel[frame_idx]
+
+        return (
+            base_pos,
+            base_quat,
+            base_lin_vel,
+            base_ang_vel,
+            dof_pos,
+            dof_vel,
+        )
+
+    def get_ref_motion_frame(
+        self,
+        motion_ids: torch.Tensor,
+        motion_times: torch.Tensor,
     ) -> tuple[
         torch.Tensor,
         torch.Tensor,
@@ -630,7 +670,7 @@ class MotionLib:
         steps = torch.round(motion_times * fps).long()
 
         frame_start_idx = self._motion_start_idx[motion_ids]
-        frame_idx = frame_start_idx + steps
+        frame_idx = frame_start_idx + steps + 1
 
         base_pos = self._motion_base_pos[frame_idx]
         base_quat = self._motion_base_quat[frame_idx]

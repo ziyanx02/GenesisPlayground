@@ -91,7 +91,12 @@ def publish_motion(
                 dof_vel,
                 link_pos_local,
                 link_quat_local,
-            ) = motion_lib.get_motion_frame(motion_ids=motion_id_t, motion_times=motion_time_t)
+                motion_obs,
+            ) = motion_lib.get_ref_motion_frame(
+                motion_ids=motion_id_t, motion_times=motion_time_t, motion_obs=True
+            )
+
+            _ = motion_obs
 
             payload: dict[str, Any] = {
                 "base_pos": _to_list(base_pos),

@@ -241,6 +241,7 @@ def evaluate_policy(
             link_name_to_idx[link_name] = env.robot.link_names.index(link_name)
 
         while True:
+            env.time_since_reset[0] = 0.0
             env.hard_reset_motion(
                 torch.IntTensor(
                     [
@@ -249,7 +250,6 @@ def evaluate_policy(
                 ),
                 motion_id,
             )
-            env.time_since_reset[0] = 0.0
             env.hard_sync_motion(torch.IntTensor([0]))
             obs, _ = wrapped_env.get_observations()
             while env.motion_times[0] < env.motion_lib.get_motion_length(motion_id):
@@ -429,8 +429,8 @@ def view_motion(env_args: Any, show_viewer: bool = False) -> None:
         nonlocal env
         motion_id = 0
         while True:
-            env.hard_reset_motion(torch.IntTensor([0]), motion_id)
             env.time_since_reset[0] = 0.0
+            env.hard_reset_motion(torch.IntTensor([0]), motion_id)
             env.hard_sync_motion(torch.IntTensor([0]))
             last_update_time = time.time()
             while env.motion_times[0] + 0.02 < env.motion_lib.get_motion_length(

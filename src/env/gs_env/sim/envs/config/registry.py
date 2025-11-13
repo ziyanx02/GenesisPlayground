@@ -180,14 +180,6 @@ EnvArgsRegistry["g1_motion"] = MotionEnvArgs(
     reward_term="g1",
     reward_args={
         ### Motion Tracking ###
-        # "DofPosReward": 5.0,
-        # "DofVelReward": 5.0,
-        # # "BaseHeightReward": 1.0,
-        # "BasePosReward": 5.0,
-        # "BaseQuatReward": 5.0,
-        # "BaseLinVelReward": 5.0,
-        # "BaseAngVelReward": 5.0,
-        # "TrackingLinkPosReward": 5.0,
         "DofPosReward": 5.0,
         "DofVelReward": 0.1,
         # "BaseHeightReward": 1.0,
@@ -223,7 +215,7 @@ EnvArgsRegistry["g1_motion"] = MotionEnvArgs(
     obs_history_len=1,
     obs_scales={
         "dof_vel": 0.1,
-        "base_ang_vel_local": 0.5,
+        "diff_dof_vel": 0.1,
         "feet_contact_force": 0.001,
     },
     obs_noises={
@@ -243,15 +235,15 @@ EnvArgsRegistry["g1_motion"] = MotionEnvArgs(
         "projected_gravity",
         # Reference
         "motion_obs",
+        "diff_base_rotation_6D",
+        "diff_base_euler",
+        "diff_dof_pos",
+        "diff_dof_vel",
         # Privileged
         "dr_obs",
         "base_lin_vel_local",
         "tracking_link_pos_local_yaw",
         "diff_base_pos_local_yaw",
-        "diff_base_rotation_6D",
-        "diff_base_euler",
-        "diff_dof_pos",
-        "diff_dof_vel",
         "diff_base_lin_vel_local",
         "diff_base_ang_vel_local",
         "diff_tracking_link_pos_local_yaw",
