@@ -190,6 +190,10 @@ class MotionEnv(LeggedRobotEnv):
         )
 
         # differences to reference (used for observations)
+        self.diff_base_pos_local_yaw = torch.zeros(self.num_envs, 3, device=self._device)
+        self.diff_base_rotation_6D = torch.zeros(
+            self.num_envs, 6, device=self._device, dtype=torch.float32
+        )
         self.diff_dof_pos = torch.zeros(self.num_envs, self._robot.dof_dim, device=self._device)
         self.diff_dof_vel = torch.zeros(self.num_envs, self._robot.dof_dim, device=self._device)
         self.diff_base_euler = torch.zeros(
@@ -197,9 +201,6 @@ class MotionEnv(LeggedRobotEnv):
         )
         self.diff_base_lin_vel_local = torch.zeros(self.num_envs, 3, device=self._device)
         self.diff_base_ang_vel_local = torch.zeros(self.num_envs, 3, device=self._device)
-        self.diff_base_rotation_6D = torch.zeros(
-            self.num_envs, 6, device=self._device, dtype=torch.float32
-        )
         self.diff_tracking_link_pos_local_yaw = torch.zeros(
             self.num_envs, len(self.tracking_link_idx_local), 3, device=self._device
         )
@@ -591,17 +592,22 @@ class MotionEnv(LeggedRobotEnv):
             :, self.tracking_link_idx_local
         ]
 
-        self.diff_dof_pos[envs_idx] = self.dof_pos[envs_idx] - self.ref_dof_pos[envs_idx]
-        self.diff_dof_vel[envs_idx] = self.dof_vel[envs_idx] - self.ref_dof_vel[envs_idx]
-        self.diff_base_euler[envs_idx] = self.base_euler[envs_idx] - self.ref_base_euler[envs_idx]
+        pos_diff = self.ref_base_pos[envs_idx] - self.base_pos[envs_idx]
+        quat_yaw = quat_from_angle_axis(
+            self.base_euler[envs_idx, -1],
+            torch.tensor([0, 0, 1], device=self._device, dtype=torch.float),
+        )
+        self.diff_base_pos_local_yaw[envs_idx] = self.batched_global_to_local(quat_yaw, pos_diff)
+        quat_diff = quat_mul(quat_inv(self.base_quat[envs_idx]), self.ref_base_quat[envs_idx])
+        self.diff_base_rotation_6D[envs_idx] = quat_to_rotation_6D(quat_diff)
+        self.diff_base_euler[envs_idx] = self.ref_base_euler[envs_idx] - self.base_euler[envs_idx]
+        self.diff_dof_pos[envs_idx] = self.ref_dof_pos[envs_idx] - self.dof_pos[envs_idx]
+        self.diff_dof_vel[envs_idx] = self.ref_dof_vel[envs_idx] - self.dof_vel[envs_idx]
         self.diff_base_lin_vel_local[envs_idx] = (
-            self.base_lin_vel_local[envs_idx] - self.ref_base_lin_vel_local[envs_idx]
+            self.ref_base_lin_vel_local[envs_idx] - self.base_lin_vel_local[envs_idx]
         )
         self.diff_base_ang_vel_local[envs_idx] = (
-            self.base_ang_vel_local[envs_idx] - self.ref_base_ang_vel_local[envs_idx]
-        )
-        self.diff_base_rotation_6D[envs_idx] = (
-            self.base_rotation_6D[envs_idx] - self.ref_base_rotation_6D[envs_idx]
+            self.ref_base_ang_vel_local[envs_idx] - self.base_ang_vel_local[envs_idx]
         )
         if len(self.tracking_link_idx_local) > 0:
             self.diff_tracking_link_pos_local_yaw[envs_idx] = (

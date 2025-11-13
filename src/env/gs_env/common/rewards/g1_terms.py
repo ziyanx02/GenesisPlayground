@@ -386,3 +386,31 @@ class TrackingLinkPosReward(RewardTerm):
         # print("tracking_link_pos_error", tracking_link_pos_error * 1)
         # return torch.exp(-tracking_link_pos_error * 2)
         return -tracking_link_pos_error
+
+
+class TrackingLinkQuatReward(RewardTerm):
+    """
+    Reward the tracking link quaternion.
+
+    Args:
+        tracking_link_quat_local_yaw: Tracking link quaternion tensor of shape (B, N, 4) where B is the batch size and N is the number of tracking links.
+        ref_tracking_link_quat_local_yaw: Reference tracking link quaternion tensor of shape (B, N, 4) where B is the batch size and N is the number of tracking links.
+    """
+
+    required_keys = ("tracking_link_quat_local_yaw", "ref_tracking_link_quat_local_yaw")
+
+    def _compute(
+        self,
+        tracking_link_quat_local_yaw: torch.Tensor,
+        ref_tracking_link_quat_local_yaw: torch.Tensor,
+    ) -> torch.Tensor:  # type: ignore
+        tracking_link_quat_error = (
+            quat_to_angle_axis(
+                quat_diff(tracking_link_quat_local_yaw, ref_tracking_link_quat_local_yaw)
+            )
+            .norm(dim=-1)
+            .mean(dim=-1)
+        )
+        # print("tracking_link_quat_error", tracking_link_quat_error * 1)
+        # return torch.exp(-tracking_link_quat_error * 2)
+        return -tracking_link_quat_error
