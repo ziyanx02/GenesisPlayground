@@ -152,6 +152,8 @@ class MotionEnv(LeggedRobotEnv):
             self.ref_joint_idx_local = [
                 self._motion_lib.get_joint_idx_by_name(name) for name in self.robot.dof_names
             ]
+        observed_steps = self._args.observed_steps
+        self.motion_lib.set_observed_steps(observed_steps)
 
         # tracking link indices
         tracking_link_names = self._args.tracking_link_names
@@ -160,6 +162,19 @@ class MotionEnv(LeggedRobotEnv):
             if self._args.motion_file is not None
             else []
         )
+
+        NUM_MOTION_OBS = (
+            len(observed_steps["base_pos"]) * 3
+            + len(observed_steps["base_quat"]) * 6
+            + len(observed_steps["base_lin_vel"]) * 3
+            + len(observed_steps["base_ang_vel"]) * 3
+            + len(observed_steps["dof_pos"]) * 29
+            + len(observed_steps["dof_vel"]) * 29
+            + len(observed_steps["link_pos_local"]) * len(self.tracking_link_idx_local) * 3
+            + len(observed_steps["link_quat_local"]) * len(self.tracking_link_idx_local) * 6
+        )
+        # motion observation buffer (future-step observations after post-processing)
+        self.motion_obs = torch.zeros(self.num_envs, NUM_MOTION_OBS, device=self._device)
 
         self.tracking_link_pos_local_yaw = torch.zeros(
             self.num_envs, len(self.tracking_link_idx_local), 3, device=self._device
@@ -321,7 +336,7 @@ class MotionEnv(LeggedRobotEnv):
         reset_buf |= contact_force_mask
 
         # terminate if motino_time will exceed motion length after next step
-        # avoid passing overlimit motion time to calc_motion_frame
+        # avoid passing overlimit motion time to get_motion_frame
         motion_end_mask = self.motion_times + self.dt > self._motion_lengths
         reset_buf |= motion_end_mask
 
@@ -506,7 +521,52 @@ class MotionEnv(LeggedRobotEnv):
             dof_vel,
             link_pos_local,
             link_quat_local,
-        ) = self._motion_lib.calc_motion_frame(motion_ids, motion_times)
+            motion_obs,
+        ) = self._motion_lib.get_motion_frame(motion_ids, motion_times)
+
+        # Post-process motion future observations into motion_obs buffer if available
+        if len(motion_obs) > 0:
+            B = envs_idx.shape[0]
+            # Precompute robot inv yaw quat for current state (used for all conversions to robot local_yaw)
+
+            quat_yaw = quat_from_angle_axis(
+                quat_to_euler(self.ref_base_quat[envs_idx])[:, -1],
+                torch.tensor([0, 0, 1], device=self._device, dtype=torch.float),
+            )  # (B, 4)
+
+            base_pos_diff = motion_obs["base_pos"] - self.ref_base_pos[envs_idx][:, None, :]
+            base_pos_obs = self.batched_global_to_local(quat_yaw, base_pos_diff).reshape(B, -1)
+
+            base_quat_diff = self.batched_global_to_local(quat_yaw, motion_obs["base_quat"])
+            base_quat_obs = quat_to_rotation_6D(base_quat_diff).reshape(B, -1)
+
+            base_lin_obs = self.batched_global_to_local(
+                quat_yaw, motion_obs["base_lin_vel"]
+            ).reshape(B, -1)
+            base_ang_obs = motion_obs["base_ang_vel"].reshape(B, -1)
+            dof_pos_obs = motion_obs["dof_pos"].reshape(B, -1)
+            dof_vel_obs = motion_obs["dof_vel"].reshape(B, -1)
+            link_pos_obs = motion_obs["link_pos_local"][
+                :, :, self.tracking_link_idx_local, :
+            ].reshape(B, -1)
+            link_quat_obs = quat_to_rotation_6D(
+                motion_obs["link_quat_local"][:, :, self.tracking_link_idx_local, :]
+            ).reshape(B, -1)
+
+            self.motion_obs[envs_idx] = torch.cat(
+                [
+                    base_pos_obs,
+                    base_quat_obs,
+                    base_lin_obs,
+                    base_ang_obs,
+                    dof_pos_obs,
+                    dof_vel_obs,
+                    link_pos_obs,
+                    link_quat_obs,
+                ],
+                dim=-1,
+            )
+
         self.ref_base_pos[envs_idx] = base_pos
         self.ref_base_quat[envs_idx] = base_quat
         self.ref_base_height[envs_idx] = self.ref_base_pos[envs_idx, 2]
@@ -515,10 +575,10 @@ class MotionEnv(LeggedRobotEnv):
         self.ref_base_lin_vel[envs_idx] = base_lin_vel
         self.ref_base_ang_vel[envs_idx] = base_ang_vel
         self.ref_base_lin_vel_local[envs_idx] = self.batched_global_to_local(
-            self.ref_base_pos[envs_idx], self.ref_base_quat[envs_idx], base_lin_vel
+            self.ref_base_quat[envs_idx], base_lin_vel
         )
         self.ref_base_ang_vel_local[envs_idx] = self.batched_global_to_local(
-            self.ref_base_pos[envs_idx], self.ref_base_quat[envs_idx], base_ang_vel
+            self.ref_base_quat[envs_idx], base_ang_vel
         )
         self.ref_dof_pos[envs_idx] = dof_pos[:, self.ref_joint_idx_local]
         self.ref_dof_vel[envs_idx] = dof_vel[:, self.ref_joint_idx_local]
@@ -531,15 +591,22 @@ class MotionEnv(LeggedRobotEnv):
             :, self.tracking_link_idx_local
         ]
 
-        self.diff_dof_pos[:] = self.dof_pos - self.ref_dof_pos
-        self.diff_dof_vel[:] = self.dof_vel - self.ref_dof_vel
-        self.diff_base_euler[:] = self.base_euler - self.ref_base_euler
-        self.diff_base_lin_vel_local[:] = self.base_lin_vel_local - self.ref_base_lin_vel_local
-        self.diff_base_ang_vel_local[:] = self.base_ang_vel_local - self.ref_base_ang_vel_local
-        self.diff_base_rotation_6D[:] = self.base_rotation_6D - self.ref_base_rotation_6D
+        self.diff_dof_pos[envs_idx] = self.dof_pos[envs_idx] - self.ref_dof_pos[envs_idx]
+        self.diff_dof_vel[envs_idx] = self.dof_vel[envs_idx] - self.ref_dof_vel[envs_idx]
+        self.diff_base_euler[envs_idx] = self.base_euler[envs_idx] - self.ref_base_euler[envs_idx]
+        self.diff_base_lin_vel_local[envs_idx] = (
+            self.base_lin_vel_local[envs_idx] - self.ref_base_lin_vel_local[envs_idx]
+        )
+        self.diff_base_ang_vel_local[envs_idx] = (
+            self.base_ang_vel_local[envs_idx] - self.ref_base_ang_vel_local[envs_idx]
+        )
+        self.diff_base_rotation_6D[envs_idx] = (
+            self.base_rotation_6D[envs_idx] - self.ref_base_rotation_6D[envs_idx]
+        )
         if len(self.tracking_link_idx_local) > 0:
-            self.diff_tracking_link_pos_local_yaw[:] = (
-                self.tracking_link_pos_local_yaw - self.ref_tracking_link_pos_local_yaw
+            self.diff_tracking_link_pos_local_yaw[envs_idx] = (
+                self.tracking_link_pos_local_yaw[envs_idx]
+                - self.ref_tracking_link_pos_local_yaw[envs_idx]
             )
 
     def hard_sync_motion(self, envs_idx: torch.Tensor) -> None:

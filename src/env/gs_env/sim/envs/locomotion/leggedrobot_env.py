@@ -549,19 +549,16 @@ class LeggedRobotEnv(BaseEnv):
         return vec_global.reshape(vec_shape)
 
     @staticmethod
-    def batched_local_to_global(
-        base_pos: torch.Tensor, base_quat: torch.Tensor, local_vec: torch.Tensor
-    ) -> torch.Tensor:
-        assert base_pos.shape[0] == base_quat.shape[0] == local_vec.shape[0]
+    def batched_local_to_global(base_quat: torch.Tensor, local_vec: torch.Tensor) -> torch.Tensor:
+        assert base_quat.shape[0] == local_vec.shape[0]
         local_vec_shape = local_vec.shape
         local_vec = local_vec.reshape(local_vec_shape[0], -1, local_vec_shape[-1])
-        B, L, _ = local_vec.shape
-        local_flat = local_vec.reshape(B * L, 3)
+        B, L, D = local_vec.shape
+        local_flat = local_vec.reshape(B * L, D)
         quat_rep = base_quat[:, None, :].repeat(1, L, 1).reshape(B * L, 4)
-        pos_rep = base_pos[:, None, :].repeat(1, L, 1).reshape(B * L, 3)
-        if local_flat.shape[-1] == 3:
-            global_flat = pos_rep + quat_apply(quat_rep, local_flat)
-        elif local_flat.shape[-1] == 4:
+        if D == 3:
+            global_flat = quat_apply(quat_rep, local_flat)
+        elif D == 4:
             global_flat = quat_mul(quat_rep, local_flat)
         else:
             raise ValueError(
@@ -570,20 +567,17 @@ class LeggedRobotEnv(BaseEnv):
         return global_flat.reshape(local_vec_shape)
 
     @staticmethod
-    def batched_global_to_local(
-        base_pos: torch.Tensor, base_quat: torch.Tensor, global_vec: torch.Tensor
-    ) -> torch.Tensor:
+    def batched_global_to_local(base_quat: torch.Tensor, global_vec: torch.Tensor) -> torch.Tensor:
         # TODO: wrong implementation
-        assert base_pos.shape[0] == base_quat.shape[0] == global_vec.shape[0]
+        assert base_quat.shape[0] == global_vec.shape[0]
         global_vec_shape = global_vec.shape
         global_vec = global_vec.reshape(global_vec_shape[0], -1, global_vec_shape[-1])
-        B, L, _ = global_vec.shape
-        global_flat = global_vec.reshape(B * L, 3)
+        B, L, D = global_vec.shape
+        global_flat = global_vec.reshape(B * L, D)
         quat_rep = base_quat[:, None, :].repeat(1, L, 1).reshape(B * L, 4)
-        pos_rep = base_pos[:, None, :].repeat(1, L, 1).reshape(B * L, 3)
-        if global_flat.shape[-1] == 3:
-            local_flat = global_flat - pos_rep
-        elif global_flat.shape[-1] == 4:
+        if D == 3:
+            local_flat = quat_apply(quat_inv(quat_rep), global_flat)
+        elif D == 4:
             local_flat = quat_mul(quat_inv(quat_rep), global_flat)
         else:
             raise ValueError(
