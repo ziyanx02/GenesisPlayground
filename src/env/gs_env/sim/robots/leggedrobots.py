@@ -351,10 +351,11 @@ class LeggedRobotBase(BaseGymRobot):
             self._num_envs,
             self._dof_dim,
         ), "Joint position action must match the number of joints."
+        # q_des = act.joint_pos + self._default_dof_pos + self._motor_offset
+        # qd_des = (q_des - self._prev_q_des) / self.scene.dt
+        # self._prev_q_des = q_des.clone()
         q_des = act.joint_pos + self._default_dof_pos + self._motor_offset
-        qd_des = (q_des - self._prev_q_des) / self.scene.dt
-        self._prev_q_des = q_des.clone()
-        # qd_des = (act.joint_pos - self.last_action) / (self._scene.dt * self._args.decimation)
+        qd_des = (act.joint_pos - self.last_action) / (self._scene.dt * self._args.decimation)
         q_err = q_des - self._dof_pos
         qd_err = qd_des - self._dof_vel
         q_force = self._batched_dof_kp * q_err + self._batched_dof_kd * qd_err

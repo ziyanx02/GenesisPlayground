@@ -21,6 +21,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "examples"))
 from utils import (  # type: ignore
     align_hf_arrays_pos_from_logger,
     align_hf_arrays_vel_from_logger,
+    analyze_latency_and_noise,
     plot_metric_on_axis,
     yaml_to_config,
 )
@@ -182,7 +183,7 @@ def run_single_dof_diagnosis(
 ) -> None:
     fig, axes = plt.subplots(6, 1, figsize=(12, 12))
     hf_logger = None
-    for i, wave_type in enumerate(["SIN"]):
+    for i, wave_type in enumerate(["SIN", "FM-SIN"]):
         if hf_logging:
             hf_logger = AsyncHFLogger(nj=env.action_dim, max_seconds=10.0, rate_hz=1000)
             hf_logger.start()
@@ -201,7 +202,8 @@ def run_single_dof_diagnosis(
         if hf_logging:
             hf_logger.stop()
             t_ns, q, _, _ = hf_logger.get()
-            q_arr = q - np.asarray(env.robot.default_dof_pos)
+            q_arr = q - np.asarray(env.robot.default_dof_pos.cpu())
+            print(t_ns.shape)
             steps, target_pos_out, q_out = align_hf_arrays_pos_from_logger(
                 t_ns=t_ns,
                 q_arr=q_arr,
@@ -212,8 +214,17 @@ def run_single_dof_diagnosis(
                 pos_offset=0.0,  # centers both streams
             )
 
+            sample_dt = 1.0 / 200.0
+            analyze_latency_and_noise(
+                target_pos_out,
+                q_out,
+                sample_dt=sample_dt,
+                name=f"{dof_name}-{wave_type}-pos",
+                trend_window_s=0.1,  # adjust if you want
+            )
+
             plot_metric_on_axis(
-                axes[i],
+                axes[2 * i],
                 steps,
                 [target_pos_out.tolist(), q_out.tolist()],
                 ["Target", "Dof Pos"],
@@ -231,8 +242,15 @@ def run_single_dof_diagnosis(
                 control_dt=0.02,
                 out_rate_hz=200.0,
             )
+            analyze_latency_and_noise(
+                target_vel_out,
+                dq_interp,
+                sample_dt=sample_dt,
+                name=f"{dof_name}-{wave_type}-vel",
+                trend_window_s=0.1,
+            )
             plot_metric_on_axis(
-                axes[i + 1],
+                axes[2 * i + 1],
                 steps,
                 [target_vel_out.tolist(), dq_interp.tolist()],
                 ["Target Vel (HF)", "Measured Vel (HF)"],
@@ -335,13 +353,7 @@ def main(
         dof_names = env.dof_names
 
         if sim:
-            log_dir = (
-                Path(__file__).parent
-                / "logs"
-                / "pd_test"
-                / "sim"
-                / f"{env.robot.ctrl_type}-beyond-mimic"
-            )
+            log_dir = Path(__file__).parent / "logs" / "pd_test" / "sim" / f"{env.robot.ctrl_type}"
         else:
             log_dir = Path(__file__).parent / "logs" / "pd_test" / "real" / f"{env.ctrl_type}"
 

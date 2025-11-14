@@ -7,6 +7,82 @@ import numpy as np
 import yaml
 
 
+def analyze_latency_and_noise(
+    target: Sequence[float],
+    measured: Sequence[float],
+    sample_dt: float,
+    name: str = "",
+    trend_window_s: float = 0.1,
+) -> tuple[float, float, float]:
+    """
+    Estimate:
+      - latency (lag) between target and measured via cross-correlation
+      - RMS tracking error
+      - RMS high-frequency noise (error minus slow trend)
+
+    Args:
+        target: 1D array-like target signal
+        measured: 1D array-like measured signal
+        sample_dt: sample period [s] (e.g. 1/200 for 200 Hz)
+        name: label for printing
+        trend_window_s: window length for slow-trend removal
+
+    Returns:
+        lag_sec: estimated lag [s] (measured delayed if > 0)
+        err_rms: RMS of total tracking error
+        noise_rms: RMS of high-frequency part of error
+    """
+    target = np.asarray(target, dtype=float)
+    measured = np.asarray(measured, dtype=float)
+
+    # Match lengths
+    n = min(len(target), len(measured))
+    target = target[:n]
+    measured = measured[:n]
+
+    # -------- 1) estimate lag via cross-correlation --------
+    t0 = target - target.mean()
+    m0 = measured - measured.mean()
+
+    # full cross-corr: lags from -(n-1)..(n-1)
+    corr = np.correlate(t0, m0, mode="full")
+    lag_idx = corr.argmax() - (n - 1)
+    lag_sec = lag_idx * sample_dt
+
+    # -------- 2) align signals using lag --------
+    if lag_idx > 0:
+        # measured is delayed → shift it left
+        measured_aligned = measured[lag_idx:]
+        target_aligned = target[: len(measured_aligned)]
+    elif lag_idx < 0:
+        # target is delayed → shift it left
+        target_aligned = target[-lag_idx:]
+        measured_aligned = measured[: len(target_aligned)]
+    else:
+        target_aligned = target
+        measured_aligned = measured
+
+    # -------- 3) tracking error & RMS --------
+    err = measured_aligned - target_aligned
+    err_rms = float(np.sqrt(np.mean(err**2)))
+
+    # -------- 4) high-frequency "noise" via trend removal --------
+    # moving-average low-pass on the error, then subtract
+    win_samples = max(3, int(trend_window_s / sample_dt))
+    kernel = np.ones(win_samples, dtype=float) / win_samples
+    trend = np.convolve(err, kernel, mode="same")
+    noise = err - trend
+    noise_rms = float(np.sqrt(np.mean(noise**2)))
+
+    if name:
+        print(
+            f"[{name}] lag ≈ {lag_sec * 1000:.2f} ms, "
+            f"err_rms ≈ {err_rms:.5f}, noise_rms ≈ {noise_rms:.5f}"
+        )
+
+    return lag_sec, err_rms, noise_rms
+
+
 def align_hf_arrays_pos_from_logger(
     t_ns: np.ndarray,
     q_arr: np.ndarray,

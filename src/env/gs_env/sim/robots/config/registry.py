@@ -177,7 +177,7 @@ DRArgsRegistry["default"] = DomainRandomizationArgs(
     kp_range=(0.9, 1.1),
     kd_range=(0.9, 1.1),
     motor_strength_range=(0.9, 1.1),
-    motor_offset_range=(0.0, 0.0),
+    motor_offset_range=(-0.05, 0.05),
     friction_range=(0.5, 1.5),
     mass_range=(-5.0, 5.0),
     com_displacement_range=(-0.05, 0.05),
@@ -459,7 +459,7 @@ RobotArgsRegistry["g1_default"] = HumanoidRobotArgs(
     dr_args=DRArgsRegistry["default"],
     visualize_contact=False,
     vis_mode="visual",
-    ctrl_type=CtrlType.DR_JOINT_POSITION,
+    ctrl_type=CtrlType.HYBRID_JOINT_VELOCITY,
     body_link_name="torso_link",
     foot_link_names=[
         "left_ankle_roll_link",
