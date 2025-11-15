@@ -22,7 +22,7 @@ ARMATURE_7520_22 = 0.025101925
 ARMATURE_4010 = 0.00425
 
 NATURAL_FREQ = 10 * 2.0 * 3.1415926535
-DAMPING_RATIO = 2.0
+DAMPING_RATIO = 1.0
 
 STIFFNESS_5020 = ARMATURE_5020 * NATURAL_FREQ**2
 STIFFNESS_7520_14 = ARMATURE_7520_14 * NATURAL_FREQ**2
@@ -452,6 +452,42 @@ G1_beyound_mimic_armature_dict: dict[str, float] = {
     "wrist_pitch": ARMATURE_4010,
     "wrist_yaw": ARMATURE_4010,
 }
+G1_beyound_mimic_vel_limit_dict: dict[str, float] = {
+    "hip_roll": 20.0,
+    "hip_pitch": 32.0,
+    "hip_yaw": 32.0,
+    "knee": 20.0,
+    "ankle_roll": 37.0,
+    "ankle_pitch": 37.0,
+    "waist_roll": 37.0,
+    "waist_pitch": 37.0,
+    "waist_yaw": 32.0,
+    "shoulder_roll": 37.0,
+    "shoulder_pitch": 37.0,
+    "shoulder_yaw": 37.0,
+    "elbow": 37.0,
+    "wrist_roll": 37.0,
+    "wrist_pitch": 22.0,
+    "wrist_yaw": 22.0,
+}
+G1_beyound_mimic_torque_limit_dict: dict[str, float] = {
+    "hip_roll": 139.0,
+    "hip_pitch": 88.0,
+    "hip_yaw": 88.0,
+    "knee": 139.0,
+    "ankle_roll": 50.0,
+    "ankle_pitch": 50.0,
+    "waist_roll": 50.0,
+    "waist_pitch": 50.0,
+    "waist_yaw": 88.0,
+    "shoulder_roll": 25.0,
+    "shoulder_pitch": 25.0,
+    "shoulder_yaw": 25.0,
+    "elbow": 25.0,
+    "wrist_roll": 25.0,
+    "wrist_pitch": 5.0,
+    "wrist_yaw": 5.0,
+}
 
 RobotArgsRegistry["g1_default"] = HumanoidRobotArgs(
     material_args=MaterialArgsRegistry["g1_default"],
@@ -519,6 +555,8 @@ RobotArgsRegistry["g1_beyond_mimic"] = HumanoidRobotArgs(
     dof_kp=G1_beyound_mimic_kp_dict,
     dof_kd=G1_beyound_mimic_kd_dict,
     dof_armature=G1_beyound_mimic_armature_dict,
+    dof_vel_limit=G1_beyound_mimic_vel_limit_dict,
+    dof_torque_limit=G1_beyound_mimic_torque_limit_dict,
     action_scale=0.15,
     ctrl_freq=50,
     decimation=4,

@@ -7,80 +7,73 @@ import numpy as np
 import yaml
 
 
-def analyze_latency_and_noise(
-    target: Sequence[float],
-    measured: Sequence[float],
-    sample_dt: float,
-    name: str = "",
-    trend_window_s: float = 0.1,
-) -> tuple[float, float, float]:
+def cross_correlation(
+    a: np.typing.NDArray[Any], b: np.typing.NDArray[Any], allow_flip: bool = False
+) -> float:
     """
-    Estimate:
-      - latency (lag) between target and measured via cross-correlation
-      - RMS tracking error
-      - RMS high-frequency noise (error minus slow trend)
-
-    Args:
-        target: 1D array-like target signal
-        measured: 1D array-like measured signal
-        sample_dt: sample period [s] (e.g. 1/200 for 200 Hz)
-        name: label for printing
-        trend_window_s: window length for slow-trend removal
-
-    Returns:
-        lag_sec: estimated lag [s] (measured delayed if > 0)
-        err_rms: RMS of total tracking error
-        noise_rms: RMS of high-frequency part of error
+    Compute the sub-sample cross-correlation lag between two 1D signals a and b.
+    Handles both normal and flipped correlation (max or min peak).
+    Returns lag in samples (positive means b lags behind a).
     """
-    target = np.asarray(target, dtype=float)
-    measured = np.asarray(measured, dtype=float)
+    assert a.ndim == 1 and b.ndim == 1 and len(a) == len(b), (
+        "Inputs must be 1D arrays of the same length"
+    )
+    a = a - np.mean(a)
+    b = b - np.mean(b)
+    corr = np.correlate(a, b, mode="full")
+    lags = np.arange(-len(a) + 1, len(a))
+    overlap = len(a) - np.abs(lags)
+    corr_unbiased = corr / overlap
+    k_max = np.argmax(corr)
+    k_min = np.argmin(corr)
+    k_peak = k_min if abs(corr[k_min]) > abs(corr[k_max]) and allow_flip else k_max
+    lag_int = lags[k_peak]
 
-    # Match lengths
-    n = min(len(target), len(measured))
+    # Parabolic interpolation: use corr[k-1], corr[k], corr[k+1]
+    if 0 < k_peak < len(corr) - 1:
+        c_minus = corr_unbiased[k_peak - 1]
+        c_0 = corr_unbiased[k_peak]
+        c_plus = corr_unbiased[k_peak + 1]
+
+        denom = -2 * c_0 + c_minus + c_plus
+        if denom != 0:
+            delta = 0.5 * (c_minus - c_plus) / denom
+        else:
+            delta = 0.0
+    else:
+        delta = 0.0
+
+    lag_subsample = lag_int + delta
+    return -lag_subsample
+
+
+def measure_lag_and_noise(
+    target: np.ndarray, measured: np.ndarray, allow_flip: bool = False
+) -> tuple[float, float]:
+    """
+    Align two 1D signals given lag_samples (positive => measured lags behind target).
+    Returns (target_aligned, measured_aligned).
+    """
+    assert target.ndim == 1 and measured.ndim == 1 and len(target) == len(measured), (
+        "Inputs must be 1D arrays of the same length"
+    )
+    lag_samples = cross_correlation(target, measured, allow_flip=allow_flip)
+    n = len(target)
     target = target[:n]
     measured = measured[:n]
 
-    # -------- 1) estimate lag via cross-correlation --------
-    t0 = target - target.mean()
-    m0 = measured - measured.mean()
+    t = np.arange(n, dtype=float)
+    # measured_aligned(t) = measured(t - lag)
+    measured_aligned = np.interp(t - lag_samples, t, measured, left=np.nan, right=np.nan)
 
-    # full cross-corr: lags from -(n-1)..(n-1)
-    corr = np.correlate(t0, m0, mode="full")
-    lag_idx = corr.argmax() - (n - 1)
-    lag_sec = lag_idx * sample_dt
+    valid = ~np.isnan(measured_aligned)
+    target_aligned = target[valid]
+    measured_aligned = measured_aligned[valid]
 
-    # -------- 2) align signals using lag --------
-    if lag_idx > 0:
-        # measured is delayed → shift it left
-        measured_aligned = measured[lag_idx:]
-        target_aligned = target[: len(measured_aligned)]
-    elif lag_idx < 0:
-        # target is delayed → shift it left
-        target_aligned = target[-lag_idx:]
-        measured_aligned = measured[: len(target_aligned)]
-    else:
-        target_aligned = target
-        measured_aligned = measured
-
-    # -------- 3) tracking error & RMS --------
     err = measured_aligned - target_aligned
-    err_rms = float(np.sqrt(np.mean(err**2)))
-
-    # -------- 4) high-frequency "noise" via trend removal --------
-    # moving-average low-pass on the error, then subtract
-    win_samples = max(3, int(trend_window_s / sample_dt))
-    kernel = np.ones(win_samples, dtype=float) / win_samples
-    trend = np.convolve(err, kernel, mode="same")
-    noise = err - trend
-    noise_rms = float(np.sqrt(np.mean(noise**2)))
-
-    if name:
-        print(
-            f"[{name}] lag ≈ {lag_sec * 1000:.2f} ms, "
-            f"err_rms ≈ {err_rms:.5f}, noise_rms ≈ {noise_rms:.5f}"
-        )
-
-    return lag_sec, err_rms, noise_rms
+    amp = (np.max(target_aligned) - np.min(target_aligned)) / 2
+    nrms_err = np.sqrt(np.mean(err**2)) / amp
+    return lag_samples, nrms_err
 
 
 def align_hf_arrays_pos_from_logger(

@@ -322,7 +322,10 @@ class LeggedRobotEnv(BaseEnv):
         self._action = action
         self._action_buf[:] = torch.cat([self._action_buf[:, :, 1:], action.unsqueeze(-1)], dim=-1)
         exec_action = self._action_buf[:, :, 0]
-        exec_action *= self._args.robot_args.action_scale
+        # exec_action *= self._args.robot_args.action_scale
+        action_scale_np = self.get_dof_action_scale()
+        action_scale = torch.from_numpy(action_scale_np).to(self._device)
+        exec_action *= action_scale.unsqueeze(0)
 
         self.torque *= 0
 
@@ -534,6 +537,23 @@ class LeggedRobotEnv(BaseEnv):
         else:
             raise ValueError(f"Vector must be (..., 3) or (..., 4), but got {vec_shape}")
         return vec_global.reshape(vec_shape)
+
+    def get_dof_action_scale(self) -> np.ndarray:
+        if hasattr(self._args, "dof_armature") and self._args.dof_armature is not None:
+            G1_ACTION_SCALE = {}
+            for jt, kp in self._args.robot_args.dof_kp.items():
+                torque = self._args.robot_args.dof_torque_limit[jt]
+                G1_ACTION_SCALE[jt] = self._args.robot_args.action_scale * torque / kp
+
+            dof_action_scale = []
+            for dof_name in self.dof_names:
+                for key in G1_ACTION_SCALE.keys():
+                    if key in dof_name:
+                        dof_action_scale.append(G1_ACTION_SCALE[key])
+
+            return np.array(dof_action_scale).astype(np.float32)
+        else:
+            return self._args.robot_args.action_scale * np.ones(self.action_dim, dtype=np.float32)
 
     @staticmethod
     def batched_local_to_global(

@@ -54,9 +54,9 @@ class LeggedRobotEnvArgs(EnvArgs):
 class WalkingEnvArgs(LeggedRobotEnvArgs):
     command_resample_time: float = 10.0
     commands_range: tuple[tuple[float, float], ...]
-    command_lin_vel_clip: float = 0.1
-    command_ang_vel_clip: float = 0.1
-    extra_stand_still_ratio: float = 0.1
+    command_lin_vel_clip: float = 0.2
+    command_ang_vel_clip: float = 0.4
+    extra_stand_still_ratio: float = 0.5
 
 
 class MotionEnvArgs(LeggedRobotEnvArgs):

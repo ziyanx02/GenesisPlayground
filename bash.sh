@@ -5,7 +5,7 @@
 #SBATCH -c 8                     # Request 8 CPUs
 #SBATCH --mem=20G                # Memory
 #SBATCH -t 480                   # Time (minutes)
-#SBATCH -C a100                  # GPU constraint
+#SBATCH -C l40s                  # GPU constraint
 #SBATCH -o logs/%x-%j.out        # Save stdout to logs/jobname-jobid.out
 #SBATCH --nodes=1
 
@@ -18,10 +18,10 @@ cd /scratch4/workspace/junyunhuang_umass_edu-myworkspace/GenesisPlayground
 export WANDB_ENTITY="h975894552"
 export WANDB_PROJECT="genesis"
 
-exp_name=${1:-HYBRID_JOINT_VELOCITY-command_v1}
+exp_name=${1:-HYBRID_JOINT_VELOCITY-command-standstill50pct-v3}
 python /scratch4/workspace/junyunhuang_umass_edu-myworkspace/GenesisPlayground/examples/run_ppo_walking.py \
     --exp_name $exp_name \
-    # --reward_args.DofVelPenalty 0.1
+    # --reward_args.TorquePenalty 1e-5 \
     # --reward_args.DofVelPenalty 0.1 \
     # --reward_args.DofPosLimitPenalty 100 \
     # --reward_args.G1FeetHeightPenalty 100 \

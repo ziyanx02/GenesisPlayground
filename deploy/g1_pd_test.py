@@ -21,7 +21,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "examples"))
 from utils import (  # type: ignore
     align_hf_arrays_pos_from_logger,
     align_hf_arrays_vel_from_logger,
-    analyze_latency_and_noise,
+    measure_lag_and_noise,
     plot_metric_on_axis,
     yaml_to_config,
 )
@@ -214,14 +214,11 @@ def run_single_dof_diagnosis(
                 pos_offset=0.0,  # centers both streams
             )
 
-            sample_dt = 1.0 / 200.0
-            analyze_latency_and_noise(
-                target_pos_out,
-                q_out,
-                sample_dt=sample_dt,
-                name=f"{dof_name}-{wave_type}-pos",
-                trend_window_s=0.1,  # adjust if you want
+            lag_pos_subsample, err_pos_rms = measure_lag_and_noise(
+                target_pos_out, q_out, allow_flip=False
             )
+            lag_pos_time_ms = lag_pos_subsample * (1000.0 / 200.0)
+            print(f"Pos lag: {lag_pos_time_ms} ms; Pos nRMS error: {err_pos_rms} rad")
 
             plot_metric_on_axis(
                 axes[2 * i],
@@ -242,13 +239,11 @@ def run_single_dof_diagnosis(
                 control_dt=0.02,
                 out_rate_hz=200.0,
             )
-            analyze_latency_and_noise(
-                target_vel_out,
-                dq_interp,
-                sample_dt=sample_dt,
-                name=f"{dof_name}-{wave_type}-vel",
-                trend_window_s=0.1,
+            lag_vel_subsample, err_vel_rms = measure_lag_and_noise(
+                target_vel_out, dq_interp, allow_flip=False
             )
+            lag_vel_time_ms = lag_vel_subsample * (1000.0 / 200.0)
+            print(f"Vel lag: {lag_vel_time_ms} ms; Vel nRMS error: {err_vel_rms} rad")
             plot_metric_on_axis(
                 axes[2 * i + 1],
                 steps,
