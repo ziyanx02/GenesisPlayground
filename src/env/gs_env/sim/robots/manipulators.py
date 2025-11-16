@@ -155,6 +155,11 @@ class ManipulatorBase(BaseGymRobot):
         # Initialize domain randomization for control parameters
         if not eval_mode:
             self._init_domain_randomization()
+        else:
+            # In eval mode, set kp/kd to base values (no randomization)
+            envs_idx = torch.arange(0, self._num_envs, device=self._device, dtype=torch.int32)
+            self._robot_entity.set_dofs_kp(self._batched_dof_kp[0], envs_idx=envs_idx)
+            self._robot_entity.set_dofs_kv(self._batched_dof_kd[0], envs_idx=envs_idx)
 
         # Set up DOF position limits
         self._dof_pos_limits = torch.stack(
