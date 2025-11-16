@@ -226,6 +226,7 @@ class MotionEnv(LeggedRobotEnv):
             "base_quat_error",
             # "dof_pos_error",
             "tracking_link_pos_error",
+            "foot_contact_force_error",
         ]
         self._terminate_after_error = {}
         self._min_terminate_after_error = {}
