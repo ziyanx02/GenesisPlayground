@@ -152,6 +152,9 @@ class MotionEnv(LeggedRobotEnv):
             self.ref_joint_idx_local = [
                 self._motion_lib.get_joint_idx_by_name(name) for name in self.robot.dof_names
             ]
+            assert self._motion_lib.foot_link_indices == self.robot.foot_links_idx, (
+                "foot link indices do not match"
+            )
         observed_steps = self._args.observed_steps
         self.motion_lib.set_observed_steps(observed_steps)
 
@@ -172,6 +175,7 @@ class MotionEnv(LeggedRobotEnv):
             + len(observed_steps["dof_vel"]) * 29
             + len(observed_steps["link_pos_local"]) * len(self.tracking_link_idx_local) * 3
             + len(observed_steps["link_quat_local"]) * len(self.tracking_link_idx_local) * 6
+            + len(observed_steps["foot_contact"]) * len(self._robot.foot_links_idx)
         )
         # motion observation buffer (future-step observations after post-processing)
         self.motion_obs = torch.zeros(self.num_envs, NUM_MOTION_OBS, device=self._device)
@@ -187,6 +191,9 @@ class MotionEnv(LeggedRobotEnv):
         )
         self.ref_tracking_link_quat_local_yaw = torch.zeros(
             self.num_envs, len(self.tracking_link_idx_local), 4, device=self._device
+        )
+        self.ref_foot_contact = torch.zeros(
+            self.num_envs, len(self._robot.foot_links_idx), device=self._device
         )
 
         # differences to reference (used for observations)
@@ -545,6 +552,7 @@ class MotionEnv(LeggedRobotEnv):
             dof_vel,
             link_pos_local,
             link_quat_local,
+            foot_contact,
             motion_obs,
         ) = self._motion_lib.get_ref_motion_frame(motion_ids, motion_times)
 
@@ -576,6 +584,7 @@ class MotionEnv(LeggedRobotEnv):
             link_quat_obs = quat_to_rotation_6D(
                 motion_obs["link_quat_local"][:, :, self.tracking_link_idx_local, :]
             ).reshape(B, -1)
+            foot_contact_obs = motion_obs["foot_contact"].reshape(B, -1)
 
             self.motion_obs[envs_idx] = torch.cat(
                 [
@@ -587,6 +596,7 @@ class MotionEnv(LeggedRobotEnv):
                     0.1 * dof_vel_obs,
                     link_pos_obs,
                     link_quat_obs,
+                    foot_contact_obs,
                 ],
                 dim=-1,
             )
@@ -614,6 +624,7 @@ class MotionEnv(LeggedRobotEnv):
         self.ref_tracking_link_quat_local_yaw[envs_idx] = self.ref_link_quat_local_yaw[envs_idx][
             :, self.tracking_link_idx_local
         ]
+        self.ref_foot_contact[envs_idx] = foot_contact
 
         pos_diff = self.ref_base_pos[envs_idx] - self.base_pos[envs_idx]
         quat_yaw = quat_from_angle_axis(

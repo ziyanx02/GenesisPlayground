@@ -368,6 +368,7 @@ class MotionLib:
         motion_link_quat_global = []
         motion_link_pos_local = []
         motion_link_quat_local = []
+        motion_foot_contact = []
 
         full_motion_files, full_motion_weights = self._fetch_motion_files(motion_file)
         num_motion_files = len(full_motion_files)
@@ -381,6 +382,7 @@ class MotionLib:
                     if len(self._link_names) == 0:
                         self._link_names = motion_data["link_names"]
                         self._dof_names = motion_data["dof_names"]
+                        self._foot_link_indices = motion_data["foot_link_indices"]
 
                     base_pos = torch.tensor(
                         motion_data["pos"], dtype=torch.float, device=self._device
@@ -420,6 +422,10 @@ class MotionLib:
                         motion_data["link_quat"], dtype=torch.float, device=self._device
                     )
 
+                    foot_contact = torch.tensor(
+                        motion_data["foot_contact"], dtype=torch.float, device=self._device
+                    )
+
                     # Resample to target FPS if requested
                     target_fps_curr = float(self._target_fps)
 
@@ -439,6 +445,7 @@ class MotionLib:
                         # positions, dof: linear
                         base_pos = (1.0 - blend_u) * base_pos[idx0] + blend_u * base_pos[idx1]
                         dof_pos = (1.0 - blend_u) * dof_pos[idx0] + blend_u * dof_pos[idx1]
+                        foot_contact = 1 - (1 - foot_contact[idx0]) * (1 - foot_contact[idx1])
                         link_pos_global = (1.0 - blend_u.unsqueeze(1)) * link_pos_global[
                             idx0
                         ] + blend_u.unsqueeze(1) * link_pos_global[idx1]
@@ -506,6 +513,7 @@ class MotionLib:
                     motion_link_quat_global.append(link_quat_global)
                     motion_link_pos_local.append(link_pos_local)
                     motion_link_quat_local.append(link_quat_local)
+                    motion_foot_contact.append(foot_contact)
 
             except Exception as e:
                 print("Error loading motion file %s: %s", curr_file, e)
@@ -531,6 +539,7 @@ class MotionLib:
         self._motion_link_quat_global = torch.cat(motion_link_quat_global, dim=0)
         self._motion_link_pos_local = torch.cat(motion_link_pos_local, dim=0)
         self._motion_link_quat_local = torch.cat(motion_link_quat_local, dim=0)
+        self._motion_foot_contact = torch.cat(motion_foot_contact, dim=0)
 
         lengths_shifted = self._motion_num_frames.roll(1)
         lengths_shifted[0] = 0
@@ -593,6 +602,7 @@ class MotionLib:
             "dof_vel",
             "link_pos_local",
             "link_quat_local",
+            "foot_contact",
         }
         self._motion_obs_steps = {}
         for term in obs_terms:
@@ -660,12 +670,13 @@ class MotionLib:
         torch.Tensor,
         torch.Tensor,
         torch.Tensor,
+        torch.Tensor,
         dict[str, torch.Tensor],
     ]:
         assert motion_times.min() >= 0.0, "motion_times must be non-negative"
         # snap to discrete frame grid using unified fps and clamp within motion length
         fps = self.fps
-        motion_len = self._motion_lengths[motion_ids]  # unchanged logical length
+        motion_len = self._motion_lengths[motion_ids] - 1  # unchanged logical length
         motion_times = torch.min(motion_times, motion_len)
         steps = torch.round(motion_times * fps).long()
 
@@ -680,6 +691,7 @@ class MotionLib:
         dof_vel = self._motion_dof_vel[frame_idx]
         link_pos_local = self._motion_link_pos_local[frame_idx]
         link_quat_local = self._motion_link_quat_local[frame_idx]
+        foot_contact = self._motion_foot_contact[frame_idx]
 
         # Assemble future-steps observations if configured
         obs_dict: dict[str, torch.Tensor] = {}
@@ -711,6 +723,7 @@ class MotionLib:
             dof_vel,
             link_pos_local,
             link_quat_local,
+            foot_contact,
             obs_dict,
         )
 
@@ -741,6 +754,18 @@ class MotionLib:
             padding="same",
         )
         return smoothed.squeeze(0).T
+
+    @property
+    def link_names(self) -> list[str]:
+        return self._link_names
+
+    @property
+    def dof_names(self) -> list[str]:
+        return self._dof_names
+
+    @property
+    def foot_link_indices(self) -> list[int]:
+        return self._foot_link_indices
 
     @property
     def num_motions(self) -> int:

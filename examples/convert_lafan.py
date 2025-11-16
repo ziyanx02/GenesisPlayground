@@ -7,6 +7,7 @@ from typing import Any, cast
 import gs_env.sim.envs as gs_envs
 import numpy as np
 import torch
+from gs_env.common.utils.math_utils import quat_to_euler
 from gs_env.sim.envs.config.registry import EnvArgsRegistry
 from gs_env.sim.envs.config.schema import MotionEnvArgs
 from gs_env.sim.scenes.config.registry import SceneArgsRegistry
@@ -31,15 +32,20 @@ def lafan_to_motion_data(
     motion_data["fps"] = 30
     motion_data["link_names"] = link_names
     motion_data["dof_names"] = dof_names
+    # save foot link indices and names for downstream usage
+    foot_links_idx = env.robot.foot_links_idx
+    motion_data["foot_link_indices"] = foot_links_idx
     pos_list = []
     quat_list = []
     dof_pos_list = []
     link_pos_list = []
     link_quat_list = []
+    foot_contact_list = []
 
     def run() -> dict[str, Any]:
         nonlocal env, data, motion_data, show_viewer
         last_update_time = time.time()
+        foot_links_idx = env.robot.foot_links_idx
         for i in range(len(data)):
             sliced_data = data[i]
             pos = sliced_data[:3]
@@ -53,6 +59,35 @@ def lafan_to_motion_data(
             dof_pos_list.append(env.dof_pos[0].clone())
             link_pos_list.append(env.link_positions[0].clone())
             link_quat_list.append(env.link_quaternions[0].clone())
+
+            # compute foot contact
+            foot_pos = env.link_positions[0, foot_links_idx, :]
+            foot_quat = env.link_quaternions[0, foot_links_idx, :]
+            foot_euler = quat_to_euler(foot_quat)
+            foot_tilt = (torch.abs(foot_euler[:, 0]) > 0.2) & (torch.abs(foot_euler[:, 1]) > 0.4)
+            foot_lift = foot_pos[:, 2] > 0.15
+            if i == 0:
+                foot_last_pos = foot_pos.clone()
+                foot_not_contact = foot_tilt | foot_lift
+            else:
+                foot_vel = (
+                    torch.norm((foot_pos[..., :2] - foot_last_pos[..., :2]) / env.dt, dim=-1) > 0.3
+                )
+                foot_not_contact = foot_tilt | foot_lift | foot_vel
+            foot_last_pos = foot_pos.clone()
+            foot_contact = ~foot_not_contact
+            foot_contact_list.append(foot_contact)
+            if show_viewer:
+                env.scene.scene.clear_debug_objects()
+                for i in range(len(foot_links_idx)):
+                    if foot_contact[i]:
+                        env.scene.scene.draw_debug_arrow(
+                            foot_pos[i],
+                            torch.tensor([0.0, 0.0, 0.3]),
+                            radius=0.01,
+                            color=(0.0, 0.0, 1.0),
+                        )
+
             if show_viewer:
                 env.scene.scene.step(refresh_visualizer=False)
                 while time.time() - last_update_time < 1 / motion_data["fps"]:
@@ -64,6 +99,7 @@ def lafan_to_motion_data(
         motion_data["dof_pos"] = torch.stack(dof_pos_list).numpy()
         motion_data["link_pos"] = torch.stack(link_pos_list).numpy()
         motion_data["link_quat"] = torch.stack(link_quat_list).numpy()
+        motion_data["foot_contact"] = torch.stack(foot_contact_list).numpy()
 
         return motion_data
 
@@ -80,9 +116,10 @@ def lafan_to_motion_data(
 
 
 if __name__ == "__main__":
-    show_viewer = True
+    show_viewer = False
 
-    csv_file = "/Users/xiongziyan/Python/GenesisPlayground/assets/lafan/jumps1_subject1.csv"
+    csv_file = "/Users/xiongziyan/Python/GenesisPlayground/assets/lafan/run1_subject2.csv"
+    csv_file = "/Users/xiongziyan/Python/GenesisPlayground/assets/lafan/dance2_subject3.csv"
     # csv_file = "/Users/xiongziyan/Python/GenesisPlayground/assets/lafan/jumps1_subject1.csv"
     data = np.genfromtxt(csv_file, delimiter=",")
     data = torch.from_numpy(data).to(torch.float32)

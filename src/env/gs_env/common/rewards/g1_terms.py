@@ -414,3 +414,21 @@ class TrackingLinkQuatReward(RewardTerm):
         # print("tracking_link_quat_error", tracking_link_quat_error * 1)
         # return torch.exp(-tracking_link_quat_error * 2)
         return -tracking_link_quat_error
+
+
+class FootContactForceReward(RewardTerm):
+    """
+    Reward the foot contact.
+
+    Args:
+        feet_contact_force: Feet contact force tensor of shape (B, N) where B is the batch size and N is the number of feet.
+        ref_foot_contact: Reference foot contact tensor of shape (B, N) where B is the batch size and N is the number of feet.
+    """
+
+    required_keys = ("feet_contact_force", "ref_foot_contact")
+
+    def _compute(
+        self, feet_contact_force: torch.Tensor, ref_foot_contact: torch.Tensor
+    ) -> torch.Tensor:  # type: ignore
+        contact_force = feet_contact_force * (1 - ref_foot_contact)
+        return -torch.square(contact_force).sum(dim=-1)

@@ -444,6 +444,16 @@ def view_motion(env_args: Any, show_viewer: bool = False) -> None:
                     link_pos = env.ref_link_pos_local_yaw[:, link_name_to_idx[link_name]]
                     link_quat = env.ref_link_quat_local_yaw[:, link_name_to_idx[link_name]]
                     env.scene.set_obj_pose(link_name, pos=link_pos, quat=link_quat)
+                env.scene.scene.clear_debug_objects()
+                for i in range(len(env.robot.foot_links_idx)):
+                    if env.ref_foot_contact[0, i]:
+                        env.scene.scene.draw_debug_arrow(
+                            env.link_positions[0, env.robot.foot_links_idx[i]],
+                            torch.tensor([0.0, 0.0, 0.3], device=env.device),
+                            radius=0.01,
+                            color=(0.0, 0.0, 1.0),
+                        )
+
                 while time.time() - last_update_time < 0.1:
                     time.sleep(0.01)
                 last_update_time = time.time()

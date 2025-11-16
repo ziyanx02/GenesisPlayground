@@ -189,6 +189,7 @@ EnvArgsRegistry["g1_motion"] = MotionEnvArgs(
         "BaseAngVelReward": 1.0,
         "TrackingLinkPosReward": 40.0,
         "TrackingLinkQuatReward": 5.0,
+        "FootContactForceReward": 0.0002,
         ### Regularization ###
         "TorquePenalty": 0.0001,
         "ActionRatePenalty": 0.3,
@@ -205,7 +206,7 @@ EnvArgsRegistry["g1_motion"] = MotionEnvArgs(
         "hip": 1.0,
         "knee": 0.6,
         "ankle": 0.3,
-        "waist": 1.0,
+        "waist": 2.0,
         "shoulder": 1.0,
         "elbow": 0.6,
         "wrist": 0.3,
@@ -233,19 +234,19 @@ EnvArgsRegistry["g1_motion"] = MotionEnvArgs(
         "base_ang_vel_local",
         "base_rotation_6D",
         "projected_gravity",
-        # Reference
-        "motion_obs",
-        "diff_base_rotation_6D",
-        "diff_base_euler",
         "diff_dof_pos",
         "diff_dof_vel",
+        "diff_base_rotation_6D",
+        "diff_base_euler",
+        "diff_base_ang_vel_local",
+        # Reference
+        "motion_obs",
         # Privileged
         "dr_obs",
         "base_lin_vel_local",
         "tracking_link_pos_local_yaw",
         "diff_base_pos_local_yaw",
         "diff_base_lin_vel_local",
-        "diff_base_ang_vel_local",
         "diff_tracking_link_pos_local_yaw",
         "feet_contact_force",
     ],
@@ -273,6 +274,7 @@ EnvArgsRegistry["g1_motion"] = MotionEnvArgs(
         "diff_base_lin_vel_local",
         "diff_base_ang_vel_local",
         "diff_tracking_link_pos_local_yaw",
+        "ref_foot_contact",
     ],
     reset_yaw_range=(-0.15, 0.15),
     terminate_after_collision_on=[
@@ -306,22 +308,15 @@ EnvArgsRegistry["g1_motion"] = MotionEnvArgs(
     adaptive_termination_ratio=None,
     motion_file=None,
     observed_steps={
-        "base_pos": [1, 2, 4, 8],
-        "base_quat": [1, 2, 4, 8],
-        "base_lin_vel": [1, 2, 4, 8],
-        "base_ang_vel": [1, 2, 4, 8],
-        "dof_pos": [
-            1,
-        ],
-        "dof_vel": [
-            1,
-        ],
-        "link_pos_local": [
-            1,
-        ],
-        "link_quat_local": [
-            1,
-        ],
+        "base_pos": [1, 2, 3, 4, 5, 6, 7, 8],
+        "base_quat": [1, 2, 3, 4, 5, 6, 7, 8],
+        "base_lin_vel": [1, 2, 3, 4, 5, 6, 7, 8],
+        "base_ang_vel": [1, 2, 3, 4, 5, 6, 7, 8],
+        "dof_pos": [1, 2, 3],
+        "dof_vel": [1, 2, 3],
+        "link_pos_local": [1, 2, 3],
+        "link_quat_local": [1, 2, 3],
+        "foot_contact": [1, 2, 3, 4, 5, 6, 7, 8],
     },
 )
 
