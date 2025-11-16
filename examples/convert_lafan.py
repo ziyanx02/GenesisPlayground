@@ -64,29 +64,30 @@ def lafan_to_motion_data(
             foot_pos = env.link_positions[0, foot_links_idx, :]
             foot_quat = env.link_quaternions[0, foot_links_idx, :]
             foot_euler = quat_to_euler(foot_quat)
-            foot_tilt = (torch.abs(foot_euler[:, 0]) > 0.2) & (torch.abs(foot_euler[:, 1]) > 0.4)
-            foot_lift = foot_pos[:, 2] > 0.15
+            foot_tilt = torch.clamp(
+                (torch.abs(foot_euler[:, 0]) + torch.abs(foot_euler[:, 1]) - 0.4) / 0.4, 0.0, 1.0
+            )
+            foot_lift = torch.clamp((foot_pos[:, 2] - 0.15) / 0.15, 0.0, 1.0)
             if i == 0:
                 foot_last_pos = foot_pos.clone()
-                foot_not_contact = foot_tilt | foot_lift
-            else:
-                foot_vel = (
-                    torch.norm((foot_pos[..., :2] - foot_last_pos[..., :2]) / env.dt, dim=-1) > 0.3
-                )
-                foot_not_contact = foot_tilt | foot_lift | foot_vel
+            foot_vel = torch.clamp(
+                torch.norm((foot_pos[..., :2] - foot_last_pos[..., :2]) / env.dt, dim=-1) - 0.3,
+                0.0,
+                1.0,
+            )
             foot_last_pos = foot_pos.clone()
-            foot_contact = ~foot_not_contact
+            foot_not_contact = ((foot_tilt + foot_lift + foot_vel) / 1.5).clamp(0.0, 1.0)
+            foot_contact = 1 - foot_not_contact
             foot_contact_list.append(foot_contact)
             if show_viewer:
                 env.scene.scene.clear_debug_objects()
                 for i in range(len(foot_links_idx)):
-                    if foot_contact[i]:
-                        env.scene.scene.draw_debug_arrow(
-                            foot_pos[i],
-                            torch.tensor([0.0, 0.0, 0.3]),
-                            radius=0.01,
-                            color=(0.0, 0.0, 1.0),
-                        )
+                    env.scene.scene.draw_debug_arrow(
+                        foot_pos[i],
+                        foot_contact[i] * torch.tensor([0.0, 0.0, 0.5]),
+                        radius=0.01,
+                        color=(0.0, 0.0, 1.0),
+                    )
 
             if show_viewer:
                 env.scene.scene.step(refresh_visualizer=False)
@@ -118,16 +119,14 @@ def lafan_to_motion_data(
 if __name__ == "__main__":
     show_viewer = False
 
-    csv_file = "/Users/xiongziyan/Python/GenesisPlayground/assets/lafan/run1_subject2.csv"
-    csv_file = "/Users/xiongziyan/Python/GenesisPlayground/assets/lafan/dance2_subject3.csv"
-    # csv_file = "/Users/xiongziyan/Python/GenesisPlayground/assets/lafan/jumps1_subject1.csv"
-    data = np.genfromtxt(csv_file, delimiter=",")
-    data = torch.from_numpy(data).to(torch.float32)
+    csv_files = [
+        "/Users/xiongziyan/Python/GenesisPlayground/assets/lafan/run1_subject2.csv",
+        "/Users/xiongziyan/Python/GenesisPlayground/assets/lafan/dance2_subject3.csv",
+        "/Users/xiongziyan/Python/GenesisPlayground/assets/lafan/jumps1_subject1.csv",
+    ]
 
     log_dir = Path("./assets/motion/lafan")
     os.makedirs(log_dir, exist_ok=True)
-    motion_name = os.path.basename(csv_file).split(".")[0]
-    motion_path = log_dir / (motion_name + ".pkl")
 
     env_args = cast(MotionEnvArgs, EnvArgsRegistry["g1_motion"]).model_copy(
         update={"scene_args": SceneArgsRegistry["flat_scene_legged"]}
@@ -141,8 +140,13 @@ if __name__ == "__main__":
     )
     env.reset()
 
-    motion_data = lafan_to_motion_data(env=env, data=data, show_viewer=show_viewer)
-    if motion_data is not None:
-        print(f"Saving motion data to {motion_path}")
-        with open(motion_path, "wb") as f:
-            pickle.dump(motion_data, f)
+    for csv_file in csv_files:
+        data = np.genfromtxt(csv_file, delimiter=",")
+        data = torch.from_numpy(data).to(torch.float32)
+        motion_name = os.path.basename(csv_file).split(".")[0]
+        motion_path = log_dir / (motion_name + ".pkl")
+        motion_data = lafan_to_motion_data(env=env, data=data, show_viewer=show_viewer)
+        if motion_data is not None:
+            print(f"Saving motion data to {motion_path}")
+            with open(motion_path, "wb") as f:
+                pickle.dump(motion_data, f)

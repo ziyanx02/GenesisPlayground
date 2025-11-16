@@ -361,6 +361,9 @@ class MotionEnv(LeggedRobotEnv):
         tracking_link_pos_error = torch.norm(
             self.tracking_link_pos_local_yaw - self.ref_tracking_link_pos_local_yaw, dim=-1
         ).mean(dim=-1)
+        foot_contact_force_error = (self.feet_contact_force * (1 - self.ref_foot_contact)).sum(
+            dim=-1
+        )
 
         error_dict = {}
         error_dict["base_pos_error"] = base_pos_error.clone()
@@ -368,6 +371,7 @@ class MotionEnv(LeggedRobotEnv):
         error_dict["base_quat_error"] = base_quat_error.clone()
         error_dict["dof_pos_error"] = dof_pos_error.clone()
         error_dict["tracking_link_pos_error"] = tracking_link_pos_error.clone()
+        error_dict["foot_contact_force_error"] = foot_contact_force_error.clone()
 
         error_mask = {}
         for error_name in self._terminate_after_error.keys():

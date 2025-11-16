@@ -300,10 +300,11 @@ EnvArgsRegistry["g1_motion"] = MotionEnvArgs(
     # [initial_threshold, [min_threshold, max_threshold]]
     terminate_after_error={
         "base_pos_error": [0.5, [0.1, 1.0]],
-        "base_height_error": [0.15, [0.05, 0.15]],
+        "base_height_error": [0.2, [0.05, 0.2]],
         "base_quat_error": [1.0, [0.1, 1.0]],
         # "dof_pos_error": [6.0, [1.0, 6.0]],
         "tracking_link_pos_error": [0.5, [0.03, 1.0]],
+        "foot_contact_force_error": [200.0, [50.0, 500.0]],
     },
     adaptive_termination_ratio=None,
     motion_file=None,
