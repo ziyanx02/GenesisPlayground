@@ -4,3 +4,6 @@ __pycache__
 logs
 
 motion/
+
+output_trajectories_mujoco/
+output_trajectories_mujoco/*
