@@ -6,6 +6,7 @@ from typing import Any, cast
 
 import gs_env.sim.envs as gs_envs
 import torch
+from gs_env.common.utils.math_utils import quat_to_euler
 from gs_env.sim.envs.config.registry import EnvArgsRegistry
 from gs_env.sim.envs.config.schema import MotionEnvArgs
 from gs_env.sim.scenes.config.registry import SceneArgsRegistry
@@ -59,15 +60,20 @@ def twist_to_motion_data(
     motion_data["fps"] = data["fps"]
     motion_data["link_names"] = link_names
     motion_data["dof_names"] = dof_names
+    # save foot link indices and names for downstream usage
+    foot_links_idx = env.robot.foot_links_idx
+    motion_data["foot_link_indices"] = foot_links_idx
     pos_list = []
     quat_list = []
     dof_pos_list = []
     link_pos_list = []
     link_quat_list = []
+    foot_contact_list = []
 
     def run() -> dict[str, Any]:
         nonlocal env, data, motion_data, show_viewer, dof_index
         last_update_time = time.time()
+        foot_links_idx = env.robot.foot_links_idx
         for i in range(len(data["root_pos"])):
             pos = torch.tensor(data["root_pos"][i], dtype=torch.float32)
             quat = torch.tensor(data["root_rot"][i], dtype=torch.float32)[[3, 0, 1, 2]]
@@ -80,6 +86,36 @@ def twist_to_motion_data(
             dof_pos_list.append(env.dof_pos[0].clone())
             link_pos_list.append(env.link_positions[0].clone())
             link_quat_list.append(env.link_quaternions[0].clone())
+
+            # compute foot contact
+            foot_pos = env.link_positions[0, foot_links_idx, :]
+            foot_quat = env.link_quaternions[0, foot_links_idx, :]
+            foot_euler = quat_to_euler(foot_quat)
+            foot_tilt = torch.clamp(
+                (torch.abs(foot_euler[:, 0]) + torch.abs(foot_euler[:, 1]) - 0.4) / 0.4, 0.0, 1.0
+            )
+            foot_lift = torch.clamp((foot_pos[:, 2] - 0.15) / 0.15, 0.0, 1.0)
+            if i == 0:
+                foot_last_pos = foot_pos.clone()
+            foot_vel = torch.clamp(
+                torch.norm((foot_pos[..., :2] - foot_last_pos[..., :2]) / env.dt, dim=-1) - 0.15,
+                0.0,
+                1.0,
+            )
+            foot_last_pos = foot_pos.clone()
+            foot_not_contact = ((foot_tilt + foot_lift + foot_vel) / 1.5).clamp(0.0, 1.0)
+            foot_contact = 1 - foot_not_contact
+            foot_contact_list.append(foot_contact)
+            if show_viewer:
+                env.scene.scene.clear_debug_objects()
+                for i in range(len(foot_links_idx)):
+                    env.scene.scene.draw_debug_arrow(
+                        foot_pos[i],
+                        foot_contact[i] * torch.tensor([0.0, 0.0, 0.5]),
+                        radius=0.01,
+                        color=(0.0, 0.0, 1.0),
+                    )
+
             if show_viewer:
                 env.scene.scene.step(refresh_visualizer=False)
                 while time.time() - last_update_time < 1 / motion_data["fps"]:
@@ -91,7 +127,7 @@ def twist_to_motion_data(
         motion_data["dof_pos"] = torch.stack(dof_pos_list).numpy()
         motion_data["link_pos"] = torch.stack(link_pos_list).numpy()
         motion_data["link_quat"] = torch.stack(link_quat_list).numpy()
-
+        motion_data["foot_contact"] = torch.stack(foot_contact_list).numpy()
         return motion_data
 
     try:
@@ -109,15 +145,13 @@ def twist_to_motion_data(
 if __name__ == "__main__":
     show_viewer = False
 
-    # pickle_file = "/Users/xiongziyan/Python/GenesisPlayground/assets/motion/cmu/01_01.pkl"
-    pickle_file = "/Users/xiongziyan/Python/GenesisPlayground/assets/motion/kit/squat04.pkl"
-    with open(pickle_file, "rb") as f:
-        data = pickle.load(f)
+    csv_files = [
+        "/Users/xiongziyan/Python/GenesisPlayground/assets/motion/cmu/01_01.pkl",
+        "/Users/xiongziyan/Python/GenesisPlayground/assets/motion/kit/squat04.pkl",
+    ]
 
-    log_dir = Path("./assets/motion/amass") / os.path.dirname(pickle_file).split("/")[-1]
+    log_dir = Path("./assets/motion/amass")
     os.makedirs(log_dir, exist_ok=True)
-    motion_name = os.path.basename(pickle_file).split(".")[0]
-    motion_path = log_dir / (motion_name + ".pkl")
 
     env_args = cast(MotionEnvArgs, EnvArgsRegistry["g1_motion"]).model_copy(
         update={"scene_args": SceneArgsRegistry["flat_scene_legged"]}
@@ -131,8 +165,14 @@ if __name__ == "__main__":
     )
     env.reset()
 
-    motion_data = twist_to_motion_data(env=env, data=data, show_viewer=show_viewer)
-    if motion_data is not None:
-        print(f"Saving motion data to {motion_path}")
-        with open(motion_path, "wb") as f:
-            pickle.dump(motion_data, f)
+    for csv_file in csv_files:
+        with open(csv_file, "rb") as f:
+            data = pickle.load(f)
+        motion_name = os.path.basename(csv_file).split(".")[0]
+        motion_dir = os.path.dirname(csv_file).split("/")[-1]
+        motion_path = log_dir / motion_dir / (motion_name + ".pkl")
+        motion_data = twist_to_motion_data(env=env, data=data, show_viewer=show_viewer)
+        if motion_data is not None:
+            print(f"Saving motion data to {motion_path}")
+            with open(motion_path, "wb") as f:
+                pickle.dump(motion_data, f)

@@ -516,7 +516,7 @@ class MotionLib:
                     motion_foot_contact.append(foot_contact)
 
             except Exception as e:
-                print("Error loading motion file %s: %s", curr_file, e)
+                print(f"Error loading motion file {curr_file}: {e}")
                 continue
 
         assert len(self._link_names) > 0, "Link names list is empty"

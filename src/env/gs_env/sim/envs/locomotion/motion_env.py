@@ -165,6 +165,21 @@ class MotionEnv(LeggedRobotEnv):
             if self._args.motion_file is not None
             else []
         )
+        if self._args.link_weights is not None:
+            tracking_link_weights_list = []
+            for link_name in tracking_link_names:
+                tracking_link_weights_list.append(1.0)
+                for key in self._args.link_weights.keys():
+                    if key in link_name:
+                        tracking_link_weights_list[-1] = self._args.link_weights[key]
+                        break
+            self.tracking_link_weights = torch.tensor(
+                tracking_link_weights_list, device=self._device, dtype=torch.float32
+            )
+        else:
+            self.tracking_link_weights = torch.ones(
+                len(tracking_link_names), device=self._device, dtype=torch.float32
+            )
 
         NUM_MOTION_OBS = (
             len(observed_steps["base_pos"]) * 3

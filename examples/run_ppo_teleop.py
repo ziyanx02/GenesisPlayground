@@ -87,7 +87,10 @@ def evaluate_policy(
     show_viewer: bool = False,
     num_ckpt: int | None = None,
     device: str = "cuda",
+    env_overrides: dict[str, Any] = None,
 ) -> None:
+    if env_overrides is None:
+        env_overrides = {}
     """Evaluate the policy."""
     print("=" * 80)
     print("EVALUATION MODE: Disabling domain randomization, observation noise, and random push")
@@ -118,6 +121,8 @@ def evaluate_policy(
 
     env_args = yaml_to_config(Path(exp_dir) / "configs" / "env_args.yaml", MotionEnvArgs)
     algo_cfg = yaml_to_config(Path(exp_dir) / "configs" / "algo_cfg.yaml", PPOArgs)
+
+    env_args = apply_overrides_generic(env_args, env_overrides, prefixes=("cfgs.", "env."))
 
     # Disable domain randomization, obs noise, and random push for evaluation
     # Create a copy of env_args with disabled randomization
@@ -241,7 +246,7 @@ def evaluate_policy(
             link_name_to_idx[link_name] = env.robot.link_names.index(link_name)
 
         while True:
-            env.time_since_reset[0] = 11.0
+            env.time_since_reset[0] = 5.0
             env.hard_reset_motion(
                 torch.IntTensor(
                     [
@@ -546,6 +551,7 @@ def main(
             show_viewer=show_viewer,
             num_ckpt=num_ckpt,
             device=device,
+            env_overrides=env_overrides,
         )
     elif view:
         view_motion(env_args, show_viewer=show_viewer)

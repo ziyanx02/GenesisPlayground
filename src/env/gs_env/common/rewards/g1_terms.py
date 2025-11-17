@@ -369,20 +369,25 @@ class TrackingLinkPosReward(RewardTerm):
     Args:
         tracking_link_pos_local_yaw: Tracking link position tensor of shape (B, N, 3) where B is the batch size and N is the number of tracking links.
         ref_tracking_link_pos_local_yaw: Reference tracking link position tensor of shape (B, N, 3) where B is the batch size and N is the number of tracking links.
+        tracking_link_weights: Tracking link weights tensor of shape (N,) where N is the number of tracking links.
     """
 
-    required_keys = ("tracking_link_pos_local_yaw", "ref_tracking_link_pos_local_yaw")
+    required_keys = (
+        "tracking_link_pos_local_yaw",
+        "ref_tracking_link_pos_local_yaw",
+        "tracking_link_weights",
+    )
 
     def _compute(
         self,
         tracking_link_pos_local_yaw: torch.Tensor,
         ref_tracking_link_pos_local_yaw: torch.Tensor,
+        tracking_link_weights: torch.Tensor,
     ) -> torch.Tensor:  # type: ignore
         tracking_link_pos_error = (
-            torch.square(tracking_link_pos_local_yaw - ref_tracking_link_pos_local_yaw)
-            .sum(dim=-1)
-            .sum(dim=-1)
-        )
+            torch.square(tracking_link_pos_local_yaw - ref_tracking_link_pos_local_yaw).sum(dim=-1)
+            * tracking_link_weights[None, :]
+        ).sum(dim=-1)
         # print("tracking_link_pos_error", tracking_link_pos_error * 1)
         # return torch.exp(-tracking_link_pos_error * 2)
         return -tracking_link_pos_error
@@ -395,22 +400,27 @@ class TrackingLinkQuatReward(RewardTerm):
     Args:
         tracking_link_quat_local_yaw: Tracking link quaternion tensor of shape (B, N, 4) where B is the batch size and N is the number of tracking links.
         ref_tracking_link_quat_local_yaw: Reference tracking link quaternion tensor of shape (B, N, 4) where B is the batch size and N is the number of tracking links.
+        tracking_link_weights: Tracking link weights tensor of shape (N,) where N is the number of tracking links.
     """
 
-    required_keys = ("tracking_link_quat_local_yaw", "ref_tracking_link_quat_local_yaw")
+    required_keys = (
+        "tracking_link_quat_local_yaw",
+        "ref_tracking_link_quat_local_yaw",
+        "tracking_link_weights",
+    )
 
     def _compute(
         self,
         tracking_link_quat_local_yaw: torch.Tensor,
         ref_tracking_link_quat_local_yaw: torch.Tensor,
+        tracking_link_weights: torch.Tensor,
     ) -> torch.Tensor:  # type: ignore
         tracking_link_quat_error = (
             quat_to_angle_axis(
                 quat_diff(tracking_link_quat_local_yaw, ref_tracking_link_quat_local_yaw)
-            )
-            .norm(dim=-1)
-            .mean(dim=-1)
-        )
+            ).norm(dim=-1)
+            * tracking_link_weights[None, :]
+        ).sum(dim=-1)
         # print("tracking_link_quat_error", tracking_link_quat_error * 1)
         # return torch.exp(-tracking_link_quat_error * 2)
         return -tracking_link_quat_error

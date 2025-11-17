@@ -118,12 +118,13 @@ def lafan_to_motion_data(
 
 
 if __name__ == "__main__":
-    show_viewer = True
+    show_viewer = False
 
     csv_files = [
-        "/Users/xiongziyan/Python/GenesisPlayground/assets/lafan/run1_subject2.csv",
-        "/Users/xiongziyan/Python/GenesisPlayground/assets/lafan/dance2_subject3.csv",
-        "/Users/xiongziyan/Python/GenesisPlayground/assets/lafan/jumps1_subject1.csv",
+        # "/Users/xiongziyan/Python/GenesisPlayground/assets/lafan/run1_subject2.csv",
+        # "/Users/xiongziyan/Python/GenesisPlayground/assets/lafan/dance2_subject3.csv",
+        # "/Users/xiongziyan/Python/GenesisPlayground/assets/lafan/jumps1_subject1.csv",
+        "/Users/xiongziyan/Python/GenesisPlayground/assets/lafan/run2_subject1.csv",
     ]
 
     log_dir = Path("./assets/motion/lafan")

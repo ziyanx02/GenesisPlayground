@@ -9,3 +9,9 @@ motions:
   - file: lafan/run1_subject2.pkl
     weight: 100.0
     description: general movement
+  - file: amass/kit/squat04.pkl
+    weight: 100.0
+    description: general movement
+  - file: amass/cmu/01_01.pkl
+    weight: 100.0
+    description: general movement
