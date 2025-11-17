@@ -87,7 +87,7 @@ def evaluate_policy(
     show_viewer: bool = False,
     num_ckpt: int | None = None,
     device: str = "cuda",
-    env_overrides: dict[str, Any] = None,
+    env_overrides: dict[str, Any] | None = None,
 ) -> None:
     if env_overrides is None:
         env_overrides = {}
