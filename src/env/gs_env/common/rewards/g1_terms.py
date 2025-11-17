@@ -227,7 +227,7 @@ class FeetOrientationPenalty(RewardTerm):
 
 
 class G1FeetContactForceLimitPenalty(FeetContactForceLimitPenalty):
-    contact_force_limit = 300.0
+    contact_force_limit = 500.0
 
 
 class LinVelYPenalty(RewardTerm):
@@ -287,7 +287,7 @@ class BaseHeightReward(RewardTerm):
 
     def _compute(self, base_pos: torch.Tensor, ref_base_pos: torch.Tensor) -> torch.Tensor:  # type: ignore
         base_height_error = torch.square(base_pos[:, 2] - ref_base_pos[:, 2])
-        return torch.exp(-base_height_error * 10)
+        return -base_height_error
 
 
 class BasePosReward(RewardTerm):

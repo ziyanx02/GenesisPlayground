@@ -3,7 +3,7 @@ motions:
   - file: lafan/dance2_subject3.pkl
     weight: 100.0
     description: general movement
-  - file: lafan/dance2fgv_subject3.pkl
+  - file: lafan/jumps1_subject1.pkl
     weight: 100.0
     description: general movement
   - file: lafan/run1_subject2.pkl

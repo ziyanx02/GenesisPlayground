@@ -180,15 +180,16 @@ EnvArgsRegistry["g1_motion"] = MotionEnvArgs(
     reward_term="g1",
     reward_args={
         ### Motion Tracking ###
-        "DofPosReward": 5.0,
-        "DofVelReward": 0.1,
+        "DofPosReward": 3.0,
+        "DofVelReward": 0.05,
         # "BaseHeightReward": 1.0,
         "BasePosReward": 200.0,
-        "BaseQuatReward": 100.0,
+        "BaseHeightReward": 100.0,
+        "BaseQuatReward": 60.0,
         "BaseLinVelReward": 10.0,
         "BaseAngVelReward": 1.0,
         "TrackingLinkPosReward": 60.0,
-        "TrackingLinkQuatReward": 20.0,
+        "TrackingLinkQuatReward": 10.0,
         "FootContactForceReward": 4e-4,
         ### Regularization ###
         "TorquePenalty": 0.0001,
@@ -298,8 +299,8 @@ EnvArgsRegistry["g1_motion"] = MotionEnvArgs(
     no_terminate_after_random_push_time=2.0,
     # [initial_threshold, [min_threshold, max_threshold]]
     terminate_after_error={
-        "base_pos_error": [0.5, [0.1, 1.0]],
-        "base_height_error": [0.2, [0.05, 0.2]],
+        "base_pos_error": [1.0, [0.1, 1.0]],
+        # "base_height_error": [0.2, [0.05, 0.2]],
         "base_quat_error": [1.0, [0.1, 1.0]],
         # "dof_pos_error": [6.0, [1.0, 6.0]],
         "tracking_link_pos_error": [0.5, [0.03, 1.0]],
