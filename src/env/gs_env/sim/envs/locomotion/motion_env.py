@@ -224,7 +224,7 @@ class MotionEnv(LeggedRobotEnv):
             "base_pos_error",
             "base_height_error",
             "base_quat_error",
-            # "dof_pos_error",
+            "dof_pos_error",
             "tracking_link_pos_error",
             "foot_contact_force_error",
         ]
@@ -234,6 +234,8 @@ class MotionEnv(LeggedRobotEnv):
         self._num_step_since_update_terminate_error = 0
         self._error_mask_buffer = {}
         for error_name in error_list:
+            if error_name not in self._args.terminate_after_error.keys():
+                continue
             terminate_after_error = self._args.terminate_after_error[error_name][0]
             min_terminate_after_error, max_terminate_after_error = self._args.terminate_after_error[
                 error_name
