@@ -539,7 +539,10 @@ class LeggedRobotEnv(BaseEnv):
         return vec_global.reshape(vec_shape)
 
     def get_dof_action_scale(self) -> np.ndarray:
-        if hasattr(self._args, "dof_armature") and self._args.dof_armature is not None:
+        if (
+            hasattr(self._args.robot_args, "dof_armature")
+            and self._args.robot_args.dof_armature is not None
+        ):
             G1_ACTION_SCALE = {}
             for jt, kp in self._args.robot_args.dof_kp.items():
                 torque = self._args.robot_args.dof_torque_limit[jt]
@@ -550,7 +553,6 @@ class LeggedRobotEnv(BaseEnv):
                 for key in G1_ACTION_SCALE.keys():
                     if key in dof_name:
                         dof_action_scale.append(G1_ACTION_SCALE[key])
-
             return np.array(dof_action_scale).astype(np.float32)
         else:
             return self._args.robot_args.action_scale * np.ones(self.action_dim, dtype=np.float32)

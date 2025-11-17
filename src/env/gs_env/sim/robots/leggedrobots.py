@@ -79,14 +79,16 @@ class LeggedRobotBase(BaseGymRobot):
         self._dofs_idx_local = [
             self._robot.get_joint(name).dofs_idx_local[0] for name in self.dof_names
         ]
-        dof_kp, dof_kd = [], []
+        dof_kp, dof_kd, dof_ki = [], [], []
         for dof_name in self.dof_names:
             for key in self._args.dof_kp.keys():
                 if key in dof_name:
                     dof_kp.append(self._args.dof_kp[key])
                     dof_kd.append(self._args.dof_kd[key])
+                    dof_ki.append(self._args.dof_ki[key])
         self._dof_kp = torch.tensor(dof_kp, device=self._device)
         self._dof_kd = torch.tensor(dof_kd, device=self._device)
+        self._dof_ki = torch.tensor(dof_ki, device=self._device)
         self._dof_armature = None
         if hasattr(self._args, "dof_armature") and self._args.dof_armature is not None:
             dof_armature = []
@@ -97,6 +99,7 @@ class LeggedRobotBase(BaseGymRobot):
             self._dof_armature = torch.tensor(dof_armature, device=self._device)
         self._batched_dof_kp = self._dof_kp[None, :].repeat(self._num_envs, 1)
         self._batched_dof_kd = self._dof_kd[None, :].repeat(self._num_envs, 1)
+        self._batched_dof_ki = self._dof_ki[None, :].repeat(self._num_envs, 1)
         self._motor_strength = torch.ones(
             (self._num_envs, self._dof_dim), device=self._device
         )  # motor strength scaling factor
@@ -128,6 +131,11 @@ class LeggedRobotBase(BaseGymRobot):
 
         # self.exec_action = torch.zeros((self._num_envs, self.action_dim), device=self._device)
         self.last_action = torch.zeros((self._num_envs, self.action_dim), device=self._device)
+
+        # === NEW: integral error buffer (per env, per joint) ===
+        self._q_err_int = torch.zeros(
+            (self._num_envs, self._dof_dim), dtype=torch.float32, device=self._device
+        )
 
         # == set up control dispatch ==
         self._dispatch: dict[CtrlType, Callable[[BaseAction], None]] = {  # type: ignore
@@ -206,6 +214,10 @@ class LeggedRobotBase(BaseGymRobot):
         # self._robot.set_dofs_kv(
         #     self._batched_dof_kd[envs_idx], dofs_idx_local=self._dofs_idx_local, envs_idx=envs_idx
         # )
+        # ki
+        min_ki, max_ki = self._args.dr_args.ki_range
+        ratios = torch.rand(len(envs_idx), self._dof_dim) * (max_ki - min_ki) + min_ki
+        self._batched_dof_ki[envs_idx] = ratios * self._dof_ki[None, :]
         # motor strength
         min_strength, max_strength = self._args.dr_args.motor_strength_range
         self._motor_strength[envs_idx] = (
@@ -244,6 +256,8 @@ class LeggedRobotBase(BaseGymRobot):
         self._dof_pos[envs_idx] = self._default_dof_pos[None].repeat(len(envs_idx), 1)
         self._prev_q_des[envs_idx] = self._default_dof_pos[None].repeat(len(envs_idx), 1)
         self._dof_vel[envs_idx] = 0.0
+        # === NEW: reset integral error ===
+        self._q_err_int[envs_idx] = 0.0
 
     def set_state(
         self,
@@ -338,6 +352,8 @@ class LeggedRobotBase(BaseGymRobot):
             * (act.joint_pos + self._default_dof_pos - self._dof_pos + self._motor_offset)
             - self._batched_dof_kd * self._dof_vel
         )
+        # logging.info(f"q_des mean: {torch.mean(act.joint_pos + self._default_dof_pos - self._dof_pos + self._motor_offset)}")
+        # logging.info(f"qd_des mean: {torch.mean(self._dof_vel)}")
         q_force = q_force * self._motor_strength
         q_force = torch.clamp(q_force, -self._torque_limits, self._torque_limits)
         self._torque[:] = q_force
@@ -351,14 +367,21 @@ class LeggedRobotBase(BaseGymRobot):
             self._num_envs,
             self._dof_dim,
         ), "Joint position action must match the number of joints."
-        # q_des = act.joint_pos + self._default_dof_pos + self._motor_offset
         # qd_des = (q_des - self._prev_q_des) / self._scene.dt
         # self._prev_q_des = q_des.clone()
         q_des = act.joint_pos + self._default_dof_pos + self._motor_offset
-        qd_des = (act.joint_pos - self.last_action) / (self._scene.dt * self._args.decimation)
         q_err = q_des - self._dof_pos
-        qd_err = qd_des - self._dof_vel
-        q_force = self._batched_dof_kp * q_err + self._batched_dof_kd * qd_err
+        # qd_des = (act.joint_pos - self.last_action) / (self._scene.dt * self._args.decimation) # action diff
+        qd_des_v1 = q_err / (self._scene.dt * self._args.decimation)  # pos error
+        self._q_err_int += q_err * self._scene.dt
+        qd_err = qd_des_v1 - self._dof_vel
+        # logging.info(f"q_err mean: {torch.mean(q_err)}")
+        # logging.info(f"qd_err mean: {torch.mean(qd_err)}")
+        q_force = (
+            self._batched_dof_kp * q_err
+            + self._batched_dof_kd * qd_err
+            + self._batched_dof_ki * self._q_err_int
+        )
         q_force = q_force * self._motor_strength
         q_force = torch.clamp(q_force, -self._torque_limits, self._torque_limits)
         self._torque[:] = q_force

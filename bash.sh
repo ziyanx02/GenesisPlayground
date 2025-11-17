@@ -18,7 +18,7 @@ cd /scratch4/workspace/junyunhuang_umass_edu-myworkspace/GenesisPlayground
 export WANDB_ENTITY="h975894552"
 export WANDB_PROJECT="genesis"
 
-exp_name=${1:-HYBRID_JOINT_VELOCITY-command-standstill50pct-v3}
+exp_name=${1:-HYBRID_JOINT_VELOCITY-PID-q_err-v1}
 python /scratch4/workspace/junyunhuang_umass_edu-myworkspace/GenesisPlayground/examples/run_ppo_walking.py \
     --exp_name $exp_name \
     # --reward_args.TorquePenalty 1e-5 \

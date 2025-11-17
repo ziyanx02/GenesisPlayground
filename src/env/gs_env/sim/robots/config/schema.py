@@ -90,6 +90,7 @@ class DomainRandomizationArgs(BaseModel):
 
     kp_range: tuple[float, float]
     kd_range: tuple[float, float]
+    ki_range: tuple[float, float]
     motor_strength_range: tuple[float, float]
     motor_offset_range: tuple[float, float]
     friction_range: tuple[float, float]
@@ -114,6 +115,7 @@ class LeggedRobotArgs(BaseModel):
     soft_dof_pos_range: float
     dof_kp: dict[str, float]
     dof_kd: dict[str, float]
+    dof_ki: dict[str, float] | None = None
     dof_armature: dict[str, float] | None = None
     dof_vel_limit: dict[str, float] | None = None
     dof_torque_limit: dict[str, float] | None = None

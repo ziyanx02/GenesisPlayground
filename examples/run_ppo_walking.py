@@ -139,6 +139,7 @@ def evaluate_policy(
             "dr_args": DomainRandomizationArgs(
                 kp_range=(1.0, 1.0),
                 kd_range=(1.0, 1.0),
+                ki_range=(1.0, 1.0),
                 motor_strength_range=(1.0, 1.0),
                 motor_offset_range=(0.0, 0.0),
                 friction_range=(1.0, 1.0),
@@ -251,7 +252,7 @@ def evaluate_policy(
             else:
                 wrapped_env.env.commands[:, 0] = 1.0
                 wrapped_env.env.commands[:, 2] = 0.0
-            wrapped_env.env.commands[:] = 0.0
+            # wrapped_env.env.commands[:] = 0.0
 
             # Get action from policy
             with torch.no_grad():

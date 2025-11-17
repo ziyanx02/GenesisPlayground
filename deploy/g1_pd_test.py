@@ -1,3 +1,4 @@
+import logging
 import platform
 import sys
 import time
@@ -203,7 +204,6 @@ def run_single_dof_diagnosis(
             hf_logger.stop()
             t_ns, q, _, _ = hf_logger.get()
             q_arr = q - np.asarray(env.robot.default_dof_pos.cpu())
-            print(t_ns.shape)
             steps, target_pos_out, q_out = align_hf_arrays_pos_from_logger(
                 t_ns=t_ns,
                 q_arr=q_arr,
@@ -218,7 +218,13 @@ def run_single_dof_diagnosis(
                 target_pos_out, q_out, allow_flip=False
             )
             lag_pos_time_ms = lag_pos_subsample * (1000.0 / 200.0)
-            print(f"Pos lag: {lag_pos_time_ms} ms; Pos nRMS error: {err_pos_rms} rad")
+            logging.info(
+                "%s, %s, Pos lag: %s ms; Pos nRMS error: %s rad",
+                wave_type,
+                dof_name,
+                lag_pos_time_ms,
+                err_pos_rms,
+            )
 
             plot_metric_on_axis(
                 axes[2 * i],
@@ -243,7 +249,13 @@ def run_single_dof_diagnosis(
                 target_vel_out, dq_interp, allow_flip=False
             )
             lag_vel_time_ms = lag_vel_subsample * (1000.0 / 200.0)
-            print(f"Vel lag: {lag_vel_time_ms} ms; Vel nRMS error: {err_vel_rms} rad")
+            logging.info(
+                "%s, %s, Vel lag: %s ms; Vel nRMS error: %s rad",
+                wave_type,
+                dof_name,
+                lag_vel_time_ms,
+                err_vel_rms,
+            )
             plot_metric_on_axis(
                 axes[2 * i + 1],
                 steps,
@@ -351,6 +363,14 @@ def main(
             log_dir = Path(__file__).parent / "logs" / "pd_test" / "sim" / f"{env.robot.ctrl_type}"
         else:
             log_dir = Path(__file__).parent / "logs" / "pd_test" / "real" / f"{env.ctrl_type}"
+
+        log_dir.mkdir(parents=True, exist_ok=True)
+        logging.basicConfig(
+            filename=str(log_dir / "diagnosis.log"),
+            level=logging.INFO,
+            format="%(asctime)s - %(message)s",
+            force=True,
+        )
 
         for dof_name, (lower_bound, upper_bound) in test_dofs.items():
             dof_idx = -1

@@ -176,6 +176,7 @@ DRArgsRegistry: dict[str, DRArgs] = {}
 DRArgsRegistry["default"] = DomainRandomizationArgs(
     kp_range=(0.9, 1.1),
     kd_range=(0.9, 1.1),
+    ki_range=(0.9, 1.1),
     motor_strength_range=(0.9, 1.1),
     motor_offset_range=(-0.05, 0.05),
     friction_range=(0.5, 1.5),
@@ -187,6 +188,7 @@ DRArgsRegistry["default"] = DomainRandomizationArgs(
 DRArgsRegistry["no_randomization"] = DomainRandomizationArgs(
     kp_range=(1.0, 1.0),
     kd_range=(1.0, 1.0),
+    ki_range=(1.0, 1.0),
     motor_strength_range=(1.0, 1.0),
     motor_offset_range=(0.0, 0.0),
     friction_range=(1.0, 1.0),
@@ -398,6 +400,24 @@ G1_kd_dict: dict[str, float] = {
     "wrist_pitch": 2.4,
     "wrist_yaw": 1.8,
 }
+G1_ki_dict: dict[str, float] = {
+    "hip_roll": 333.3,
+    "hip_pitch": 333.3,
+    "hip_yaw": 333.3,
+    "knee": 666.6667,
+    "ankle_roll": 66.7,
+    "ankle_pitch": 66.7,
+    "waist_roll": 400.0,
+    "waist_pitch": 400.0,
+    "waist_yaw": 266.7,
+    "shoulder_roll": 40.0,
+    "shoulder_pitch": 40.0,
+    "shoulder_yaw": 40.0,
+    "elbow": 40.0,
+    "wrist_roll": 6.7,
+    "wrist_pitch": 13.3,
+    "wrist_yaw": 10.0,
+}
 G1_beyound_mimic_kp_dict: dict[str, float] = {
     "hip_roll": STIFFNESS_7520_22,
     "hip_pitch": STIFFNESS_7520_14,
@@ -507,6 +527,7 @@ RobotArgsRegistry["g1_default"] = HumanoidRobotArgs(
     soft_dof_pos_range=0.9,
     dof_kp=G1_kp_dict,
     dof_kd=G1_kd_dict,
+    dof_ki=G1_ki_dict,
     action_scale=0.15,
     ctrl_freq=50,
     decimation=4,
@@ -531,6 +552,7 @@ RobotArgsRegistry["g1_fixed"] = HumanoidRobotArgs(
     soft_dof_pos_range=0.9,
     dof_kp=G1_kp_dict,
     dof_kd=G1_kd_dict,
+    dof_ki=G1_ki_dict,
     action_scale=0.15,
     ctrl_freq=50,
     decimation=4,
@@ -557,7 +579,7 @@ RobotArgsRegistry["g1_beyond_mimic"] = HumanoidRobotArgs(
     dof_armature=G1_beyound_mimic_armature_dict,
     dof_vel_limit=G1_beyound_mimic_vel_limit_dict,
     dof_torque_limit=G1_beyound_mimic_torque_limit_dict,
-    action_scale=0.15,
+    action_scale=0.25,
     ctrl_freq=50,
     decimation=4,
 )
