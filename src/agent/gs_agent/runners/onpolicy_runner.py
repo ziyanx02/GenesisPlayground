@@ -90,7 +90,6 @@ class OnPolicyRunner(BaseRunner):
             "total_steps": total_steps,
             "total_time": training_time,
             "final_reward": reward_list[-1],
-            "final_iteration": total_iterations,
         }
 
     def _log_metrics(
