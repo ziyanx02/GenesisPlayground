@@ -375,6 +375,7 @@ class MotionEnv(LeggedRobotEnv):
         error_dict["dof_pos_error"] = dof_pos_error.clone()
         error_dict["tracking_link_pos_error"] = tracking_link_pos_error.clone()
         error_dict["foot_contact_force_error"] = foot_contact_force_error.clone()
+        print(foot_contact_force_error)
 
         error_mask = {}
         for error_name in self._terminate_after_error.keys():

@@ -1,0 +1,11 @@
+root_path: assets/motion
+motions:
+  - file: lafan/dance2_subject3.pkl
+    weight: 100.0
+    description: general movement
+  - file: lafan/dance2fgv_subject3.pkl
+    weight: 100.0
+    description: general movement
+  - file: lafan/run1_subject2.pkl
+    weight: 100.0
+    description: general movement

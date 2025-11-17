@@ -52,6 +52,7 @@ def lafan_to_motion_data(
             pos[2] -= 0.02
             quat = sliced_data[[6, 3, 4, 5]]
             dof_pos = sliced_data[7:]
+            # dof_pos[[19, 20, 21, 26, 27, 28]] = 0.0
             env.robot.set_state(pos=pos, quat=quat, dof_pos=dof_pos)
             env.update_buffers()
             pos_list.append(env.base_pos[0].clone())
@@ -117,7 +118,7 @@ def lafan_to_motion_data(
 
 
 if __name__ == "__main__":
-    show_viewer = False
+    show_viewer = True
 
     csv_files = [
         "/Users/xiongziyan/Python/GenesisPlayground/assets/lafan/run1_subject2.csv",

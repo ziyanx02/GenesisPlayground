@@ -241,7 +241,7 @@ def evaluate_policy(
             link_name_to_idx[link_name] = env.robot.link_names.index(link_name)
 
         while True:
-            env.time_since_reset[0] = 0.0
+            env.time_since_reset[0] = 11.0
             env.hard_reset_motion(
                 torch.IntTensor(
                     [
