@@ -257,7 +257,7 @@ def evaluate_policy(
             )
             env.hard_sync_motion(torch.IntTensor([0]))
             obs, _ = wrapped_env.get_observations()
-            while env.motion_times[0] < env.motion_lib.get_motion_length(motion_id):
+            while env.motion_times[0] < env.motion_lib.get_motion_length(motion_id) - 0.02:
                 # Get action from policy
                 with torch.no_grad():
                     action = inference_policy(obs)  # type: ignore[misc]
@@ -303,7 +303,7 @@ def evaluate_policy(
                 continue
             while True:
                 action = input(
-                    "Enter n to play next motion, q to quit, r to replay current motion, p to play previous motion, id to play specific motion"
+                    "Enter n to play next motion, q to quit, r to replay current motion, p to play previous motion, id to play specific motion\n"
                 )
                 if action == "n":
                     motion_id = (motion_id + 1) % env.motion_lib.num_motions
@@ -468,7 +468,7 @@ def view_motion(env_args: Any, show_viewer: bool = False) -> None:
                 continue
             while True:
                 action = input(
-                    "Enter n to play next motion, q to quit, r to replay current motion, p to play previous motion, id to play specific motion"
+                    "Enter n to play next motion, q to quit, r to replay current motion, p to play previous motion, id to play specific motion\n"
                 )
                 if action == "n":
                     motion_id = (motion_id + 1) % env.motion_lib.num_motions
