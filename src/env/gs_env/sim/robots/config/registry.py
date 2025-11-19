@@ -365,22 +365,22 @@ G1_default_dof_pos: dict[str, float] = {
     "right_wrist_yaw_joint": 0.0,
 }
 G1_kp_dict: dict[str, float] = {
-    "hip_roll": 200.0,
-    "hip_pitch": 200.0,
-    "hip_yaw": 200.0,
-    "knee": 200.0,
-    "ankle_roll": 40.0,
-    "ankle_pitch": 40.0,
-    "waist_roll": 300.0,
-    "waist_pitch": 300.0,
-    "waist_yaw": 200.0,
-    "shoulder_roll": 60.0,
-    "shoulder_pitch": 60.0,
-    "shoulder_yaw": 60.0,
-    "elbow": 60.0,
-    "wrist_roll": 20.0,
-    "wrist_pitch": 40.0,
-    "wrist_yaw": 30.0,
+    "hip_roll": 100.0,
+    "hip_pitch": 100.0,
+    "hip_yaw": 100.0,
+    "knee": 100.0,
+    "ankle_roll": 20.0,
+    "ankle_pitch": 20.0,
+    "waist_roll": 150.0,
+    "waist_pitch": 150.0,
+    "waist_yaw": 100.0,
+    "shoulder_roll": 30.0,
+    "shoulder_pitch": 30.0,
+    "shoulder_yaw": 30.0,
+    "elbow": 30.0,
+    "wrist_roll": 10.0,
+    "wrist_pitch": 20.0,
+    "wrist_yaw": 15.0,
 }
 G1_kd_dict: dict[str, float] = {
     "hip_roll": 10.0,
@@ -419,40 +419,40 @@ G1_ki_dict: dict[str, float] = {
     "wrist_yaw": 10.0,
 }
 G1_beyound_mimic_kp_dict: dict[str, float] = {
-    "hip_roll": STIFFNESS_7520_22,
-    "hip_pitch": STIFFNESS_7520_14,
-    "hip_yaw": STIFFNESS_7520_14,
-    "knee": STIFFNESS_7520_22,
-    "ankle_roll": 2.0 * STIFFNESS_5020,
-    "ankle_pitch": 2.0 * STIFFNESS_5020,
-    "waist_roll": 2.0 * STIFFNESS_5020,
-    "waist_pitch": 2.0 * STIFFNESS_5020,
-    "waist_yaw": STIFFNESS_7520_14,
-    "shoulder_roll": STIFFNESS_5020,
-    "shoulder_pitch": STIFFNESS_5020,
-    "shoulder_yaw": STIFFNESS_5020,
-    "elbow": STIFFNESS_5020,
-    "wrist_roll": STIFFNESS_5020,
-    "wrist_pitch": STIFFNESS_4010,
-    "wrist_yaw": STIFFNESS_4010,
+    "hip_roll": STIFFNESS_7520_22,  # 99.1
+    "hip_pitch": STIFFNESS_7520_14,  # 40.18
+    "hip_yaw": STIFFNESS_7520_14,  # 40.18
+    "knee": STIFFNESS_7520_22,  # 99.1
+    "ankle_roll": 2.0 * STIFFNESS_5020,  # 28.5
+    "ankle_pitch": 2.0 * STIFFNESS_5020,  # 28.5
+    "waist_roll": 2.0 * STIFFNESS_5020,  # 28.5
+    "waist_pitch": 2.0 * STIFFNESS_5020,  # 28.5
+    "waist_yaw": STIFFNESS_7520_14,  # 40.18
+    "shoulder_roll": STIFFNESS_5020,  # 14.25
+    "shoulder_pitch": STIFFNESS_5020,  # 14.25
+    "shoulder_yaw": STIFFNESS_5020,  # 14.25
+    "elbow": STIFFNESS_5020,  # 14.25
+    "wrist_roll": STIFFNESS_5020,  # 14.25
+    "wrist_pitch": STIFFNESS_4010,  # 16.8
+    "wrist_yaw": STIFFNESS_4010,  # 16.8
 }
 G1_beyound_mimic_kd_dict: dict[str, float] = {
-    "hip_roll": DAMPING_7520_22,
-    "hip_pitch": DAMPING_7520_14,
-    "hip_yaw": DAMPING_7520_14,
-    "knee": DAMPING_7520_22,
-    "ankle_roll": 2.0 * DAMPING_5020,
-    "ankle_pitch": 2.0 * DAMPING_5020,
-    "waist_roll": 2.0 * DAMPING_5020,
-    "waist_pitch": 2.0 * DAMPING_5020,
-    "waist_yaw": DAMPING_7520_14,
-    "shoulder_roll": DAMPING_5020,
-    "shoulder_pitch": DAMPING_5020,
-    "shoulder_yaw": DAMPING_5020,
-    "elbow": DAMPING_5020,
-    "wrist_roll": DAMPING_5020,
-    "wrist_pitch": DAMPING_4010,
-    "wrist_yaw": DAMPING_4010,
+    "hip_roll": DAMPING_7520_22,  # 6.3
+    "hip_pitch": DAMPING_7520_14,  # 2.6
+    "hip_yaw": DAMPING_7520_14,  # 2.6
+    "knee": DAMPING_7520_22,  # 6.3
+    "ankle_roll": 2.0 * DAMPING_5020,  # 1.8
+    "ankle_pitch": 2.0 * DAMPING_5020,  # 1.8
+    "waist_roll": 2.0 * DAMPING_5020,  # 1.8
+    "waist_pitch": 2.0 * DAMPING_5020,  # 1.8
+    "waist_yaw": DAMPING_7520_14,  # 2.6
+    "shoulder_roll": DAMPING_5020,  # 0.9
+    "shoulder_pitch": DAMPING_5020,  # 0.9
+    "shoulder_yaw": DAMPING_5020,  # 0.9
+    "elbow": DAMPING_5020,  # 0.9
+    "wrist_roll": DAMPING_5020,  # 0.9
+    "wrist_pitch": DAMPING_4010,  # 1.1
+    "wrist_yaw": DAMPING_4010,  # 1.1
 }
 G1_beyound_mimic_armature_dict: dict[str, float] = {
     "hip_roll": ARMATURE_7520_22,
@@ -528,6 +528,7 @@ RobotArgsRegistry["g1_default"] = HumanoidRobotArgs(
     dof_kp=G1_kp_dict,
     dof_kd=G1_kd_dict,
     dof_ki=G1_ki_dict,
+    dof_vel_limit=G1_beyound_mimic_vel_limit_dict,
     action_scale=0.15,
     ctrl_freq=50,
     decimation=4,
@@ -553,6 +554,7 @@ RobotArgsRegistry["g1_fixed"] = HumanoidRobotArgs(
     dof_kp=G1_kp_dict,
     dof_kd=G1_kd_dict,
     dof_ki=G1_ki_dict,
+    dof_vel_limit=G1_beyound_mimic_vel_limit_dict,
     action_scale=0.15,
     ctrl_freq=50,
     decimation=4,

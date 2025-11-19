@@ -163,6 +163,13 @@ class LeggedRobotBase(BaseGymRobot):
             self._dof_pos_limits[i, 0] = m - 0.5 * r * self._args.soft_dof_pos_range
             self._dof_pos_limits[i, 1] = m + 0.5 * r * self._args.soft_dof_pos_range
         self._torque_limits = self._robot.get_dofs_force_range(self._dofs_idx_local)[1]
+        if hasattr(self._args, "dof_vel_limit") and self._args.dof_vel_limit is not None:
+            dof_vel_limit = []
+            for dof_name in self.dof_names:
+                for key in self._args.dof_vel_limit.keys():
+                    if key in dof_name:
+                        dof_vel_limit.append(self._args.dof_vel_limit[key])
+            self._dof_vel_limit = torch.tensor(dof_vel_limit, device=self._device)
 
     def _init_domain_randomization(self) -> None:
         envs_idx: torch.IntTensor = torch.arange(0, self._num_envs, device=self._device)  # type: ignore
@@ -371,16 +378,19 @@ class LeggedRobotBase(BaseGymRobot):
         # self._prev_q_des = q_des.clone()
         q_des = act.joint_pos + self._default_dof_pos + self._motor_offset
         q_err = q_des - self._dof_pos
-        # qd_des = (act.joint_pos - self.last_action) / (self._scene.dt * self._args.decimation) # action diff
-        qd_des_v1 = q_err / (self._scene.dt * self._args.decimation)  # pos error
-        self._q_err_int += q_err * self._scene.dt
-        qd_err = qd_des_v1 - self._dof_vel
+        qd_des = (act.joint_pos - self.last_action) / (
+            self._scene.dt * self._args.decimation
+        )  # action diff
+
+        qd_des = torch.clamp(qd_des, -self._dof_vel_limit, self._dof_vel_limit)
+        # qd_des_v1 = q_err / (self._scene.dt * self._args.decimation)  # pos error
+        # self._q_err_int += q_err * self._scene.dt
+        qd_err = qd_des - self._dof_vel
         # logging.info(f"q_err mean: {torch.mean(q_err)}")
         # logging.info(f"qd_err mean: {torch.mean(qd_err)}")
         q_force = (
-            self._batched_dof_kp * q_err
-            + self._batched_dof_kd * qd_err
-            + self._batched_dof_ki * self._q_err_int
+            self._batched_dof_kp * q_err + self._batched_dof_kd * qd_err
+            # + self._batched_dof_ki * self._q_err_int
         )
         q_force = q_force * self._motor_strength
         q_force = torch.clamp(q_force, -self._torque_limits, self._torque_limits)
