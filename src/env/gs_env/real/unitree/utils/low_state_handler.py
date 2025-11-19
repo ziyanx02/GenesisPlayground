@@ -1,3 +1,4 @@
+import math
 import struct
 import threading
 import time
@@ -148,6 +149,15 @@ class LowStateMsgHandler:
         self.F3 = 0
         self.Start = 0
 
+        # Kalman filter for dof_vel
+        self.filter_enabled = True
+        self.dynamic_filter_enabled = False
+        self.P = 10.0  # initial covariance
+        self.Q = 0.1  # process noise covariance
+        self.R = 5.0  # measurement noise covariance
+        P_ss = self.Q + math.sqrt(self.Q**2 + self.Q * self.R)
+        self.K_ss = P_ss / (P_ss + self.R)
+
         # Create a thread for the main loop
         self.main_thread = threading.Thread(target=self.main_loop, daemon=True)
 
@@ -207,9 +217,21 @@ class LowStateMsgHandler:
         self.ang_vel = np.array(imu_state.gyroscope)
 
     def parse_motor_state(self, motor_state: Any) -> None:
+        if self.dynamic_filter_enabled:
+            P = self.P + self.Q
+            self.K = P / (P + self.R)
+            self.P = (1 - self.K) * P
         for i in range(self.num_dof):
             self.joint_pos[i] = motor_state[self.dof_index[i]].q
-            self.joint_vel[i] = motor_state[self.dof_index[i]].dq
+            # kalman filter for dq
+            if self.filter_enabled:
+                z = motor_state[self.dof_index[i]].dq
+                if self.dynamic_filter_enabled:
+                    self.joint_vel[i] = self.joint_vel[i] + self.K * (z - self.joint_vel[i])
+                else:
+                    self.joint_vel[i] = self.joint_vel[i] + self.K_ss * (z - self.joint_vel[i])
+            else:
+                self.joint_vel[i] = motor_state[self.dof_index[i]].dq
             self.torque[i] = motor_state[self.dof_index[i]].tau_est
             # self.temperature[i] = motor_state[self.dof_index[i]].temperature
             error_code = motor_state[self.dof_index[i]].reserve[0]
