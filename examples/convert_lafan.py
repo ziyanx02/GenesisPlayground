@@ -49,7 +49,6 @@ def lafan_to_motion_data(
         for i in range(len(data)):
             sliced_data = data[i]
             pos = sliced_data[:3]
-            pos[2] -= 0.02
             quat = sliced_data[[6, 3, 4, 5]]
             dof_pos = sliced_data[7:]
             # dof_pos[[19, 20, 21, 26, 27, 28]] = 0.0
@@ -120,12 +119,9 @@ def lafan_to_motion_data(
 if __name__ == "__main__":
     show_viewer = False
 
-    csv_files = [
-        # "/Users/xiongziyan/Python/GenesisPlayground/assets/lafan/run1_subject2.csv",
-        # "/Users/xiongziyan/Python/GenesisPlayground/assets/lafan/dance2_subject3.csv",
-        # "/Users/xiongziyan/Python/GenesisPlayground/assets/lafan/jumps1_subject1.csv",
-        "/Users/xiongziyan/Python/GenesisPlayground/assets/lafan/run2_subject1.csv",
-    ]
+    # add files in directory assets/lafan
+    csv_files = [f for f in Path("./assets/lafan").glob("*.csv")]
+    # csv_files = ["/Users/xiongziyan/Python/GenesisPlayground/assets/lafan/run2_subject4.csv"]
 
     log_dir = Path("./assets/motion/lafan")
     os.makedirs(log_dir, exist_ok=True)
@@ -142,6 +138,11 @@ if __name__ == "__main__":
     )
     env.reset()
 
+    dataset_yaml = {
+        "root_path": str(log_dir),
+        "motions": [],
+    }
+
     for csv_file in csv_files:
         data = np.genfromtxt(csv_file, delimiter=",")
         data = torch.from_numpy(data).to(torch.float32)
@@ -152,3 +153,11 @@ if __name__ == "__main__":
             print(f"Saving motion data to {motion_path}")
             with open(motion_path, "wb") as f:
                 pickle.dump(motion_data, f)
+    #     dataset_yaml["motions"].append({
+    #         "file": motion_name + ".pkl",
+    #         "weight": 100.0,
+    #     })
+
+    # dataset_yaml["motions"].sort(key=lambda x: x["file"]
+    # with open(log_dir / "lafan.yaml", "w") as f:
+    #     yaml.dump(dataset_yaml, f)

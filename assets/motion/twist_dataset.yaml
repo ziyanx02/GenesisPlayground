@@ -1,5 +1,0 @@
-root_path: assets/motion
-motions:
-  - file: kit/squat04.pkl
-    weight: 100.0
-    description: general movement
