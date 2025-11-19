@@ -93,7 +93,7 @@ def run_single_dof_wave_diagnosis(
 
     env.reset()
     action = torch.zeros((1, num_dofs), device=env.device)
-    action[:, dof_idx] = offset / env.action_scale
+    action[:, dof_idx] = offset / float(env.get_dof_action_scale()[dof_idx])
 
     if isinstance(env, UnitreeLeggedEnv):
 
@@ -125,7 +125,9 @@ def run_single_dof_wave_diagnosis(
             time.sleep(0.001)
         last_controller_time = time.time()
         env.apply_action(
-            current_dof_pos / env.action_scale * (1 - i / TOTAL_RESET_STEPS)
+            current_dof_pos
+            / float(env.get_dof_action_scale()[dof_idx])
+            * (1 - i / TOTAL_RESET_STEPS)
             + action * (i / TOTAL_RESET_STEPS)
         )
 
@@ -157,7 +159,7 @@ def run_single_dof_wave_diagnosis(
 
         # last_controller_time = time.perf_counter()
         target_dof_pos = wave_func(i) + offset
-        action[:, dof_idx] = target_dof_pos / env.action_scale
+        action[:, dof_idx] = target_dof_pos / float(env.get_dof_action_scale()[dof_idx])
         dof_pos = env.dof_pos[0, dof_idx].cpu().item() - env.robot.default_dof_pos[dof_idx]
         target_dof_pos_list.append(target_dof_pos)
         dof_pos_list.append(dof_pos)
@@ -184,7 +186,7 @@ def run_single_dof_diagnosis(
 ) -> None:
     fig, axes = plt.subplots(6, 1, figsize=(12, 12))
     hf_logger = None
-    for i, wave_type in enumerate(["SIN", "FM-SIN"]):
+    for i, wave_type in enumerate(["SIN"]):
         if hf_logging:
             hf_logger = AsyncHFLogger(nj=env.action_dim, max_seconds=10.0, rate_hz=1000)
             hf_logger.start()
@@ -203,6 +205,7 @@ def run_single_dof_diagnosis(
         if hf_logging:
             hf_logger.stop()
             t_ns, q, _, _ = hf_logger.get()
+            print(f"HF POS logger collected {len(t_ns)} samples.")
             q_arr = q - np.asarray(env.robot.default_dof_pos.cpu())
             steps, target_pos_out, q_out = align_hf_arrays_pos_from_logger(
                 t_ns=t_ns,
@@ -237,6 +240,7 @@ def run_single_dof_diagnosis(
             )
 
             t_ns, _, dq_arr, _ = hf_logger.get()
+            print(f"HF Vel logger collected {len(t_ns)} samples.")
             steps, target_vel_out, dq_interp = align_hf_arrays_vel_from_logger(
                 t_ns=t_ns,
                 dq_arr=dq_arr,
@@ -363,8 +367,21 @@ def main(
             log_dir = (
                 Path(__file__).parent / "logs" / "pd_test" / "sim" / f"{env.robot.ctrl_type}—v1"
             )
+            log_dir = (
+                Path(__file__).parent
+                / "logs"
+                / "pd_test"
+                / "sim"
+                / f"{env.robot.ctrl_type}_half-kp"
+            )
         else:
-            log_dir = Path(__file__).parent / "logs" / "pd_test" / "real" / f"{env.ctrl_type}"
+            log_dir = (
+                Path(__file__).parent
+                / "logs"
+                / "pd_test"
+                / "real"
+                / f"{env.ctrl_type}_beyond_mimic-freq_25-ratio_2.0"
+            )
 
         log_dir.mkdir(parents=True, exist_ok=True)
         logging.basicConfig(

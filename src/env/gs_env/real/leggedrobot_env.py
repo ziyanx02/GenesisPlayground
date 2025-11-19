@@ -37,7 +37,7 @@ class UnitreeLeggedEnv(BaseGymRobot):
             self._robot = LowStateMsgHandler(args.robot_args)
             self._robot.init()
         self._action_space = spaces.Box(shape=(self.action_dim,), low=-np.inf, high=np.inf)
-        self._action_scale = args.robot_args.action_scale * action_scale
+        self._action_scale = self.get_dof_action_scale() * action_scale
         self._device = device
         self.prev_target_pos = np.array(self.robot.default_dof_pos, dtype=np.float32)
         self.dt = 1.0 / self._args.robot_args.ctrl_freq
@@ -75,6 +75,25 @@ class UnitreeLeggedEnv(BaseGymRobot):
         self.prev_target_pos = target_pos.copy()
         self.robot.target_pos = target_pos
         self.robot.target_vel = target_vel
+
+    def get_dof_action_scale(self) -> np.ndarray:
+        if (
+            hasattr(self._args.robot_args, "dof_armature")
+            and self._args.robot_args.dof_armature is not None
+        ):
+            G1_ACTION_SCALE = {}
+            for jt, kp in self._args.robot_args.dof_kp.items():
+                torque = self._args.robot_args.dof_torque_limit[jt]
+                G1_ACTION_SCALE[jt] = self._args.robot_args.action_scale * torque / kp
+
+            dof_action_scale = []
+            for dof_name in self.dof_names:
+                for key in G1_ACTION_SCALE.keys():
+                    if key in dof_name:
+                        dof_action_scale.append(G1_ACTION_SCALE[key])
+            return np.array(dof_action_scale).astype(np.float32)
+        else:
+            return self._args.robot_args.action_scale * np.ones(self.action_dim, dtype=np.float32)
 
     def emergency_stop(self) -> None:
         self.robot.emergency_stop()
@@ -129,9 +148,10 @@ class UnitreeLeggedEnv(BaseGymRobot):
         )
         return torch.tensor(projected_gravity, device=self._device, dtype=torch.float32)[None, :]
 
-    # @property
-    # def base_ang_vel(self) -> torch.Tensor:
-    #     return torch.tensor(self.robot.ang_vel, device=self._device, dtype=torch.float32)[None, :]
+    @property
+    def base_ang_vel(self) -> torch.Tensor:
+        return torch.tensor(self.robot.ang_vel, device=self._device, dtype=torch.float32)[None, :]
+
     # SHOULD BE GLOBAL ANGULAR VELOCITY, NOT IMPLEMENTED YET
 
     @property
