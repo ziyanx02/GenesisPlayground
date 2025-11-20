@@ -353,9 +353,10 @@ class LeggedRobotEnv(BaseEnv):
 
             if self._args.robot_args.ctrl_type == CtrlType.DR_JOINT_POSITION_VELOCITY:
                 joint_vel = (exec_action - self.last_action) / self.dt
-                exec_action = torch.cat([exec_action, joint_vel], dim=-1)
-
-            self._robot.apply_action(action=exec_action)
+                extended_action = torch.cat([exec_action, joint_vel], dim=-1)
+                self._robot.apply_action(action=extended_action)
+            else:
+                self._robot.apply_action(action=exec_action)
             self._scene.scene.step(refresh_visualizer=self._refresh_visualizer)
             self.torque = torch.max(self.torque, torch.abs(self._robot.torque))
 

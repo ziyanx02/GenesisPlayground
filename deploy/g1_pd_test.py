@@ -83,7 +83,7 @@ def run_single_dof_wave_diagnosis(
 
     env.reset()
     action = torch.zeros((1, num_dofs), device=env.device)
-    action[:, dof_idx] = offset / env.action_scale
+    action[:, dof_idx] = offset / env.action_scale[dof_idx]
 
     last_update_time = time.time()
 
@@ -107,7 +107,7 @@ def run_single_dof_wave_diagnosis(
         last_update_time = time.time()
 
         target_dof_pos = wave_func(i) + offset
-        action[:, dof_idx] = target_dof_pos / env.action_scale
+        action[:, dof_idx] = target_dof_pos / env.action_scale[dof_idx]
         dof_pos = env.dof_pos[0, dof_idx].cpu().item() - env.robot.default_dof_pos[dof_idx]
         target_dof_pos_list.append(target_dof_pos)
         dof_pos_list.append(dof_pos)
@@ -211,22 +211,22 @@ def main(
 
     # DoF names, lower bound, upper bound
     test_dofs = {
-        "hip_roll": [0.0, 0.8],
-        "hip_pitch": [-0.5, 0.5],
-        "hip_yaw": [-0.5, 0.5],
+        # "hip_roll": [0.0, 0.8],
+        # "hip_pitch": [-0.5, 0.5],
+        # "hip_yaw": [-0.5, 0.5],
         "knee": [0.0, 1.0],
-        "ankle_roll": [-0.2, 0.2],
-        "ankle_pitch": [-0.5, 0.5],
-        "waist_yaw": [-1.0, 1.0],
-        "waist_roll": [-0.3, 0.3],
-        "waist_pitch": [-0.3, 0.3],
-        "shoulder_roll": [0.0, 1.0],
-        "shoulder_pitch": [-0.5, 0.5],
-        "shoulder_yaw": [0.0, 1.0],
-        "elbow": [0.0, 1.0],
-        "wrist_roll": [-1.0, 1.0],
-        "wrist_pitch": [-1.0, 1.0],
-        "wrist_yaw": [0.0, 1.0],
+        # "ankle_roll": [-0.2, 0.2],
+        # "ankle_pitch": [-0.5, 0.5],
+        # "waist_yaw": [-1.0, 1.0],
+        # "waist_roll": [-0.3, 0.3],
+        # "waist_pitch": [-0.3, 0.3],
+        # "shoulder_roll": [0.0, 1.0],
+        # "shoulder_pitch": [-0.5, 0.5],
+        # "shoulder_yaw": [0.0, 1.0],
+        # "elbow": [0.0, 1.0],
+        # "wrist_roll": [-1.0, 1.0],
+        # "wrist_pitch": [-1.0, 1.0],
+        # "wrist_yaw": [0.0, 1.0],
     }
 
     def run_dof_diagnosis_fixed() -> None:

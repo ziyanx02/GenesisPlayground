@@ -516,6 +516,7 @@ RobotArgsRegistry["g1_default"] = HumanoidRobotArgs(
     action_scale=0.15,
     ctrl_freq=50,
     decimation=4,
+    adaptive_action_scale=False,
     indirect_drive_joint_names=G1_indirect_drive_joints,
 )
 
@@ -541,6 +542,7 @@ RobotArgsRegistry["g1_no_dr"] = HumanoidRobotArgs(
     action_scale=0.15,
     ctrl_freq=50,
     decimation=4,
+    adaptive_action_scale=True,
     indirect_drive_joint_names=G1_indirect_drive_joints,
 )
 
@@ -563,7 +565,10 @@ RobotArgsRegistry["g1_fixed"] = HumanoidRobotArgs(
     soft_dof_pos_range=0.9,
     dof_kp=G1_kp_dict,
     dof_kd=G1_kd_dict,
+    dof_vel_limit=G1_vel_limit_dict,
+    dof_torque_limit=G1_torque_limit_dict,
     action_scale=0.15,
+    adaptive_action_scale=True,
     ctrl_freq=50,
     decimation=4,
     indirect_drive_joint_names=G1_indirect_drive_joints,
@@ -593,6 +598,7 @@ RobotArgsRegistry["g1_beyond_mimic"] = HumanoidRobotArgs(
     action_scale=0.25,
     ctrl_freq=50,
     decimation=4,
+    adaptive_action_scale=True,
     indirect_drive_joint_names=G1_indirect_drive_joints,
 )
 
@@ -618,5 +624,6 @@ RobotArgsRegistry["g1_no_waist"] = HumanoidRobotArgs(
     action_scale=0.15,
     ctrl_freq=50,
     decimation=4,
+    adaptive_action_scale=True,
     indirect_drive_joint_names=G1_indirect_drive_joints,
 )
