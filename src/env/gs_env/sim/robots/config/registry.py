@@ -13,6 +13,28 @@ from gs_env.sim.robots.config.schema import (
 )
 
 # ------------------------------------------------------------
+# CFG Constants
+# ------------------------------------------------------------
+
+ARMATURE_5020 = 0.003609725
+ARMATURE_7520_14 = 0.010177520
+ARMATURE_7520_22 = 0.025101925
+ARMATURE_4010 = 0.00425
+
+NATURAL_FREQ = 25 * 2.0 * 3.1415926535
+DAMPING_RATIO = 2.0
+
+STIFFNESS_5020 = ARMATURE_5020 * NATURAL_FREQ**2
+STIFFNESS_7520_14 = ARMATURE_7520_14 * NATURAL_FREQ**2
+STIFFNESS_7520_22 = ARMATURE_7520_22 * NATURAL_FREQ**2
+STIFFNESS_4010 = ARMATURE_4010 * NATURAL_FREQ**2
+
+DAMPING_5020 = 2.0 * DAMPING_RATIO * ARMATURE_5020 * NATURAL_FREQ
+DAMPING_7520_14 = 2.0 * DAMPING_RATIO * ARMATURE_7520_14 * NATURAL_FREQ
+DAMPING_7520_22 = 2.0 * DAMPING_RATIO * ARMATURE_7520_22 * NATURAL_FREQ
+DAMPING_4010 = 2.0 * DAMPING_RATIO * ARMATURE_4010 * NATURAL_FREQ
+
+# ------------------------------------------------------------
 # Material
 # ------------------------------------------------------------
 
@@ -155,7 +177,7 @@ DRArgsRegistry["default"] = DomainRandomizationArgs(
     kp_range=(0.9, 1.1),
     kd_range=(0.9, 1.1),
     motor_strength_range=(0.9, 1.1),
-    motor_offset_range=(0.0, 0.0),
+    motor_offset_range=(-0.05, 0.05),
     friction_range=(0.5, 1.5),
     mass_range=(-5.0, 5.0),
     com_displacement_range=(-0.05, 0.05),
@@ -341,22 +363,22 @@ G1_default_dof_pos: dict[str, float] = {
     "right_wrist_yaw_joint": 0.0,
 }
 G1_kp_dict: dict[str, float] = {
-    "hip_roll": 200.0,
-    "hip_pitch": 200.0,
-    "hip_yaw": 200.0,
-    "knee": 200.0,
-    "ankle_roll": 40.0,
-    "ankle_pitch": 40.0,
-    "waist_roll": 300.0,
-    "waist_pitch": 300.0,
-    "waist_yaw": 200.0,
-    "shoulder_roll": 60.0,
-    "shoulder_pitch": 60.0,
-    "shoulder_yaw": 60.0,
-    "elbow": 60.0,
-    "wrist_roll": 20.0,
-    "wrist_pitch": 40.0,
-    "wrist_yaw": 30.0,
+    "hip_roll": 100.0,
+    "hip_pitch": 100.0,
+    "hip_yaw": 100.0,
+    "knee": 100.0,
+    "ankle_roll": 20.0,
+    "ankle_pitch": 20.0,
+    "waist_roll": 150.0,
+    "waist_pitch": 150.0,
+    "waist_yaw": 100.0,
+    "shoulder_roll": 30.0,
+    "shoulder_pitch": 30.0,
+    "shoulder_yaw": 30.0,
+    "elbow": 30.0,
+    "wrist_roll": 10.0,
+    "wrist_pitch": 20.0,
+    "wrist_yaw": 15.0,
 }
 G1_kd_dict: dict[str, float] = {
     "hip_roll": 10.0,
@@ -376,7 +398,101 @@ G1_kd_dict: dict[str, float] = {
     "wrist_pitch": 2.4,
     "wrist_yaw": 1.8,
 }
-
+G1_beyound_mimic_kp_dict: dict[str, float] = {
+    "hip_roll": STIFFNESS_7520_22,  # 99.1
+    "hip_pitch": STIFFNESS_7520_14,  # 40.18
+    "hip_yaw": STIFFNESS_7520_14,  # 40.18
+    "knee": STIFFNESS_7520_22,  # 99.1
+    "ankle_roll": 2.0 * STIFFNESS_5020,  # 28.5
+    "ankle_pitch": 2.0 * STIFFNESS_5020,  # 28.5
+    "waist_roll": 2.0 * STIFFNESS_5020,  # 28.5
+    "waist_pitch": 2.0 * STIFFNESS_5020,  # 28.5
+    "waist_yaw": STIFFNESS_7520_14,  # 40.18
+    "shoulder_roll": STIFFNESS_5020,  # 14.25
+    "shoulder_pitch": STIFFNESS_5020,  # 14.25
+    "shoulder_yaw": STIFFNESS_5020,  # 14.25
+    "elbow": STIFFNESS_5020,  # 14.25
+    "wrist_roll": STIFFNESS_5020,  # 14.25
+    "wrist_pitch": STIFFNESS_4010,  # 16.8
+    "wrist_yaw": STIFFNESS_4010,  # 16.8
+}
+G1_beyound_mimic_kd_dict: dict[str, float] = {
+    "hip_roll": DAMPING_7520_22,  # 6.3
+    "hip_pitch": DAMPING_7520_14,  # 2.6
+    "hip_yaw": DAMPING_7520_14,  # 2.6
+    "knee": DAMPING_7520_22,  # 6.3
+    "ankle_roll": 2.0 * DAMPING_5020,  # 1.8
+    "ankle_pitch": 2.0 * DAMPING_5020,  # 1.8
+    "waist_roll": 2.0 * DAMPING_5020,  # 1.8
+    "waist_pitch": 2.0 * DAMPING_5020,  # 1.8
+    "waist_yaw": DAMPING_7520_14,  # 2.6
+    "shoulder_roll": DAMPING_5020,  # 0.9
+    "shoulder_pitch": DAMPING_5020,  # 0.9
+    "shoulder_yaw": DAMPING_5020,  # 0.9
+    "elbow": DAMPING_5020,  # 0.9
+    "wrist_roll": DAMPING_5020,  # 0.9
+    "wrist_pitch": DAMPING_4010,  # 1.1
+    "wrist_yaw": DAMPING_4010,  # 1.1
+}
+G1_beyound_mimic_armature_dict: dict[str, float] = {
+    "hip_roll": ARMATURE_7520_22,
+    "hip_pitch": ARMATURE_7520_14,
+    "hip_yaw": ARMATURE_7520_14,
+    "knee": ARMATURE_7520_22,
+    "ankle_roll": 2.0 * ARMATURE_5020,
+    "ankle_pitch": 2.0 * ARMATURE_5020,
+    "waist_roll": 2.0 * ARMATURE_5020,
+    "waist_pitch": 2.0 * ARMATURE_5020,
+    "waist_yaw": ARMATURE_7520_14,
+    "shoulder_roll": ARMATURE_5020,
+    "shoulder_pitch": ARMATURE_5020,
+    "shoulder_yaw": ARMATURE_5020,
+    "elbow": ARMATURE_5020,
+    "wrist_roll": ARMATURE_5020,
+    "wrist_pitch": ARMATURE_4010,
+    "wrist_yaw": ARMATURE_4010,
+}
+G1_vel_limit_dict: dict[str, float] = {
+    "hip_roll": 20.0,
+    "hip_pitch": 32.0,
+    "hip_yaw": 32.0,
+    "knee": 20.0,
+    "ankle_roll": 37.0,
+    "ankle_pitch": 37.0,
+    "waist_roll": 37.0,
+    "waist_pitch": 37.0,
+    "waist_yaw": 32.0,
+    "shoulder_roll": 37.0,
+    "shoulder_pitch": 37.0,
+    "shoulder_yaw": 37.0,
+    "elbow": 37.0,
+    "wrist_roll": 37.0,
+    "wrist_pitch": 22.0,
+    "wrist_yaw": 22.0,
+}
+G1_torque_limit_dict: dict[str, float] = {
+    "hip_roll": 139.0,
+    "hip_pitch": 88.0,
+    "hip_yaw": 88.0,
+    "knee": 139.0,
+    "ankle_roll": 50.0,
+    "ankle_pitch": 50.0,
+    "waist_roll": 50.0,
+    "waist_pitch": 50.0,
+    "waist_yaw": 88.0,
+    "shoulder_roll": 25.0,
+    "shoulder_pitch": 25.0,
+    "shoulder_yaw": 25.0,
+    "elbow": 25.0,
+    "wrist_roll": 25.0,
+    "wrist_pitch": 5.0,
+    "wrist_yaw": 5.0,
+}
+G1_indirect_drive_joints: list[str] = [
+    "ankle",
+    "waist_pitch",
+    "waist_roll",
+]
 
 RobotArgsRegistry["g1_default"] = HumanoidRobotArgs(
     material_args=MaterialArgsRegistry["g1_default"],
@@ -384,7 +500,7 @@ RobotArgsRegistry["g1_default"] = HumanoidRobotArgs(
     dr_args=DRArgsRegistry["default"],
     visualize_contact=False,
     vis_mode="visual",
-    ctrl_type=CtrlType.DR_JOINT_POSITION,
+    ctrl_type=CtrlType.DR_JOINT_POSITION_VELOCITY,
     body_link_name="torso_link",
     foot_link_names=[
         "left_ankle_roll_link",
@@ -396,9 +512,11 @@ RobotArgsRegistry["g1_default"] = HumanoidRobotArgs(
     soft_dof_pos_range=0.9,
     dof_kp=G1_kp_dict,
     dof_kd=G1_kd_dict,
+    dof_vel_limit=G1_vel_limit_dict,
     action_scale=0.15,
     ctrl_freq=50,
     decimation=4,
+    indirect_drive_joint_names=G1_indirect_drive_joints,
 )
 
 
@@ -423,6 +541,7 @@ RobotArgsRegistry["g1_no_dr"] = HumanoidRobotArgs(
     action_scale=0.15,
     ctrl_freq=50,
     decimation=4,
+    indirect_drive_joint_names=G1_indirect_drive_joints,
 )
 
 
@@ -432,7 +551,7 @@ RobotArgsRegistry["g1_fixed"] = HumanoidRobotArgs(
     dr_args=DRArgsRegistry["default"],
     visualize_contact=False,
     vis_mode="visual",
-    ctrl_type=CtrlType.DR_JOINT_POSITION,
+    ctrl_type=CtrlType.DR_JOINT_POSITION_VELOCITY,
     body_link_name="torso_link",
     foot_link_names=[
         "left_ankle_roll_link",
@@ -447,6 +566,34 @@ RobotArgsRegistry["g1_fixed"] = HumanoidRobotArgs(
     action_scale=0.15,
     ctrl_freq=50,
     decimation=4,
+    indirect_drive_joint_names=G1_indirect_drive_joints,
+)
+
+RobotArgsRegistry["g1_beyond_mimic"] = HumanoidRobotArgs(
+    material_args=MaterialArgsRegistry["g1_fixed"],
+    morph_args=MorphArgsRegistry["g1_fixed"],
+    dr_args=DRArgsRegistry["default"],
+    visualize_contact=False,
+    vis_mode="visual",
+    ctrl_type=CtrlType.DR_JOINT_POSITION_VELOCITY,
+    body_link_name="torso_link",
+    foot_link_names=[
+        "left_ankle_roll_link",
+        "right_ankle_roll_link",
+    ],
+    show_target=True,
+    dof_names=G1_dof_names,
+    default_dof_pos=G1_default_dof_pos,
+    soft_dof_pos_range=0.9,
+    dof_kp=G1_beyound_mimic_kp_dict,
+    dof_kd=G1_beyound_mimic_kd_dict,
+    dof_armature=G1_beyound_mimic_armature_dict,
+    dof_vel_limit=G1_vel_limit_dict,
+    dof_torque_limit=G1_torque_limit_dict,
+    action_scale=0.25,
+    ctrl_freq=50,
+    decimation=4,
+    indirect_drive_joint_names=G1_indirect_drive_joints,
 )
 
 
@@ -471,4 +618,5 @@ RobotArgsRegistry["g1_no_waist"] = HumanoidRobotArgs(
     action_scale=0.15,
     ctrl_freq=50,
     decimation=4,
+    indirect_drive_joint_names=G1_indirect_drive_joints,
 )

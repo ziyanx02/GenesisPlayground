@@ -28,9 +28,28 @@ class UnitreeLeggedEnv(BaseGymRobot):
         else:
             self._robot = LowStateMsgHandler(args.robot_args)
             self._robot.init()
-        self._action_space = spaces.Box(shape=(self.action_dim,), low=-np.inf, high=np.inf)
-        self._action_scale = args.robot_args.action_scale * action_scale
         self._device = device
+        self._action_space = spaces.Box(shape=(self.action_dim,), low=-np.inf, high=np.inf)
+        self._action_scale = np.ones((self.action_dim,), dtype=np.float32)
+        if self._args.robot_args.adaptive_action_scale:
+            assert self._args.robot_args.dof_torque_limit is not None, (
+                "Adaptive action scaling requires dof_torque_limit to be set."
+            )
+            dof_torque_limit = self._args.robot_args.dof_torque_limit
+            dof_kp = self._args.robot_args.dof_kp
+            for i, dof_name in enumerate(self.dof_names):
+                for key in dof_torque_limit.keys():
+                    if key in dof_name:
+                        self._action_scale[i] = dof_torque_limit[key] / dof_kp[key]
+                        break
+        self._action_scale *= self._args.robot_args.action_scale
+        self.direct_drive_mask = np.ones((self.action_dim,))
+        for joint_name in self._args.robot_args.indirect_drive_joint_names:
+            for i, dof_name in enumerate(self.dof_names):
+                if joint_name in dof_name:
+                    self.direct_drive_mask[i] = 0.0
+        self.prev_target_pos = np.array(self.robot.default_dof_pos, dtype=np.float32)
+        self.dt = 1.0 / self.ctrl_freq
 
     def reset(self, envs_idx: torch.IntTensor | None = None) -> None:
         # TODO: implement reset to reset_pos
@@ -39,7 +58,10 @@ class UnitreeLeggedEnv(BaseGymRobot):
     def apply_action(self, action: torch.Tensor) -> None:
         action_np = action[0].cpu().numpy()
         target_pos = self.robot.default_dof_pos + action_np * self._action_scale
+        target_vel = (target_pos - self.prev_target_pos) / self.dt
         self.robot.target_pos = target_pos
+        self.robot.target_vel = target_vel * self.direct_drive_mask
+        self.prev_target_pos = target_pos.copy()
 
     def emergency_stop(self) -> None:
         self.robot.emergency_stop()
@@ -106,3 +128,11 @@ class UnitreeLeggedEnv(BaseGymRobot):
     @property
     def device(self) -> torch.device:
         return self._device
+
+    @property
+    def ctrl_type(self) -> int:
+        return self._args.robot_args.ctrl_type
+
+    @property
+    def ctrl_freq(self) -> int:
+        return self._args.robot_args.ctrl_freq

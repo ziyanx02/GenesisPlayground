@@ -61,6 +61,7 @@ class CtrlType(GenesisEnum):
     EE_POSE_REL = "EE_POSE_REL"  # Delta pose from current EE pose
     # Legged Control Types
     DR_JOINT_POSITION = "DR_JOINT_POSITION"  # Noised position control for legged robots
+    DR_JOINT_POSITION_VELOCITY = "DR_JOINT_POSITION_VELOCITY"  # Hybrid control for legs
 
 
 class IKSolver(GenesisEnum):
@@ -113,7 +114,12 @@ class LeggedRobotArgs(BaseModel):
     soft_dof_pos_range: float
     dof_kp: dict[str, float]
     dof_kd: dict[str, float]
+    dof_armature: dict[str, float] | None = None
+    dof_vel_limit: dict[str, float] | None = None
+    dof_torque_limit: dict[str, float] | None = None
     action_scale: float
+    adaptive_action_scale: bool = False
+    indirect_drive_joint_names: list[str] = []
     ctrl_freq: int
     decimation: int
 
@@ -153,4 +159,13 @@ class DRJointPosAction(BaseModel):
     joint_pos: torch.Tensor  # (n_dof,)
 
 
-BaseAction: TypeAlias = JointPosAction | EEPoseAbsAction | EEPoseRelAction | DRJointPosAction
+class DRJointPosVelAction(BaseModel):
+    model_config = genesis_pydantic_config(frozen=True, arbitrary_types_allowed=True)
+
+    joint_pos: torch.Tensor  # (n_dof,)
+    joint_vel: torch.Tensor  # (n_dof,)
+
+
+BaseAction: TypeAlias = (
+    JointPosAction | EEPoseAbsAction | EEPoseRelAction | DRJointPosAction | DRJointPosVelAction
+)

@@ -22,6 +22,7 @@ from gs_env.common.utils.math_utils import (
 )
 from gs_env.common.utils.misc_utils import get_space_dim
 from gs_env.sim.envs.config.schema import LeggedRobotEnvArgs
+from gs_env.sim.robots.config.schema import CtrlType
 from gs_env.sim.robots.leggedrobots import G1Robot
 
 _DEFAULT_DEVICE = torch.device("cpu")
@@ -119,6 +120,20 @@ class LeggedRobotEnv(BaseEnv):
         self.last_action = torch.zeros((self.num_envs, self.action_dim), device=self._device)
         self.last_last_action = torch.zeros((self.num_envs, self.action_dim), device=self._device)
         self.torque = torch.zeros((self.num_envs, self.action_dim), device=self._device)
+
+        self.action_scale = torch.ones((self.action_dim,), device=self._device)
+        if self._args.robot_args.adaptive_action_scale:
+            assert self._args.robot_args.dof_torque_limit is not None, (
+                "Adaptive action scaling requires dof_torque_limit to be set."
+            )
+            dof_torque_limit = self._args.robot_args.dof_torque_limit
+            dof_kp = self._args.robot_args.dof_kp
+            for i, dof_name in enumerate(self.dof_names):
+                for key in dof_torque_limit.keys():
+                    if key in dof_name:
+                        self.action_scale[i] = dof_torque_limit[key] / dof_kp[key]
+                        break
+        self.action_scale *= self._args.robot_args.action_scale
 
         self.base_default_pos: torch.Tensor = self._robot.default_pos[None, :].repeat(
             self.num_envs, 1
@@ -328,13 +343,17 @@ class LeggedRobotEnv(BaseEnv):
         self._action = action
         self._action_buf[:] = torch.cat([self._action_buf[:, :, 1:], action.unsqueeze(-1)], dim=-1)
         exec_action = self._action_buf[:, :, 0]
-        exec_action *= self._args.robot_args.action_scale
+        exec_action *= self.action_scale.unsqueeze(0)
 
         self.torque *= 0
 
         # Apply actions and simulate physics
-        for _ in range(self._args.robot_args.decimation):
+        for _ in range(self.decimation):
             self._pre_step()
+
+            if self._args.robot_args.ctrl_type == CtrlType.DR_JOINT_POSITION_VELOCITY:
+                joint_vel = (exec_action - self.last_action) / self.dt
+                exec_action = torch.cat([exec_action, joint_vel], dim=-1)
 
             self._robot.apply_action(action=exec_action)
             self._scene.scene.step(refresh_visualizer=self._refresh_visualizer)
@@ -607,10 +626,6 @@ class LeggedRobotEnv(BaseEnv):
         return act_dim
 
     @property
-    def action_scale(self) -> float:
-        return self._args.robot_args.action_scale
-
-    @property
     def action(self) -> torch.Tensor:
         return self._action
 
@@ -620,7 +635,7 @@ class LeggedRobotEnv(BaseEnv):
 
     @property
     def dt(self) -> float:
-        return self._scene.scene.dt * self._args.robot_args.decimation
+        return self._scene.scene.dt * self.decimation
 
     @property
     def actor_obs_dim(self) -> int:

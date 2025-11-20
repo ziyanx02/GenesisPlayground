@@ -1,9 +1,177 @@
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
 import matplotlib.ticker as ticker
 import numpy as np
 import yaml
+
+
+def cross_correlation(
+    a: np.typing.NDArray[Any], b: np.typing.NDArray[Any], allow_flip: bool = False
+) -> float:
+    """
+    Compute the sub-sample cross-correlation lag between two 1D signals a and b.
+    Handles both normal and flipped correlation (max or min peak).
+    Returns lag in samples (positive means b lags behind a).
+    """
+    assert a.ndim == 1 and b.ndim == 1 and len(a) == len(b), (
+        "Inputs must be 1D arrays of the same length"
+    )
+    a = a - np.mean(a)
+    b = b - np.mean(b)
+    corr = np.correlate(a, b, mode="full")
+    lags = np.arange(-len(a) + 1, len(a))
+    overlap = len(a) - np.abs(lags)
+    corr_unbiased = corr / overlap
+    k_max = np.argmax(corr)
+    k_min = np.argmin(corr)
+    k_peak = k_min if abs(corr[k_min]) > abs(corr[k_max]) and allow_flip else k_max
+    lag_int = lags[k_peak]
+
+    # Parabolic interpolation: use corr[k-1], corr[k], corr[k+1]
+    if 0 < k_peak < len(corr) - 1:
+        c_minus = corr_unbiased[k_peak - 1]
+        c_0 = corr_unbiased[k_peak]
+        c_plus = corr_unbiased[k_peak + 1]
+
+        denom = -2 * c_0 + c_minus + c_plus
+        if denom != 0:
+            delta = 0.5 * (c_minus - c_plus) / denom
+        else:
+            delta = 0.0
+    else:
+        delta = 0.0
+
+    lag_subsample = lag_int + delta
+    return -lag_subsample
+
+
+def measure_lag_and_noise(
+    target: np.ndarray, measured: np.ndarray, allow_flip: bool = False
+) -> tuple[float, float]:
+    """
+    Align two 1D signals given lag_samples (positive => measured lags behind target).
+    Returns (target_aligned, measured_aligned).
+    """
+    assert target.ndim == 1 and measured.ndim == 1 and len(target) == len(measured), (
+        "Inputs must be 1D arrays of the same length"
+    )
+    lag_samples = cross_correlation(target, measured, allow_flip=allow_flip)
+    n = len(target)
+    target = target[:n]
+    measured = measured[:n]
+
+    t = np.arange(n, dtype=float)
+    # measured_aligned(t) = measured(t - lag)
+    measured_aligned = np.interp(t - lag_samples, t, measured, left=np.nan, right=np.nan)
+
+    valid = ~np.isnan(measured_aligned)
+    target_aligned = target[valid]
+    measured_aligned = measured_aligned[valid]
+
+    err = measured_aligned - target_aligned
+    amp = (np.max(target_aligned) - np.min(target_aligned)) / 2
+    nrms_err = np.sqrt(np.mean(err**2)) / amp
+    return lag_samples, nrms_err
+
+
+def align_hf_arrays_pos_from_logger(
+    t_ns: np.ndarray,
+    q_arr: np.ndarray,
+    dof_idx: int,
+    target_pos: Sequence[float],
+    control_dt: float = 0.02,
+    out_rate_hz: float = 200.0,
+    pos_offset: float = 0.0,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    # HF absolute time base (s)
+    t_hf = (t_ns - t_ns[0]).astype(np.float64) * 1e-9
+    q_joint = np.asarray(q_arr[:, dof_idx], dtype=np.float64)
+
+    # sort + dedup
+    order = np.argsort(t_hf)
+    t_hf, q_joint = t_hf[order], q_joint[order]
+    keep = np.r_[True, np.diff(t_hf) > 0.0]
+    t_hf, q_joint = t_hf[keep], q_joint[keep]
+
+    # controller absolute base aligned to HF start
+    target_pos = np.asarray(target_pos, dtype=np.float64)
+    N = target_pos.shape[0]
+    t_ctrl0 = t_hf[0]
+    t_ctrl = t_ctrl0 + np.arange(N) * float(control_dt)
+
+    # choose overlap window (inclusive end!)
+    dt_out = 1.0 / float(out_rate_hz)
+    t_start = max(t_ctrl[0], t_hf[0])
+    t_end = min(t_ctrl[-1], t_hf[-1])
+    if not (t_end > t_start):
+        return np.array([]), np.array([]), np.array([])
+
+    # inclusive last point to avoid trimming ~one step
+    t_out = np.arange(t_start, t_end + 1e-12, dt_out, dtype=np.float64)
+
+    if pos_offset:
+        target_pos = target_pos - pos_offset
+        q_joint = q_joint - pos_offset
+
+    target_pos_out = np.interp(t_out, t_ctrl, target_pos)
+    q_out = np.interp(t_out, t_hf, q_joint)
+    return t_out, target_pos_out, q_out
+
+
+def align_hf_arrays_vel_from_logger(
+    t_ns: np.ndarray,  # int64 nanoseconds from logger.get()
+    dq_arr: np.ndarray,  # (N, nj) measured joint velocities (HF)
+    dof_idx: int,  # joint index to compare
+    target_pos: Sequence[float],  # controller targets at control_dt
+    control_dt: float = 0.02,
+    out_rate_hz: float = 200.0,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Aligns HF measured joint velocity (dq_arr[:, dof_idx]) and the control-target
+    velocity (d/dt of target_pos) onto a common output grid.
+
+    Returns:
+        t_out [s], target_vel_out, dq_out  (all shape (M,))
+    """
+    if t_ns.size == 0 or dq_arr.size == 0 or len(target_pos) == 0:
+        return np.array([]), np.array([]), np.array([])
+
+    # HF time base (s) relative to first sample
+    t_hf = (t_ns - t_ns[0]).astype(np.float64) * 1e-9
+    dq_joint = np.asarray(dq_arr[:, dof_idx], dtype=np.float64)
+
+    # Sort & dedup
+    order = np.argsort(t_hf)
+    t_hf = t_hf[order]
+    dq_joint = dq_joint[order]
+    keep = np.r_[True, np.diff(t_hf) > 0.0]
+    t_hf = t_hf[keep]
+    dq_joint = dq_joint[keep]
+
+    # Controller time base (uniform dt)
+    target_pos = np.asarray(target_pos, dtype=np.float64)
+    N = target_pos.shape[0]
+    t_ctrl = np.arange(N, dtype=np.float64) * float(control_dt)
+
+    # Target velocity from target_pos
+    target_vel_ctrl = np.gradient(target_pos, float(control_dt), edge_order=2)
+
+    # Output grid over overlap
+    dt_out = 1.0 / float(out_rate_hz)
+    t_start = max(t_ctrl[0], t_hf[0])
+    t_end = min(t_ctrl[-1], t_hf[-1])
+    if not (t_end > t_start):
+        return np.array([]), np.array([]), np.array([])
+
+    t_out = np.arange(t_start, t_end, dt_out, dtype=np.float64)
+
+    # Interpolate onto t_out
+    target_vel_out = np.interp(t_out, t_ctrl, target_vel_ctrl)
+    dq_out = np.interp(t_out, t_hf, dq_joint)
+
+    return t_out, target_vel_out, dq_out
 
 
 def plot_metric_on_axis(

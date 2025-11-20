@@ -16,8 +16,8 @@ from gs_env.sim.robots.config.schema import (
     BaseAction,
     CtrlType,
     DRJointPosAction,
+    DRJointPosVelAction,
     HumanoidRobotArgs,
-    JointPosAction,
     LeggedRobotArgs,
     ManipulatorRobotArgs,
     QuadrupedRobotArgs,
@@ -85,9 +85,24 @@ class LeggedRobotBase(BaseGymRobot):
                     dof_kd.append(self._args.dof_kd[key])
         self._dof_kp = torch.tensor(dof_kp, device=self._device)
         self._dof_kd = torch.tensor(dof_kd, device=self._device)
+        self._dof_armature = None
+        if self._args.dof_armature is not None:
+            dof_armature = []
+            for dof_name in self.dof_names:
+                for key in self._args.dof_armature.keys():
+                    if key in dof_name:
+                        dof_armature.append(self._args.dof_armature[key])
+            self._dof_armature = torch.tensor(dof_armature, device=self._device)
         self._batched_dof_kp = self._dof_kp[None, :].repeat(self._num_envs, 1)
         self._batched_dof_kd = self._dof_kd[None, :].repeat(self._num_envs, 1)
         self._torque = torch.zeros((self._num_envs, self._dof_dim), device=self._device)
+
+        #
+        self.direct_drive_mask = torch.ones((self._dof_dim,), device=self._device)
+        for joint_name in self._args.indirect_drive_joint_names:
+            for i, dof_name in enumerate(self.dof_names):
+                if joint_name in dof_name:
+                    self.direct_drive_mask[i] = 0.0
 
         #
         self._kp_ratio = torch.ones(self._num_envs, self._dof_dim, device=self._device)
@@ -124,13 +139,19 @@ class LeggedRobotBase(BaseGymRobot):
 
         # == set up control dispatch ==
         self._dispatch: dict[CtrlType, Callable[[BaseAction], None]] = {  # type: ignore
-            CtrlType.JOINT_POSITION.value: self._apply_joint_pos,
             CtrlType.DR_JOINT_POSITION.value: self._apply_dr_joint_pos,
+            CtrlType.DR_JOINT_POSITION_VELOCITY.value: self._apply_dr_joint_pos_vel,
         }
 
     def post_build_init(self, eval_mode: bool = False) -> None:
         if not eval_mode:
             self._init_domain_randomization()
+
+        if self._dof_armature is not None:
+            self._robot.set_dofs_armature(
+                self._dof_armature,
+                dofs_idx_local=self._dofs_idx_local,
+            )
 
         # limits
         self._dof_pos_limits = torch.stack(self._robot.get_dofs_limit(self._dofs_idx_local), dim=1)
@@ -141,6 +162,13 @@ class LeggedRobotBase(BaseGymRobot):
             self._dof_pos_limits[i, 0] = m - 0.5 * r * self._args.soft_dof_pos_range
             self._dof_pos_limits[i, 1] = m + 0.5 * r * self._args.soft_dof_pos_range
         self._torque_limits = self._robot.get_dofs_force_range(self._dofs_idx_local)[1]
+        if self._args.dof_vel_limit is not None:
+            dof_vel_limit = []
+            for dof_name in self.dof_names:
+                for key in self._args.dof_vel_limit.keys():
+                    if key in dof_name:
+                        dof_vel_limit.append(self._args.dof_vel_limit[key])
+            self._dof_vel_limit = torch.tensor(dof_vel_limit, device=self._device)
 
     def _init_domain_randomization(self) -> None:
         envs_idx: torch.IntTensor = torch.arange(0, self._num_envs, device=self._device)  # type: ignore
@@ -294,24 +322,15 @@ class LeggedRobotBase(BaseGymRobot):
             match self.ctrl_type:
                 case CtrlType.DR_JOINT_POSITION:
                     action = DRJointPosAction(joint_pos=action)
-                case CtrlType.JOINT_POSITION:
-                    action = JointPosAction(joint_pos=action, gripper_width=0.0)
+                case CtrlType.DR_JOINT_POSITION_VELOCITY:
+                    joint_pos = action[:, : self._dof_dim]
+                    joint_vel = action[:, self._dof_dim :]
+                    action = DRJointPosVelAction(joint_pos=joint_pos, joint_vel=joint_vel)
                 case _:
                     raise ValueError(f"Unsupported control type: {self.ctrl_type}")
         self._dispatch[self._args.ctrl_type](action)
         self._dof_pos[:] = self._robot.get_dofs_position(self._dofs_idx_local)
         self._dof_vel[:] = self._robot.get_dofs_velocity(self._dofs_idx_local)
-
-    def _apply_joint_pos(self, act: JointPosAction) -> None:
-        """
-        Apply joint position control to the robot.
-        """
-        assert act.joint_pos.shape == (
-            self._num_envs,
-            self._dof_dim,
-        ), "Joint position action must match the number of joints."
-        q_target = act.joint_pos.to(self._device)
-        self._robot.control_dofs_position(position=q_target)
 
     def _apply_dr_joint_pos(self, act: DRJointPosAction) -> None:
         """
@@ -326,6 +345,25 @@ class LeggedRobotBase(BaseGymRobot):
             * (act.joint_pos + self._default_dof_pos - self._dof_pos + self._motor_offset)
             - self._batched_dof_kd * self._dof_vel
         )
+        # logging.info(f"q_des mean: {torch.mean(act.joint_pos + self._default_dof_pos - self._dof_pos + self._motor_offset)}")
+        # logging.info(f"qd_des mean: {torch.mean(self._dof_vel)}")
+        q_force = q_force * self._motor_strength
+        q_force = torch.clamp(q_force, -self._torque_limits, self._torque_limits)
+        self._torque[:] = q_force
+        self._robot.control_dofs_force(force=q_force, dofs_idx_local=self._dofs_idx_local)
+
+    def _apply_dr_joint_pos_vel(self, act: DRJointPosVelAction) -> None:
+        """
+        Apply noised joint position and velocity control to the robot.
+        """
+        assert act.joint_pos.shape == (
+            self._num_envs,
+            self._dof_dim,
+        ), "Joint position action must match the number of joints."
+
+        q_force = self._batched_dof_kp * (
+            act.joint_pos + self._default_dof_pos - self._dof_pos + self._motor_offset
+        ) + self._batched_dof_kd * (act.joint_vel * self.direct_drive_mask - self._dof_vel)
         q_force = q_force * self._motor_strength
         q_force = torch.clamp(q_force, -self._torque_limits, self._torque_limits)
         self._torque[:] = q_force
@@ -437,6 +475,10 @@ class LeggedRobotBase(BaseGymRobot):
     @property
     def ctrl_type(self) -> CtrlType:
         return self._args.ctrl_type
+
+    @property
+    def ctrl_freq(self) -> float:
+        return self._args.ctrl_freq
 
 
 class HumanoidRobotBase(LeggedRobotBase):

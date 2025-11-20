@@ -1,11 +1,10 @@
-import argparse
+import math
 import struct
 import threading
 import time
 from typing import Any
 
 import numpy as np
-import yaml
 from unitree_sdk2py.core.channel import ChannelFactoryInitialize, ChannelSubscriber
 from unitree_sdk2py.idl.unitree_go.msg.dds_ import LowState_ as LowState_go
 from unitree_sdk2py.idl.unitree_hg.msg.dds_ import LowState_ as LowState_hg
@@ -150,6 +149,15 @@ class LowStateMsgHandler:
         self.F3 = 0
         self.Start = 0
 
+        # Kalman filter for dof_vel
+        self.filter_enabled = True
+        self.dynamic_filter_enabled = False
+        self.P = 10.0  # initial covariance
+        self.Q = 0.1  # process noise covariance
+        self.R = 5.0  # measurement noise covariance
+        P_ss = self.Q + math.sqrt(self.Q**2 + self.Q * self.R)
+        self.K_ss = P_ss / (P_ss + self.R)
+
         # Create a thread for the main loop
         self.main_thread = threading.Thread(target=self.main_loop, daemon=True)
 
@@ -209,9 +217,21 @@ class LowStateMsgHandler:
         self.ang_vel = np.array(imu_state.gyroscope)
 
     def parse_motor_state(self, motor_state: Any) -> None:
+        if self.dynamic_filter_enabled:
+            P = self.P + self.Q
+            self.K = P / (P + self.R)
+            self.P = (1 - self.K) * P
         for i in range(self.num_dof):
             self.joint_pos[i] = motor_state[self.dof_index[i]].q
-            self.joint_vel[i] = motor_state[self.dof_index[i]].dq
+            # kalman filter for dq
+            if self.filter_enabled:
+                z = motor_state[self.dof_index[i]].dq
+                if self.dynamic_filter_enabled:
+                    self.joint_vel[i] = self.joint_vel[i] + self.K * (z - self.joint_vel[i])
+                else:
+                    self.joint_vel[i] = self.joint_vel[i] + self.K_ss * (z - self.joint_vel[i])
+            else:
+                self.joint_vel[i] = motor_state[self.dof_index[i]].dq
             self.torque[i] = motor_state[self.dof_index[i]].tau_est
             # self.temperature[i] = motor_state[self.dof_index[i]].temperature
             error_code = motor_state[self.dof_index[i]].reserve[0]
@@ -219,7 +239,6 @@ class LowStateMsgHandler:
                 print(f"Joint {self.dof_index[i]} Error Code: {error_code}")
         for i in range(self.num_full_dof):
             self.full_joint_pos[i] = motor_state[i].q
-        # print(self.joint_pos)
         # print("low_state_big_flag", self.robot_low_state.bit_flag)
 
     def parse_botton(self, data1: int, data2: int) -> None:
@@ -277,22 +296,3 @@ class LowStateMsgHandler:
         # print("F1:", self.F1)
         # print("F3:", self.F3)
         # print("Start:", self.Start)
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-r", "--robot", type=str, default="go2")
-    parser.add_argument("-n", "--name", type=str, default="default")
-    parser.add_argument("-c", "--cfg", type=str, default=None)
-    args = parser.parse_args()
-
-    cfg = yaml.safe_load(open(f"../{args.robot}.yaml"))
-    if args.cfg is not None:
-        cfg = yaml.safe_load(open(f"./cfgs/{args.robot}/{args.cfg}.yaml"))
-
-    # Run steta publisher
-    low_state_handler = LowStateMsgHandler(cfg)
-    low_state_handler.init()
-    while True:
-        time.sleep(1)
-        print(low_state_handler.joint_pos)
