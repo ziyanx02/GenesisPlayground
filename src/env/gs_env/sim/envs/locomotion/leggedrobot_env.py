@@ -119,6 +119,9 @@ class LeggedRobotEnv(BaseEnv):
         self._action = torch.zeros((self.num_envs, self.action_dim), device=self._device)
         self.last_action = torch.zeros((self.num_envs, self.action_dim), device=self._device)
         self.last_last_action = torch.zeros((self.num_envs, self.action_dim), device=self._device)
+        self._last_target_dof_pos = torch.zeros(
+            (self.num_envs, self.action_dim), device=self._device
+        )
         self.torque = torch.zeros((self.num_envs, self.action_dim), device=self._device)
 
         self.action_scale = torch.ones((self.action_dim,), device=self._device)
@@ -221,6 +224,7 @@ class LeggedRobotEnv(BaseEnv):
         self.time_since_reset[envs_idx] = 0.0
         self.last_action[envs_idx] *= 0
         self.last_last_action[envs_idx] *= 0
+        self._last_target_dof_pos[envs_idx] *= 0
 
     def reset_idx(self, envs_idx: torch.IntTensor) -> None:
         default_pos = self._robot.default_pos[None, :].repeat(len(envs_idx), 1)
@@ -343,7 +347,13 @@ class LeggedRobotEnv(BaseEnv):
         self._action = action
         self._action_buf[:] = torch.cat([self._action_buf[:, :, 1:], action.unsqueeze(-1)], dim=-1)
         exec_action = self._action_buf[:, :, 0]
-        exec_action *= self.action_scale.unsqueeze(0)
+        target_dof_pos = exec_action * self.action_scale.unsqueeze(0)
+        if self._args.robot_args.ctrl_type == CtrlType.DR_JOINT_POSITION_VELOCITY:
+            target_dof_vel = (target_dof_pos - self._last_target_dof_pos) / self.dt
+            exec_action = torch.cat([target_dof_pos, target_dof_vel], dim=-1)
+        else:
+            exec_action = target_dof_pos
+        self._last_target_dof_pos[:] = target_dof_pos.clone()
 
         self.torque *= 0
 
@@ -351,12 +361,7 @@ class LeggedRobotEnv(BaseEnv):
         for _ in range(self.decimation):
             self._pre_step()
 
-            if self._args.robot_args.ctrl_type == CtrlType.DR_JOINT_POSITION_VELOCITY:
-                joint_vel = (exec_action - self.last_action) / self.dt
-                extended_action = torch.cat([exec_action, joint_vel], dim=-1)
-                self._robot.apply_action(action=extended_action)
-            else:
-                self._robot.apply_action(action=exec_action)
+            self._robot.apply_action(action=exec_action)
             self._scene.scene.step(refresh_visualizer=self._refresh_visualizer)
             self.torque = torch.max(self.torque, torch.abs(self._robot.torque))
 
