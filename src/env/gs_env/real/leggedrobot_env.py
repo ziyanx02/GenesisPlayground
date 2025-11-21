@@ -83,8 +83,8 @@ class UnitreeLeggedEnv(BaseGymRobot):
         return self._action_space
 
     @property
-    def action_scale(self) -> float:
-        return self._action_scale
+    def action_scale(self) -> torch.Tensor:
+        return torch.tensor(self._action_scale, device=self._device, dtype=torch.float32)
 
     @property
     def dof_names(self) -> list[str]:

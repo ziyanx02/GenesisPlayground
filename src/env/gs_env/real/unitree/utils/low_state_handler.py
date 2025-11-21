@@ -160,7 +160,7 @@ class LowStateMsgHandler:
         self._joint_vel_history = []
         self._joint_vel_raw_history = []
         # Use control frequency times decimation for logging frequency
-        self._logging_interval = 1.0 / (self.cfg.ctrl_freq * self.cfg.decimation)
+        self.logging_interval = 1.0 / (self.cfg.ctrl_freq * self.cfg.decimation)
         self._logging_thread: threading.Thread | None = None
 
         # Create a thread for the main loop
@@ -304,7 +304,7 @@ class LowStateMsgHandler:
             self._joint_vel_history.append(self.joint_vel.copy())
             self._joint_vel_raw_history.append(self.joint_vel_raw.copy())
             cur_t = time.time()
-            sleep_dt = self._logging_interval - (cur_t - start_t)
+            sleep_dt = self.logging_interval - (cur_t - start_t)
             if sleep_dt > 0:
                 time.sleep(sleep_dt)
 
@@ -322,16 +322,10 @@ class LowStateMsgHandler:
         if self._logging_thread is not None:
             self._logging_thread.join(timeout=1.0)
             self._logging_thread = None
-        if len(self._joint_pos_history) > 0:
-            pos_history = np.stack(self._joint_pos_history, axis=0)
-            pos_raw_history = np.stack(self._joint_pos_raw_history, axis=0)
-            vel_history = np.stack(self._joint_vel_history, axis=0)
-            vel_raw_history = np.stack(self._joint_vel_raw_history, axis=0)
-        else:
-            pos_history = np.zeros((0, self.num_dof), dtype=float)
-            pos_raw_history = np.zeros((0, self.num_dof), dtype=float)
-            vel_history = np.zeros((0, self.num_dof), dtype=float)
-            vel_raw_history = np.zeros((0, self.num_dof), dtype=float)
+        pos_history = np.stack(self._joint_pos_history, axis=0)
+        pos_raw_history = np.stack(self._joint_pos_raw_history, axis=0)
+        vel_history = np.stack(self._joint_vel_history, axis=0)
+        vel_raw_history = np.stack(self._joint_vel_raw_history, axis=0)
         return {
             "dof_pos": pos_history,
             "dof_pos_raw": pos_raw_history,
