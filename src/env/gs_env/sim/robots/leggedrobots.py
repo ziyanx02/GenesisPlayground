@@ -85,6 +85,9 @@ class LeggedRobotBase(BaseGymRobot):
                     dof_kd.append(self._args.dof_kd[key])
         self._dof_kp = torch.tensor(dof_kp, device=self._device)
         self._dof_kd = torch.tensor(dof_kd, device=self._device)
+        self._batched_dof_kp = self._dof_kp[None, :].repeat(self._num_envs, 1)
+        self._batched_dof_kd = self._dof_kd[None, :].repeat(self._num_envs, 1)
+        self._torque = torch.zeros((self._num_envs, self._dof_dim), device=self._device)
         self._dof_armature = None
         if self._args.dof_armature is not None:
             dof_armature = []
@@ -93,9 +96,6 @@ class LeggedRobotBase(BaseGymRobot):
                     if key in dof_name:
                         dof_armature.append(self._args.dof_armature[key])
             self._dof_armature = torch.tensor(dof_armature, device=self._device)
-        self._batched_dof_kp = self._dof_kp[None, :].repeat(self._num_envs, 1)
-        self._batched_dof_kd = self._dof_kd[None, :].repeat(self._num_envs, 1)
-        self._torque = torch.zeros((self._num_envs, self._dof_dim), device=self._device)
 
         #
         self.direct_drive_mask = torch.ones((self._dof_dim,), device=self._device)
@@ -142,6 +142,12 @@ class LeggedRobotBase(BaseGymRobot):
             CtrlType.DR_JOINT_POSITION.value: self._apply_dr_joint_pos,
             CtrlType.DR_JOINT_POSITION_VELOCITY.value: self._apply_dr_joint_pos_vel,
         }
+
+        # == set up dof pos logger ==
+        self._target_dof_pos_history = []
+        self._dof_pos_history = []
+        self._dof_vel_history = []
+        self._logging = False
 
     def post_build_init(self, eval_mode: bool = False) -> None:
         if not eval_mode:
@@ -318,6 +324,10 @@ class LeggedRobotBase(BaseGymRobot):
         """
         Apply the action to the robot.
         """
+        if self._logging:
+            self._dof_pos_history.append(self._dof_pos.clone())
+            self._dof_vel_history.append(self._dof_vel.clone())
+            self._target_dof_pos_history.append(action.clone())
         if isinstance(action, torch.Tensor):
             match self.ctrl_type:
                 case CtrlType.DR_JOINT_POSITION:
@@ -371,6 +381,48 @@ class LeggedRobotBase(BaseGymRobot):
 
     def get_link_idx_local_by_name(self, name: str) -> int:
         return self._robot.get_link(name).idx_local
+
+    def start_logging(self) -> None:
+        self._logging = True
+        self._dof_pos_history = []
+        self._dof_vel_history = []
+        self._target_dof_pos_history = []
+
+    def stop_logging(self) -> dict[str, torch.Tensor]:
+        self._logging = False
+        pos_history = torch.stack(self._dof_pos_history, dim=1).cpu()
+        vel_history = torch.stack(self._dof_vel_history, dim=1).cpu()
+        target_pos_history = torch.stack(self._target_dof_pos_history, dim=1).cpu()
+        self._dof_pos_history = []
+        self._dof_vel_history = []
+        self._target_dof_pos_history = []
+        return {
+            "dof_pos": pos_history,
+            "dof_vel": vel_history,
+            "target_dof_pos": target_pos_history,
+        }
+
+    @property
+    def dof_kp(self) -> torch.Tensor:
+        return self._dof_kp
+    
+    @property
+    def dof_kd(self) -> torch.Tensor:
+        return self._dof_kd
+
+    @property
+    def batched_dof_kp(self) -> torch.Tensor:
+        return self._batched_dof_kp
+
+    @property
+    def batched_dof_kd(self) -> torch.Tensor:
+        return self._batched_dof_kd
+
+    def set_batched_dof_kp(self, batched_dof_kp: torch.Tensor) -> None:
+        self._batched_dof_kp = batched_dof_kp
+
+    def set_batched_dof_kd(self, batched_dof_kd: torch.Tensor) -> None:
+        self._batched_dof_kd = batched_dof_kd
 
     @property
     def action_space(self) -> spaces.Box:

@@ -19,31 +19,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "examples"))
 from utils import plot_metric_on_axis, yaml_to_config  # type: ignore
 
 
-def load_env_args(exp_name: str) -> LeggedRobotEnvArgs:
-    """Load JIT checkpoint and env_args from deploy/logs directory.
-
-    Args:
-        exp_name: Experiment name
-
-    Returns:
-        env_args
-    """
-
-    deploy_dir = Path(__file__).parent / "logs" / exp_name
-    if not deploy_dir.exists():
-        raise FileNotFoundError(f"Deploy directory not found: {deploy_dir}")
-
-    # Load env_args from YAML
-    env_args_path = deploy_dir / "env_args.yaml"
-    if not env_args_path.exists():
-        raise FileNotFoundError(f"env_args.yaml not found: {env_args_path}")
-
-    print(f"Loading env_args from: {env_args_path}")
-    env_args = yaml_to_config(env_args_path, LeggedRobotEnvArgs)
-
-    return env_args
-
-
 def run_single_dof_wave_diagnosis(
     env: Any,
     dof_idx: int = 0,
