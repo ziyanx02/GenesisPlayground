@@ -123,6 +123,8 @@ class LeggedRobotEnv(BaseEnv):
             (self.num_envs, self.action_dim), device=self._device
         )
         self.torque = torch.zeros((self.num_envs, self.action_dim), device=self._device)
+        self._target_dof_vel_low_pass = torch.zeros((self.num_envs, self.action_dim), device=self._device)
+        self._low_pass_alpha = self._args.robot_args.low_pass_alpha
 
         self.action_scale = torch.ones((self.action_dim,), device=self._device)
         if self._args.robot_args.adaptive_action_scale:
@@ -350,7 +352,8 @@ class LeggedRobotEnv(BaseEnv):
         target_dof_pos = exec_action * self.action_scale.unsqueeze(0)
         if self._args.robot_args.ctrl_type == CtrlType.DR_JOINT_POSITION_VELOCITY:
             target_dof_vel = (target_dof_pos - self._last_target_dof_pos) / self.dt
-            exec_action = torch.cat([target_dof_pos, target_dof_vel], dim=-1)
+            self._target_dof_vel_low_pass += self._low_pass_alpha * (target_dof_vel - self._target_dof_vel_low_pass)
+            exec_action = torch.cat([target_dof_pos, self._target_dof_vel_low_pass], dim=-1)
         else:
             exec_action = target_dof_pos
         self._last_target_dof_pos[:] = target_dof_pos.clone()

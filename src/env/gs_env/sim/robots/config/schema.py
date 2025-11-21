@@ -122,6 +122,8 @@ class LeggedRobotArgs(BaseModel):
     indirect_drive_joint_names: list[str] = []
     ctrl_freq: int
     decimation: int
+    feed_forward_ratio: float = 0.0
+    low_pass_alpha: float = 1.0
 
 
 class QuadrupedRobotArgs(LeggedRobotArgs): ...

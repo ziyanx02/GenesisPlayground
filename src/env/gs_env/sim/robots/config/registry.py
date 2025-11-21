@@ -398,60 +398,6 @@ G1_kd_dict: dict[str, float] = {
     "wrist_pitch": 1.3,
     "wrist_yaw": 1.2,
 }
-G1_beyound_mimic_kp_dict: dict[str, float] = {
-    "hip_roll": STIFFNESS_7520_22,  # 99.1
-    "hip_pitch": STIFFNESS_7520_14,  # 40.18
-    "hip_yaw": STIFFNESS_7520_14,  # 40.18
-    "knee": STIFFNESS_7520_22,  # 99.1
-    "ankle_roll": 2.0 * STIFFNESS_5020,  # 28.5
-    "ankle_pitch": 2.0 * STIFFNESS_5020,  # 28.5
-    "waist_roll": 2.0 * STIFFNESS_5020,  # 28.5
-    "waist_pitch": 2.0 * STIFFNESS_5020,  # 28.5
-    "waist_yaw": STIFFNESS_7520_14,  # 40.18
-    "shoulder_roll": STIFFNESS_5020,  # 14.25
-    "shoulder_pitch": STIFFNESS_5020,  # 14.25
-    "shoulder_yaw": STIFFNESS_5020,  # 14.25
-    "elbow": STIFFNESS_5020,  # 14.25
-    "wrist_roll": STIFFNESS_5020,  # 14.25
-    "wrist_pitch": STIFFNESS_4010,  # 16.8
-    "wrist_yaw": STIFFNESS_4010,  # 16.8
-}
-G1_beyound_mimic_kd_dict: dict[str, float] = {
-    "hip_roll": DAMPING_7520_22,  # 6.3
-    "hip_pitch": DAMPING_7520_14,  # 2.6
-    "hip_yaw": DAMPING_7520_14,  # 2.6
-    "knee": DAMPING_7520_22,  # 6.3
-    "ankle_roll": 2.0 * DAMPING_5020,  # 1.8
-    "ankle_pitch": 2.0 * DAMPING_5020,  # 1.8
-    "waist_roll": 2.0 * DAMPING_5020,  # 1.8
-    "waist_pitch": 2.0 * DAMPING_5020,  # 1.8
-    "waist_yaw": DAMPING_7520_14,  # 2.6
-    "shoulder_roll": DAMPING_5020,  # 0.9
-    "shoulder_pitch": DAMPING_5020,  # 0.9
-    "shoulder_yaw": DAMPING_5020,  # 0.9
-    "elbow": DAMPING_5020,  # 0.9
-    "wrist_roll": DAMPING_5020,  # 0.9
-    "wrist_pitch": DAMPING_4010,  # 1.1
-    "wrist_yaw": DAMPING_4010,  # 1.1
-}
-G1_beyound_mimic_armature_dict: dict[str, float] = {
-    "hip_roll": ARMATURE_7520_22,
-    "hip_pitch": ARMATURE_7520_14,
-    "hip_yaw": ARMATURE_7520_14,
-    "knee": ARMATURE_7520_22,
-    "ankle_roll": 2.0 * ARMATURE_5020,
-    "ankle_pitch": 2.0 * ARMATURE_5020,
-    "waist_roll": 2.0 * ARMATURE_5020,
-    "waist_pitch": 2.0 * ARMATURE_5020,
-    "waist_yaw": ARMATURE_7520_14,
-    "shoulder_roll": ARMATURE_5020,
-    "shoulder_pitch": ARMATURE_5020,
-    "shoulder_yaw": ARMATURE_5020,
-    "elbow": ARMATURE_5020,
-    "wrist_roll": ARMATURE_5020,
-    "wrist_pitch": ARMATURE_4010,
-    "wrist_yaw": ARMATURE_4010,
-}
 G1_vel_limit_dict: dict[str, float] = {
     "hip_roll": 20.0,
     "hip_pitch": 32.0,
