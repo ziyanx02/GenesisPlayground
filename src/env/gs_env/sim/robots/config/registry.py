@@ -520,34 +520,6 @@ RobotArgsRegistry["g1_fixed"] = HumanoidRobotArgs(
     indirect_drive_joint_names=G1_indirect_drive_joints,
 )
 
-RobotArgsRegistry["g1_beyond_mimic"] = HumanoidRobotArgs(
-    material_args=MaterialArgsRegistry["g1_fixed"],
-    morph_args=MorphArgsRegistry["g1_fixed"],
-    dr_args=DRArgsRegistry["default"],
-    visualize_contact=False,
-    vis_mode="visual",
-    ctrl_type=CtrlType.DR_JOINT_POSITION_VELOCITY,
-    body_link_name="torso_link",
-    foot_link_names=[
-        "left_ankle_roll_link",
-        "right_ankle_roll_link",
-    ],
-    show_target=True,
-    dof_names=G1_dof_names,
-    default_dof_pos=G1_default_dof_pos,
-    soft_dof_pos_range=0.9,
-    dof_kp=G1_beyound_mimic_kp_dict,
-    dof_kd=G1_beyound_mimic_kd_dict,
-    dof_armature=G1_beyound_mimic_armature_dict,
-    dof_vel_limit=G1_vel_limit_dict,
-    dof_torque_limit=G1_torque_limit_dict,
-    action_scale=0.25,
-    ctrl_freq=50,
-    decimation=4,
-    adaptive_action_scale=True,
-    indirect_drive_joint_names=G1_indirect_drive_joints,
-)
-
 
 RobotArgsRegistry["g1_no_waist"] = HumanoidRobotArgs(
     material_args=MaterialArgsRegistry["g1_default"],
