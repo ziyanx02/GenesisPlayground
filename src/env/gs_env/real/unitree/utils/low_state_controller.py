@@ -1,3 +1,4 @@
+import threading
 import time
 
 import numpy as np
@@ -58,6 +59,8 @@ class LowStateCmdHandler(LowStateMsgHandler):
 
         # thread handling
         self.lowCmdWriteThreadPtr = None
+
+        self._target_pos_history = []
 
         self.crc = CRC()
 
@@ -261,3 +264,55 @@ class LowStateCmdHandler(LowStateMsgHandler):
     @property
     def is_emergency_stop(self) -> bool:
         return self._emergency_stop
+
+    # =========================
+    # Logging API (threaded)
+    # =========================
+    def _logging_loop(self) -> None:
+        while self._logging:
+            start_t = time.time()
+            # Copy current measurements
+            self._joint_pos_history.append(self.joint_pos.copy())
+            self._joint_pos_raw_history.append(self.joint_pos_raw.copy())
+            self._joint_vel_history.append(self.joint_vel.copy())
+            self._joint_vel_raw_history.append(self.joint_vel_raw.copy())
+            self._target_pos_history.append(self.target_pos.copy())
+            cur_t = time.time()
+            sleep_dt = self._logging_interval - (cur_t - start_t)
+            if sleep_dt > 0:
+                time.sleep(sleep_dt)
+
+    def start_logging(self) -> None:
+        self._logging = True
+        self._joint_pos_history = []
+        self._joint_pos_raw_history = []
+        self._joint_vel_history = []
+        self._joint_vel_raw_history = []
+        self._target_pos_history = []
+        self._logging_thread = threading.Thread(target=self._logging_loop, daemon=True)
+        self._logging_thread.start()
+
+    def stop_logging(self) -> dict[str, np.ndarray]:
+        self._logging = False
+        if self._logging_thread is not None:
+            self._logging_thread.join(timeout=1.0)
+            self._logging_thread = None
+        if len(self._joint_pos_history) > 0:
+            pos_history = np.stack(self._joint_pos_history, axis=0)
+            pos_raw_history = np.stack(self._joint_pos_raw_history, axis=0)
+            vel_history = np.stack(self._joint_vel_history, axis=0)
+            vel_raw_history = np.stack(self._joint_vel_raw_history, axis=0)
+            target_pos_history = np.stack(self._target_pos_history, axis=0)
+        else:
+            pos_history = np.zeros((0, self.num_dof), dtype=float)
+            pos_raw_history = np.zeros((0, self.num_dof), dtype=float)
+            vel_history = np.zeros((0, self.num_dof), dtype=float)
+            vel_raw_history = np.zeros((0, self.num_dof), dtype=float)
+            target_pos_history = np.zeros((0, self.num_dof), dtype=float)
+        return {
+            "dof_pos": pos_history,
+            "dof_pos_raw": pos_raw_history,
+            "dof_vel": vel_history,
+            "dof_vel_raw": vel_raw_history,
+            "target_dof_pos": target_pos_history,
+        }

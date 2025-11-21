@@ -1,4 +1,3 @@
-import math
 import struct
 import threading
 import time
@@ -121,7 +120,9 @@ class LowStateMsgHandler:
         self.quat = np.zeros(4)
         self.ang_vel = np.zeros(3)
         self.joint_pos = np.zeros(self.num_dof)
+        self.joint_pos_raw = np.zeros(self.num_dof)
         self.joint_vel = np.zeros(self.num_dof)
+        self.joint_vel_raw = np.zeros(self.num_dof)
         self.torque = np.zeros(self.num_dof)
         self.temperature = np.zeros(self.num_dof)
         if self.robot_name == "go2":
@@ -149,14 +150,18 @@ class LowStateMsgHandler:
         self.F3 = 0
         self.Start = 0
 
-        # Kalman filter for dof_vel
-        self.filter_enabled = True
-        self.dynamic_filter_enabled = False
-        self.P = 10.0  # initial covariance
-        self.Q = 0.1  # process noise covariance
-        self.R = 5.0  # measurement noise covariance
-        P_ss = self.Q + math.sqrt(self.Q**2 + self.Q * self.R)
-        self.K_ss = P_ss / (P_ss + self.R)
+        # Low Pass Filter
+        self.low_pass_alpha = 0.3
+
+        # Logging (runs in a separate thread)
+        self._logging = False
+        self._joint_pos_history = []
+        self._joint_pos_raw_history = []
+        self._joint_vel_history = []
+        self._joint_vel_raw_history = []
+        # Use control frequency times decimation for logging frequency
+        self._logging_interval = 1.0 / (self.cfg.ctrl_freq * self.cfg.decimation)
+        self._logging_thread: threading.Thread | None = None
 
         # Create a thread for the main loop
         self.main_thread = threading.Thread(target=self.main_loop, daemon=True)
@@ -217,21 +222,11 @@ class LowStateMsgHandler:
         self.ang_vel = np.array(imu_state.gyroscope)
 
     def parse_motor_state(self, motor_state: Any) -> None:
-        if self.dynamic_filter_enabled:
-            P = self.P + self.Q
-            self.K = P / (P + self.R)
-            self.P = (1 - self.K) * P
         for i in range(self.num_dof):
-            self.joint_pos[i] = motor_state[self.dof_index[i]].q
-            # kalman filter for dq
-            if self.filter_enabled:
-                z = motor_state[self.dof_index[i]].dq
-                if self.dynamic_filter_enabled:
-                    self.joint_vel[i] = self.joint_vel[i] + self.K * (z - self.joint_vel[i])
-                else:
-                    self.joint_vel[i] = self.joint_vel[i] + self.K_ss * (z - self.joint_vel[i])
-            else:
-                self.joint_vel[i] = motor_state[self.dof_index[i]].dq
+            self.joint_pos_raw[i] = motor_state[self.dof_index[i]].q
+            self.joint_pos[i] += self.low_pass_alpha * (self.joint_pos_raw[i] - self.joint_pos[i])
+            self.joint_vel_raw[i] = motor_state[self.dof_index[i]].dq
+            self.joint_vel[i] += self.low_pass_alpha * (self.joint_vel_raw[i] - self.joint_vel[i])
             self.torque[i] = motor_state[self.dof_index[i]].tau_est
             # self.temperature[i] = motor_state[self.dof_index[i]].temperature
             error_code = motor_state[self.dof_index[i]].reserve[0]
@@ -296,3 +291,50 @@ class LowStateMsgHandler:
         # print("F1:", self.F1)
         # print("F3:", self.F3)
         # print("Start:", self.Start)
+
+    # =========================
+    # Logging API (threaded)
+    # =========================
+    def _logging_loop(self) -> None:
+        while self._logging:
+            start_t = time.time()
+            # Copy current measurements
+            self._joint_pos_history.append(self.joint_pos.copy())
+            self._joint_pos_raw_history.append(self.joint_pos_raw.copy())
+            self._joint_vel_history.append(self.joint_vel.copy())
+            self._joint_vel_raw_history.append(self.joint_vel_raw.copy())
+            cur_t = time.time()
+            sleep_dt = self._logging_interval - (cur_t - start_t)
+            if sleep_dt > 0:
+                time.sleep(sleep_dt)
+
+    def start_logging(self) -> None:
+        self._logging = True
+        self._joint_pos_history = []
+        self._joint_pos_raw_history = []
+        self._joint_vel_history = []
+        self._joint_vel_raw_history = []
+        self._logging_thread = threading.Thread(target=self._logging_loop, daemon=True)
+        self._logging_thread.start()
+
+    def stop_logging(self) -> dict[str, np.ndarray]:
+        self._logging = False
+        if self._logging_thread is not None:
+            self._logging_thread.join(timeout=1.0)
+            self._logging_thread = None
+        if len(self._joint_pos_history) > 0:
+            pos_history = np.stack(self._joint_pos_history, axis=0)
+            pos_raw_history = np.stack(self._joint_pos_raw_history, axis=0)
+            vel_history = np.stack(self._joint_vel_history, axis=0)
+            vel_raw_history = np.stack(self._joint_vel_raw_history, axis=0)
+        else:
+            pos_history = np.zeros((0, self.num_dof), dtype=float)
+            pos_raw_history = np.zeros((0, self.num_dof), dtype=float)
+            vel_history = np.zeros((0, self.num_dof), dtype=float)
+            vel_raw_history = np.zeros((0, self.num_dof), dtype=float)
+        return {
+            "dof_pos": pos_history,
+            "dof_pos_raw": pos_raw_history,
+            "dof_vel": vel_history,
+            "dof_vel_raw": vel_raw_history,
+        }
