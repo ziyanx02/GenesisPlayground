@@ -94,7 +94,8 @@ def run_single_dof_wave_diagnosis(
 
     log = env.robot.stop_logging()
     for key in log.keys():
-        log[key] = log[key][..., dof_idx]
+        if key != "time_stamp":
+            log[key] = log[key][..., dof_idx]
         if isinstance(log[key], torch.Tensor):
             log[key] = log[key].squeeze().cpu().numpy()
 
@@ -124,55 +125,72 @@ def run_single_dof_diagnosis(
             amplitude=amplitude,
             offset=offset,
         )
-        target_dof_pos_list = log["target_dof_pos"].tolist()
-        dof_pos_list = log["dof_pos"].tolist()
-        dof_vel_list = log["dof_vel"].tolist()
+        time_stamp_raw = log["time_stamp"]
+        time_stamp_raw -= time_stamp_raw[0]
+        interpolate_num = int(time_stamp_raw[-1] / env.dt * env.decimation) + 1
+        time_stamp = np.arange(interpolate_num) * env.dt / env.decimation
+        target_dof_pos_raw = log["target_dof_pos"]
+        dof_pos_raw = log["dof_pos"]
+        target_dof_pos = np.interp(time_stamp, time_stamp_raw, target_dof_pos_raw)
+        dof_pos = np.interp(time_stamp, time_stamp_raw, dof_pos_raw)
+        dof_vel_raw = log["dof_vel"]
 
         dof_pos_lag = (
-            cross_correlation(np.array(target_dof_pos_list[::4]), np.array(dof_pos_list[::4]))
+            cross_correlation(
+                target_dof_pos[:: env.decimation],
+                dof_pos[:: env.decimation],
+            )
             * env.dt
         )
         print("=" * 40)
         print(f"Lag: {dof_pos_lag:.4f}")
         print("=" * 40)
+        target_dof_pos_SRD = compute_SRD(target_dof_pos)
+        target_dof_pos_SD = compute_SD(target_dof_pos)
+        target_dof_pos_SRD_decimated = compute_SRD(target_dof_pos[:: env.decimation])
+        target_dof_pos_SD_decimated = compute_SD(target_dof_pos[:: env.decimation])
+        print(f"target_dof_pos SRD: {target_dof_pos_SRD:.4f}, SD: {target_dof_pos_SD:.4f}")
         print(
-            f"target_dof_pos SRD: {compute_SRD(np.array(target_dof_pos_list)):.4f}, SD: {compute_SD(np.array(target_dof_pos_list)):.4f}"
+            f"target_dof_pos / {env.decimation} SRD: {target_dof_pos_SRD_decimated:.4f}, SD: {target_dof_pos_SD_decimated:.4f}"
         )
+        dof_pos_SRD = compute_SRD(dof_pos)
+        dof_pos_SD = compute_SD(dof_pos)
+        dof_pos_SRD_decimated = compute_SRD(dof_pos[:: env.decimation])
+        dof_pos_SD_decimated = compute_SD(dof_pos[:: env.decimation])
+        print(f"dof_pos SRD: {dof_pos_SRD:.4f}, SD: {dof_pos_SD:.4f}")
         print(
-            f"target_dof_pos / 4 SRD: {compute_SRD(np.array(target_dof_pos_list[::4])):.4f}, SD: {compute_SD(np.array(target_dof_pos_list[::4])):.4f}"
-        )
-        print(
-            f"dof_pos SRD: {compute_SRD(np.array(dof_pos_list)):.4f}, SD: {compute_SD(np.array(dof_pos_list)):.4f}"
-        )
-        print(
-            f"dof_pos / 4 SRD: {compute_SRD(np.array(dof_pos_list[::4])):.4f}, SD: {compute_SD(np.array(dof_pos_list[::4])):.4f}"
+            f"dof_pos / {env.decimation} SRD: {dof_pos_SRD_decimated:.4f}, SD: {dof_pos_SD_decimated:.4f}"
         )
         if sim:
-            data_lists = [target_dof_pos_list, dof_pos_list]
+            data_lists = [target_dof_pos.tolist(), dof_pos.tolist()]
             labels = ["Target", "Dof Pos"]
         else:
-            dof_pos_raw_list = log["dof_pos_raw"].tolist()
+            dof_pos_raw_raw = log["dof_pos_raw"]
+            dof_pos_raw = np.interp(time_stamp, time_stamp_raw, dof_pos_raw_raw)
             print("=" * 40)
             dof_pos_lag = (
                 cross_correlation(
-                    np.array(target_dof_pos_list[::4]), np.array(dof_pos_raw_list[::4])
+                    target_dof_pos[:: env.decimation],
+                    dof_pos_raw[:: env.decimation],
                 )
                 * env.dt
             )
             print(f"Raw Lag: {dof_pos_lag:.4f}")
             print("=" * 40)
+            dof_pos_raw_SRD = compute_SRD(dof_pos_raw)
+            dof_pos_raw_SD = compute_SD(dof_pos_raw)
+            dof_pos_raw_SRD_decimated = compute_SRD(dof_pos_raw[:: env.decimation])
+            dof_pos_raw_SD_decimated = compute_SD(dof_pos_raw[:: env.decimation])
+            print(f"dof_pos_raw SRD: {dof_pos_raw_SRD:.4f}, SD: {dof_pos_raw_SD:.4f}")
             print(
-                f"dof_pos_raw SRD: {compute_SRD(np.array(dof_pos_raw_list)):.4f}, SD: {compute_SD(np.array(dof_pos_raw_list)):.4f}"
+                f"dof_pos_raw / {env.decimation} SRD: {dof_pos_raw_SRD_decimated:.4f}, SD: {dof_pos_raw_SD_decimated:.4f}"
             )
-            print(
-                f"dof_pos_raw / 4 SRD: {compute_SRD(np.array(dof_pos_raw_list[::4])):.4f}, SD: {compute_SD(np.array(dof_pos_raw_list[::4])):.4f}"
-            )
-            data_lists = [target_dof_pos_list, dof_pos_list, dof_pos_raw_list]
+            data_lists = [target_dof_pos.tolist(), dof_pos.tolist(), dof_pos_raw.tolist()]
             labels = ["Target", "Dof Pos", "Dof Pos Raw"]
 
         plot_metric_on_axis(
             axes[i * 2],
-            np.arange(len(target_dof_pos_list)),
+            time_stamp,
             data_lists,
             labels,
             "Dof Pos",
@@ -181,30 +199,34 @@ def run_single_dof_diagnosis(
         )
 
         print("=" * 40)
+        dof_vel_SRD = compute_SRD(dof_vel_raw)
+        dof_vel_SD = compute_SD(dof_vel_raw)
+        dof_vel_SRD_decimated = compute_SRD(dof_vel_raw[:: env.decimation])
+        dof_vel_SD_decimated = compute_SD(dof_vel_raw[:: env.decimation])
+        print(f"dof_vel SRD: {dof_vel_SRD:.4f}, SD: {dof_vel_SD:.4f}")
         print(
-            f"dof_vel SRD: {compute_SRD(np.array(dof_vel_list)):.4f}, SD: {compute_SD(np.array(dof_vel_list)):.4f}"
-        )
-        print(
-            f"dof_vel / 4 SRD: {compute_SRD(np.array(dof_vel_list[::4])):.4f}, SD: {compute_SD(np.array(dof_vel_list[::4])):.4f}"
+            f"dof_vel / {env.decimation} SRD: {dof_vel_SRD_decimated:.4f}, SD: {dof_vel_SD_decimated:.4f}"
         )
 
         if sim:
-            data_lists = [dof_vel_list]
+            data_lists = [dof_vel_raw.tolist()]
             labels = ["Dof Vel"]
         else:
-            dof_vel_raw_list = log["dof_vel_raw"].tolist()
+            dof_vel_raw_raw = log["dof_vel_raw"]
+            dof_vel_raw_SRD = compute_SRD(dof_vel_raw_raw)
+            dof_vel_raw_SD = compute_SD(dof_vel_raw_raw)
+            dof_vel_raw_SRD_decimated = compute_SRD(dof_vel_raw_raw[:: env.decimation])
+            dof_vel_raw_SD_decimated = compute_SD(dof_vel_raw_raw[:: env.decimation])
+            print(f"dof_vel_raw SRD: {dof_vel_raw_SRD:.4f}, SD: {dof_vel_raw_SD:.4f}")
             print(
-                f"dof_vel_raw SRD: {compute_SRD(np.array(dof_vel_raw_list)):.4f}, SD: {compute_SD(np.array(dof_vel_raw_list)):.4f}"
+                f"dof_vel_raw / {env.decimation} SRD: {dof_vel_raw_SRD_decimated:.4f}, SD: {dof_vel_raw_SD_decimated:.4f}"
             )
-            print(
-                f"dof_vel_raw / 4 SRD: {compute_SRD(np.array(dof_vel_raw_list[::4])):.4f}, SD: {compute_SD(np.array(dof_vel_raw_list[::4])):.4f}"
-            )
-            data_lists = [dof_vel_list, dof_vel_raw_list]
+            data_lists = [dof_vel_raw.tolist(), dof_vel_raw_raw.tolist()]
             labels = ["Dof Vel", "Dof Vel Raw"]
 
         plot_metric_on_axis(
             axes[i * 2 + 1],
-            np.arange(len(target_dof_pos_list)),
+            time_stamp_raw,
             data_lists,
             labels,
             "Dof Vel",

@@ -159,6 +159,7 @@ class LowStateMsgHandler:
         self._joint_pos_raw_history = []
         self._joint_vel_history = []
         self._joint_vel_raw_history = []
+        self._logging_time_stamp = []
         # Use control frequency times decimation for logging frequency
         self.logging_interval = 1.0 / (self.cfg.ctrl_freq * self.cfg.decimation)
         self._logging_thread: threading.Thread | None = None
@@ -303,6 +304,7 @@ class LowStateMsgHandler:
             self._joint_pos_raw_history.append(self.joint_pos_raw.copy())
             self._joint_vel_history.append(self.joint_vel.copy())
             self._joint_vel_raw_history.append(self.joint_vel_raw.copy())
+            self._logging_time_stamp.append(time.time() - self._logging_start_time)
             cur_t = time.time()
             sleep_dt = self.logging_interval - (cur_t - start_t)
             if sleep_dt > 0:
@@ -315,9 +317,10 @@ class LowStateMsgHandler:
         self._joint_vel_history = []
         self._joint_vel_raw_history = []
         self._logging_thread = threading.Thread(target=self._logging_loop, daemon=True)
+        self._logging_start_time = time.time()
         self._logging_thread.start()
 
-    def stop_logging(self) -> dict[str, np.ndarray]:
+    def stop_logging(self) -> dict[str, np.typing.NDArray]:
         self._logging = False
         if self._logging_thread is not None:
             self._logging_thread.join(timeout=1.0)
@@ -326,9 +329,11 @@ class LowStateMsgHandler:
         pos_raw_history = np.stack(self._joint_pos_raw_history, axis=0)
         vel_history = np.stack(self._joint_vel_history, axis=0)
         vel_raw_history = np.stack(self._joint_vel_raw_history, axis=0)
+        time_stamp = np.array(self._logging_time_stamp)
         return {
             "dof_pos": pos_history,
             "dof_pos_raw": pos_raw_history,
             "dof_vel": vel_history,
             "dof_vel_raw": vel_raw_history,
+            "time_stamp": time_stamp,
         }

@@ -148,6 +148,8 @@ class LeggedRobotBase(BaseGymRobot):
         self._target_dof_pos_history = []
         self._dof_pos_history = []
         self._dof_vel_history = []
+        self._logging_time_stamp = []
+        self._time_stamp = 0.0
         self._logging = False
 
     def post_build_init(self, eval_mode: bool = False) -> None:
@@ -328,7 +330,11 @@ class LeggedRobotBase(BaseGymRobot):
         if self._logging:
             self._dof_pos_history.append(self._dof_pos.clone())
             self._dof_vel_history.append(self._dof_vel.clone())
-            self._target_dof_pos_history.append(action[:, : self._dof_dim].clone() + self._default_dof_pos)
+            self._target_dof_pos_history.append(
+                action[:, : self._dof_dim].clone() + self._default_dof_pos
+            )
+            self._logging_time_stamp.append(self._time_stamp)
+            self._time_stamp += 1.0 / self.ctrl_freq / self.decimation
         if isinstance(action, torch.Tensor):
             match self.ctrl_type:
                 case CtrlType.DR_JOINT_POSITION:
@@ -390,25 +396,31 @@ class LeggedRobotBase(BaseGymRobot):
         self._dof_pos_history = []
         self._dof_vel_history = []
         self._target_dof_pos_history = []
+        self._logging_time_stamp = []
+        self._time_stamp = 0.0
 
     def stop_logging(self) -> dict[str, torch.Tensor]:
         self._logging = False
         pos_history = torch.stack(self._dof_pos_history, dim=1).cpu()
         vel_history = torch.stack(self._dof_vel_history, dim=1).cpu()
         target_pos_history = torch.stack(self._target_dof_pos_history, dim=1).cpu()
+        time_stamp = torch.tensor(self._logging_time_stamp, device=self._device)
         self._dof_pos_history = []
         self._dof_vel_history = []
         self._target_dof_pos_history = []
+        self._logging_time_stamp = []
+        self._time_stamp = 0.0
         return {
             "dof_pos": pos_history,
             "dof_vel": vel_history,
             "target_dof_pos": target_pos_history,
+            "time_stamp": time_stamp,
         }
 
     @property
     def dof_kp(self) -> torch.Tensor:
         return self._dof_kp
-    
+
     @property
     def dof_kd(self) -> torch.Tensor:
         return self._dof_kd
@@ -534,6 +546,10 @@ class LeggedRobotBase(BaseGymRobot):
     @property
     def ctrl_freq(self) -> float:
         return self._args.ctrl_freq
+
+    @property
+    def decimation(self) -> int:
+        return self._args.decimation
 
 
 class HumanoidRobotBase(LeggedRobotBase):
