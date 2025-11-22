@@ -25,6 +25,9 @@ from utils import (
 )  # type: ignore
 
 
+WAIT_FOR_NEXT_CTRL = True
+
+
 def run_single_dof_wave_diagnosis(
     env: Any,
     dof_idx: int = 0,
@@ -71,11 +74,12 @@ def run_single_dof_wave_diagnosis(
     current_dof_pos = env.dof_pos[0] - env.default_dof_pos
     TOTAL_RESET_STEPS = 50
     for i in range(TOTAL_RESET_STEPS):
-        if time.time() >= next_ctrl:
-            next_ctrl = time.time() + env.dt
-        else:
-            time.sleep(max(0, next_ctrl - time.time()))
-        next_ctrl += env.dt
+        if WAIT_FOR_NEXT_CTRL:
+            if time.time() >= next_ctrl:
+                next_ctrl = time.time() + env.dt
+            else:
+                time.sleep(max(0, next_ctrl - time.time()))
+            next_ctrl += env.dt
         env.apply_action(
             current_dof_pos / env.action_scale * (1 - i / TOTAL_RESET_STEPS)
             + action * (i / TOTAL_RESET_STEPS)
@@ -84,11 +88,12 @@ def run_single_dof_wave_diagnosis(
     env.robot.start_logging()
 
     for i in range(period * NUM_TOTAL_PERIODS):
-        if time.time() >= next_ctrl:
-            next_ctrl = time.time() + env.dt
-        else:
-            time.sleep(max(0, next_ctrl - time.time()))
-        next_ctrl += env.dt
+        if WAIT_FOR_NEXT_CTRL:
+            if time.time() >= next_ctrl:
+                next_ctrl = time.time() + env.dt
+            else:
+                time.sleep(max(0, next_ctrl - time.time()))
+            next_ctrl += env.dt
 
         target_dof_pos = wave_func(i) + offset
         action[:, dof_idx] = target_dof_pos / env.action_scale[dof_idx]
@@ -343,6 +348,10 @@ def main(
         }
     )
 
+    if sim and not show_viewer:
+        global WAIT_FOR_NEXT_CTRL
+        WAIT_FOR_NEXT_CTRL = False
+
     if sim:
         print("Running in SIMULATION mode")
         from gs_env.sim.envs.locomotion.leggedrobot_env import LeggedRobotEnv
@@ -370,11 +379,11 @@ def main(
             time.sleep(0.1)
 
     # DoF names, lower bound, upper bound
-    test_dofs = {
+    test_dofs = [
         # "hip_roll": [0.0, 0.8],
         # "hip_pitch": [-0.5, 0.5],
         # "hip_yaw": [-0.5, 0.5],
-        "knee": [0.0, 1.0],
+        # "knee": [0.0, 1.0],
         # "ankle_roll": [-0.2, 0.2],
         # "ankle_pitch": [-0.5, 0.5],
         # "waist_yaw": [-1.0, 1.0],
@@ -383,16 +392,27 @@ def main(
         # "shoulder_roll": [0.0, 1.0],
         # "shoulder_pitch": [-0.5, 0.5],
         # "shoulder_yaw": [0.0, 1.0],
-        # "elbow": [0.0, 1.0],
+        ["elbow", [0.0, 1.0]],
         # "wrist_roll": [-1.0, 1.0],
         # "wrist_pitch": [-1.0, 1.0],
         # "wrist_yaw": [0.0, 1.0],
-    }
+    ]
 
-    periods = [1, 2, 4]
-    pds = [[50, 5], [100, 5], [100, 10], [200, 10], [200, 20]]
+    for i, name in enumerate(env.dof_names):
+        if test_dofs[0][0] in name:
+            dof_idx = i
+            break
+    if sim:
+        kp = env.robot.dof_kp[dof_idx].item()
+        kd = env.robot.dof_kd[dof_idx].item()
+    else:
+        kp = env.robot.kp[dof_idx]
+        kd = env.robot.kd[dof_idx]
+    # periods = [1, 2, 4]
+    periods = [2,]
+    pds = [[kp / 2, kd / 2], [kp / 2, kd], [kp, kd], [kp, kd * 2], [kp * 2, kd * 2]]
     # feed_forward_ratios = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
-    feed_forward_ratios = [0.0, 0.5, 1.0]
+    feed_forward_ratios = [0.0, 0.25, 0.5, 0.75, 1.0]
     # low_pass_alphas = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
     low_pass_alphas = [1.0]
 
@@ -406,32 +426,32 @@ def main(
             for feed_forward_ratio in feed_forward_ratios:
                 for low_pass_alpha in low_pass_alphas:
                     for period in periods:
-                        for dof_name, (lower_bound, upper_bound) in test_dofs.items():
-                            dof_idx = -1
-                            for i, name in enumerate(dof_names):
-                                if dof_name in name:
-                                    dof_idx = i
-                                    break
-                            if dof_idx == -1:
-                                print(f"Dof {dof_name} not found")
-                                continue
-                            amplitude = (upper_bound - lower_bound) / 2
-                            offset = (upper_bound + lower_bound) / 2
-                            run_single_dof_diagnosis(
-                                env,
-                                dof_idx=dof_idx,
-                                dof_name=dof_name,
-                                num_dofs=env.action_dim,
-                                period=int(period / env.dt),
-                                amplitude=amplitude,
-                                offset=offset,
-                                log_dir=log_dir,
-                                sim=sim,
-                                kp=kp,
-                                kd=kd,
-                                feed_forward_ratio=feed_forward_ratio,
-                                low_pass_alpha=low_pass_alpha,
-                            )
+                        dof_name, (lower_bound, upper_bound) = test_dofs[0]
+                        dof_idx = -1
+                        for i, name in enumerate(dof_names):
+                            if dof_name in name:
+                                dof_idx = i
+                                break
+                        if dof_idx == -1:
+                            print(f"Dof {dof_name} not found")
+                            continue
+                        amplitude = (upper_bound - lower_bound) / 2
+                        offset = (upper_bound + lower_bound) / 2
+                        run_single_dof_diagnosis(
+                            env,
+                            dof_idx=dof_idx,
+                            dof_name=dof_name,
+                            num_dofs=env.action_dim,
+                            period=int(period / env.dt),
+                            amplitude=amplitude,
+                            offset=offset,
+                            log_dir=log_dir,
+                            sim=sim,
+                            kp=kp,
+                            kd=kd,
+                            feed_forward_ratio=feed_forward_ratio,
+                            low_pass_alpha=low_pass_alpha,
+                        )
 
     try:
         if platform.system() == "Darwin" and show_viewer:

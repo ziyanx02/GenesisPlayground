@@ -10,7 +10,7 @@ from itertools import cycle
 
 
 def main(
-    dof_name: str = "knee",
+    dof_name: str = "elbow",
     sim: bool = True,
     x_axis: str = "dof_pos_lag",
     y_axis: str = "dof_vel_SD",
