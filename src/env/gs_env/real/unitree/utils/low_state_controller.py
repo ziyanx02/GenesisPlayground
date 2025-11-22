@@ -277,10 +277,8 @@ class LowStateCmdHandler(LowStateMsgHandler):
             self._joint_vel_history.append(self.joint_vel.copy())
             self._joint_vel_raw_history.append(self.joint_vel_raw.copy())
             self._target_pos_history.append(self.target_pos.copy())
-            cur_t = time.time()
-            sleep_dt = self.logging_interval - (cur_t - start_t)
-            if sleep_dt > 0:
-                time.sleep(sleep_dt)
+            if self.logging_interval - (time.time() - start_t) > 0:
+                time.sleep(self.logging_interval - (time.time() - start_t))
 
     def start_logging(self) -> None:
         self._logging = True

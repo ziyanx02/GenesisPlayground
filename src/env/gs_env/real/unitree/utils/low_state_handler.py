@@ -151,7 +151,7 @@ class LowStateMsgHandler:
         self.Start = 0
 
         # Low Pass Filter
-        self.low_pass_alpha = 0.3
+        self.low_pass_alpha = 0.1
 
         # Logging (runs in a separate thread)
         self._logging = False

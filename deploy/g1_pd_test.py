@@ -12,16 +12,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from gs_env.sim.envs.config.registry import EnvArgsRegistry
-from gs_env.sim.envs.config.schema import LeggedRobotEnvArgs
 
 # Add examples to path to import utils
 sys.path.insert(0, str(Path(__file__).parent.parent / "examples"))
 from utils import (
-    plot_metric_on_axis,
-    yaml_to_config,
-    cross_correlation,
-    compute_SRD,
     compute_SD,
+    compute_SRD,
+    cross_correlation,
+    plot_metric_on_axis,
 )  # type: ignore
 
 
@@ -71,19 +69,17 @@ def run_single_dof_wave_diagnosis(
     current_dof_pos = env.dof_pos[0] - env.default_dof_pos
     TOTAL_RESET_STEPS = 50
     for i in range(TOTAL_RESET_STEPS):
-        while time.time() - last_update_time < 0.02:
-            time.sleep(0.001)
         last_update_time = time.time()
         env.apply_action(
             current_dof_pos / env.action_scale * (1 - i / TOTAL_RESET_STEPS)
             + action * (i / TOTAL_RESET_STEPS)
         )
+        if time.time() - last_update_time < env.dt:
+            time.sleep(env.dt - (time.time() - last_update_time))
 
     env.robot.start_logging()
 
     for i in range(period * NUM_TOTAL_PERIODS):
-        while time.time() - last_update_time < 0.02:
-            time.sleep(0.001)
         last_update_time = time.time()
 
         target_dof_pos = wave_func(i) + offset
@@ -93,10 +89,13 @@ def run_single_dof_wave_diagnosis(
         if i % period == 0:
             print(f"Step {i} of {period * NUM_TOTAL_PERIODS}")
 
+        if time.time() - last_update_time < env.dt:
+            time.sleep(env.dt - (time.time() - last_update_time))
+
     log = env.robot.stop_logging()
     for key in log.keys():
         log[key] = log[key][..., dof_idx]
-        if type(log[key]) == torch.Tensor:
+        if isinstance(log[key], torch.Tensor):
             log[key] = log[key].squeeze().cpu().numpy()
 
     return log
@@ -129,29 +128,45 @@ def run_single_dof_diagnosis(
         dof_pos_list = log["dof_pos"].tolist()
         dof_vel_list = log["dof_vel"].tolist()
 
-        dof_pos_lag = cross_correlation(
-            np.array(target_dof_pos_list[::4]), np.array(dof_pos_list[::4])
-        ) * env.dt
+        dof_pos_lag = (
+            cross_correlation(np.array(target_dof_pos_list[::4]), np.array(dof_pos_list[::4]))
+            * env.dt
+        )
         print("=" * 40)
         print(f"Lag: {dof_pos_lag:.4f}")
         print("=" * 40)
-        print(f"target_dof_pos SRD: {compute_SRD(np.array(target_dof_pos_list)):.4f}, SD: {compute_SD(np.array(target_dof_pos_list)):.4f}")
-        print(f"target_dof_pos / 4 SRD: {compute_SRD(np.array(target_dof_pos_list[::4])):.4f}, SD: {compute_SD(np.array(target_dof_pos_list[::4])):.4f}")
-        print(f"dof_pos SRD: {compute_SRD(np.array(dof_pos_list)):.4f}, SD: {compute_SD(np.array(dof_pos_list)):.4f}")
-        print(f"dof_pos / 4 SRD: {compute_SRD(np.array(dof_pos_list[::4])):.4f}, SD: {compute_SD(np.array(dof_pos_list[::4])):.4f}")
+        print(
+            f"target_dof_pos SRD: {compute_SRD(np.array(target_dof_pos_list)):.4f}, SD: {compute_SD(np.array(target_dof_pos_list)):.4f}"
+        )
+        print(
+            f"target_dof_pos / 4 SRD: {compute_SRD(np.array(target_dof_pos_list[::4])):.4f}, SD: {compute_SD(np.array(target_dof_pos_list[::4])):.4f}"
+        )
+        print(
+            f"dof_pos SRD: {compute_SRD(np.array(dof_pos_list)):.4f}, SD: {compute_SD(np.array(dof_pos_list)):.4f}"
+        )
+        print(
+            f"dof_pos / 4 SRD: {compute_SRD(np.array(dof_pos_list[::4])):.4f}, SD: {compute_SD(np.array(dof_pos_list[::4])):.4f}"
+        )
         if sim:
             data_lists = [target_dof_pos_list, dof_pos_list]
             labels = ["Target", "Dof Pos"]
         else:
             dof_pos_raw_list = log["dof_pos_raw"].tolist()
             print("=" * 40)
-            dof_pos_lag = cross_correlation(
-                np.array(target_dof_pos_list[::4]), np.array(dof_pos_raw_list[::4])
-            ) * env.dt
+            dof_pos_lag = (
+                cross_correlation(
+                    np.array(target_dof_pos_list[::4]), np.array(dof_pos_raw_list[::4])
+                )
+                * env.dt
+            )
             print(f"Raw Lag: {dof_pos_lag:.4f}")
             print("=" * 40)
-            print(f"dof_pos_raw SRD: {compute_SRD(np.array(dof_pos_raw_list)):.4f}, SD: {compute_SD(np.array(dof_pos_raw_list)):.4f}")
-            print(f"dof_pos_raw / 4 SRD: {compute_SRD(np.array(dof_pos_raw_list[::4])):.4f}, SD: {compute_SD(np.array(dof_pos_raw_list[::4])):.4f}")
+            print(
+                f"dof_pos_raw SRD: {compute_SRD(np.array(dof_pos_raw_list)):.4f}, SD: {compute_SD(np.array(dof_pos_raw_list)):.4f}"
+            )
+            print(
+                f"dof_pos_raw / 4 SRD: {compute_SRD(np.array(dof_pos_raw_list[::4])):.4f}, SD: {compute_SD(np.array(dof_pos_raw_list[::4])):.4f}"
+            )
             data_lists = [target_dof_pos_list, dof_pos_list, dof_pos_raw_list]
             labels = ["Target", "Dof Pos", "Dof Pos Raw"]
 
@@ -166,15 +181,24 @@ def run_single_dof_diagnosis(
         )
 
         print("=" * 40)
-        print(f"dof_vel SRD: {compute_SRD(np.array(dof_vel_list)):.4f}, SD: {compute_SD(np.array(dof_vel_list)):.4f}")
-        print(f"dof_vel / 4 SRD: {compute_SRD(np.array(dof_vel_list[::4])):.4f}, SD: {compute_SD(np.array(dof_vel_list[::4])):.4f}")
+        print(
+            f"dof_vel SRD: {compute_SRD(np.array(dof_vel_list)):.4f}, SD: {compute_SD(np.array(dof_vel_list)):.4f}"
+        )
+        print(
+            f"dof_vel / 4 SRD: {compute_SRD(np.array(dof_vel_list[::4])):.4f}, SD: {compute_SD(np.array(dof_vel_list[::4])):.4f}"
+        )
 
         if sim:
             data_lists = [dof_vel_list]
             labels = ["Dof Vel"]
         else:
             dof_vel_raw_list = log["dof_vel_raw"].tolist()
-            print(f"dof_vel_raw SRD: {compute_SRD(np.array(dof_vel_raw_list)):.4f}, SD: {compute_SD(np.array(dof_vel_raw_list)):.4f}")
+            print(
+                f"dof_vel_raw SRD: {compute_SRD(np.array(dof_vel_raw_list)):.4f}, SD: {compute_SD(np.array(dof_vel_raw_list)):.4f}"
+            )
+            print(
+                f"dof_vel_raw / 4 SRD: {compute_SRD(np.array(dof_vel_raw_list[::4])):.4f}, SD: {compute_SD(np.array(dof_vel_raw_list[::4])):.4f}"
+            )
             data_lists = [dof_vel_list, dof_vel_raw_list]
             labels = ["Dof Vel", "Dof Vel Raw"]
 
@@ -288,10 +312,7 @@ def main(
         nonlocal env
         dof_names = env.dof_names
 
-        if sim:
-            log_dir = Path(__file__).parent / "logs" / "pd_test" / "sim"
-        else:
-            log_dir = Path(__file__).parent / "logs" / "pd_test" / "real"
+        log_dir = Path(__file__).parent / "logs" / "pd_test"
 
         for dof_name, (lower_bound, upper_bound) in test_dofs.items():
             dof_idx = -1
