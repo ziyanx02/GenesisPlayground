@@ -44,7 +44,7 @@ def cross_correlation(
         delta = 0.0
 
     lag_subsample = lag_int + delta
-    return -lag_subsample
+    return -lag_subsample.item()
 
 
 def compute_SRD(a: np.typing.NDArray[Any], eps: float = 1e-3) -> float:

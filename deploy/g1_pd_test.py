@@ -1,8 +1,10 @@
 import platform
+import os
 import sys
 import time
 from pathlib import Path
 from typing import Any
+import yaml
 
 import fire
 import matplotlib
@@ -64,23 +66,29 @@ def run_single_dof_wave_diagnosis(
     action = torch.zeros((1, num_dofs), device=env.device)
     action[:, dof_idx] = offset / env.action_scale[dof_idx]
 
-    last_update_time = time.time()
+    next_ctrl = time.time() + env.dt
 
     current_dof_pos = env.dof_pos[0] - env.default_dof_pos
     TOTAL_RESET_STEPS = 50
     for i in range(TOTAL_RESET_STEPS):
-        last_update_time = time.time()
+        # if time.time() >= next_ctrl:
+        #     next_ctrl = time.time() + env.dt
+        # else:
+        #     time.sleep(max(0, next_ctrl - time.time()))
+        # next_ctrl += env.dt
         env.apply_action(
             current_dof_pos / env.action_scale * (1 - i / TOTAL_RESET_STEPS)
             + action * (i / TOTAL_RESET_STEPS)
         )
-        if time.time() - last_update_time < env.dt:
-            time.sleep(env.dt - (time.time() - last_update_time))
 
     env.robot.start_logging()
 
     for i in range(period * NUM_TOTAL_PERIODS):
-        last_update_time = time.time()
+        # if time.time() >= next_ctrl:
+        #     next_ctrl = time.time() + env.dt
+        # else:
+        #     time.sleep(max(0, next_ctrl - time.time()))
+        # next_ctrl += env.dt
 
         target_dof_pos = wave_func(i) + offset
         action[:, dof_idx] = target_dof_pos / env.action_scale[dof_idx]
@@ -88,9 +96,6 @@ def run_single_dof_wave_diagnosis(
 
         if i % period == 0:
             print(f"Step {i} of {period * NUM_TOTAL_PERIODS}")
-
-        if time.time() - last_update_time < env.dt:
-            time.sleep(env.dt - (time.time() - last_update_time))
 
     log = env.robot.stop_logging()
     for key in log.keys():
@@ -112,9 +117,39 @@ def run_single_dof_diagnosis(
     offset: float = 0.0,
     log_dir: Path = Path(__file__).parent / "logs" / "pd_test",
     sim: bool = True,
-) -> None:
+    kp: float | None = None,
+    kd: float | None = None,
+    feed_forward_ratio: float | None = None,
+    low_pass_alpha: float | None = None,
+) -> dict[str, float]:
+    if sim:
+        if kp is not None:
+            batched_kp = env.robot.batched_dof_kp.clone()
+            batched_kp[:, dof_idx] = kp
+            env.robot.set_batched_dof_kp(batched_kp)
+        if kd is not None:
+            batched_kd = env.robot.batched_dof_kd.clone()
+            batched_kd[:, dof_idx] = kd
+            env.robot.set_batched_dof_kd(batched_kd)
+    else:
+        if kp is not None:
+            env.robot.kp[dof_idx] = kp
+        if kd is not None:
+            env.robot.kd[dof_idx] = kd
+    if kp is None:
+        kp = env.robot.dof_kp[dof_idx].item()
+    if kd is None:
+        kd = env.robot.dof_kd[dof_idx].item()
+    if feed_forward_ratio is not None:
+        env.robot.feed_forward_ratio = feed_forward_ratio
+    else:
+        feed_forward_ratio = env.robot.feed_forward_ratio
+    if low_pass_alpha is not None:
+        env.low_pass_alpha = low_pass_alpha
+    else:
+        low_pass_alpha = env.low_pass_alpha
     fig, axes = plt.subplots(4, 1, figsize=(12, 12))
-    wave_types = ["SIN", "FM-SIN"] if sim else ["SIN"]
+    wave_types = ["SIN",]
     for i, wave_type in enumerate(wave_types):
         log = run_single_dof_wave_diagnosis(
             env,
@@ -217,6 +252,16 @@ def run_single_dof_diagnosis(
             dof_vel_raw_SD = compute_SD(dof_vel_raw_raw)
             dof_vel_raw_SRD_decimated = compute_SRD(dof_vel_raw_raw[:: env.decimation])
             dof_vel_raw_SD_decimated = compute_SD(dof_vel_raw_raw[:: env.decimation])
+            low_pass_lag = (
+                cross_correlation(
+                    dof_vel_raw_raw,
+                    dof_vel_raw,
+                )
+                * env.dt / env.decimation
+            )
+            print("=" * 40)
+            print(f"Low Pass Lag: {low_pass_lag:.4f}")
+            print("=" * 40)
             print(f"dof_vel_raw SRD: {dof_vel_raw_SRD:.4f}, SD: {dof_vel_raw_SD:.4f}")
             print(
                 f"dof_vel_raw / {env.decimation} SRD: {dof_vel_raw_SRD_decimated:.4f}, SD: {dof_vel_raw_SD_decimated:.4f}"
@@ -234,20 +279,6 @@ def run_single_dof_diagnosis(
             yscale="linear",
         )
 
-        # if wave_type == "SQ":
-        #     truncated_dof_pos_list = dof_pos_list[-period : -period + 10]
-        #     truncated_target_dof_pos_list = target_dof_pos_list[-period : -period + 10]
-        #     plot_metric_on_axis(
-        #         axes[3],
-        #         np.arange(len(truncated_target_dof_pos_list)),
-        #         [truncated_target_dof_pos_list, truncated_dof_pos_list],
-        #         ["Target", "Dof Pos"],
-        #         "Dof Pos",
-        #         "Truncated",
-        #         yscale="linear",
-        #         show_mean=False,
-        #     )
-
         print("=" * 40)
 
     # Save plot
@@ -260,6 +291,34 @@ def run_single_dof_diagnosis(
     plt.close(fig)
 
     print(f"Plot saved to: {plot_path}")
+
+    result = {
+        "dof_name": dof_name,
+        "sim": sim,
+        "period": period * env.dt,
+        "kp": kp,
+        "kd": kd,
+        "feed_forward_ratio": feed_forward_ratio,
+        "low_pass_alpha": low_pass_alpha,
+        "dof_pos_lag": dof_pos_lag,
+        "dof_vel_SRD": dof_vel_SRD,
+        "dof_vel_SD": dof_vel_SD,
+        "dof_vel_SRD_decimated": dof_vel_SRD_decimated,
+        "dof_vel_SD_decimated": dof_vel_SD_decimated,
+    }
+
+    if not sim:
+        result["low_pass_lag"] = low_pass_lag
+        result["dof_vel_raw_SRD"] = dof_vel_raw_SRD
+        result["dof_vel_raw_SD"] = dof_vel_raw_SD
+        result["dof_vel_raw_SRD_decimated"] = dof_vel_raw_SRD_decimated
+        result["dof_vel_raw_SD_decimated"] = dof_vel_raw_SD_decimated
+
+    os.makedirs(log_dir / "yaml", exist_ok=True)
+    with open(log_dir / "yaml" / f"{dof_name}_{sim_suffix}_{period * env.dt:.1f}_{kp:.1f}_{kd:.1f}_{feed_forward_ratio:.1f}_{low_pass_alpha:.1f}.yaml", "w") as f:
+        yaml.dump(result, f)
+
+    return result
 
 
 def main(
@@ -330,34 +389,49 @@ def main(
         # "wrist_yaw": [0.0, 1.0],
     }
 
+    periods = [1, 2, 4]
+    pds = [[50, 5], [100, 5], [100, 10], [200, 10], [200, 20]]
+    # feed_forward_ratios = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+    feed_forward_ratios = [0.0, 0.5, 1.0]
+    # low_pass_alphas = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+    low_pass_alphas = [1.0]
+
     def run_dof_diagnosis_fixed() -> None:
-        nonlocal env
+        nonlocal env, test_dofs, pds, feed_forward_ratios, low_pass_alphas, periods
         dof_names = env.dof_names
 
         log_dir = Path(__file__).parent / "logs" / "pd_test"
 
-        for dof_name, (lower_bound, upper_bound) in test_dofs.items():
-            dof_idx = -1
-            for i, name in enumerate(dof_names):
-                if dof_name in name:
-                    dof_idx = i
-                    break
-            if dof_idx == -1:
-                print(f"Dof {dof_name} not found")
-                continue
-            amplitude = (upper_bound - lower_bound) / 2
-            offset = (upper_bound + lower_bound) / 2
-            run_single_dof_diagnosis(
-                env,
-                dof_idx=dof_idx,
-                dof_name=dof_name,
-                num_dofs=env.action_dim,
-                period=100,
-                amplitude=amplitude,
-                offset=offset,
-                log_dir=log_dir,
-                sim=sim,
-            )
+        for kp, kd in pds:
+            for feed_forward_ratio in feed_forward_ratios:
+                for low_pass_alpha in low_pass_alphas:
+                    for period in periods:
+                        for dof_name, (lower_bound, upper_bound) in test_dofs.items():
+                            dof_idx = -1
+                            for i, name in enumerate(dof_names):
+                                if dof_name in name:
+                                    dof_idx = i
+                                    break
+                            if dof_idx == -1:
+                                print(f"Dof {dof_name} not found")
+                                continue
+                            amplitude = (upper_bound - lower_bound) / 2
+                            offset = (upper_bound + lower_bound) / 2
+                            run_single_dof_diagnosis(
+                                env,
+                                dof_idx=dof_idx,
+                                dof_name=dof_name,
+                                num_dofs=env.action_dim,
+                                period=int(period / env.dt),
+                                amplitude=amplitude,
+                                offset=offset,
+                                log_dir=log_dir,
+                                sim=sim,
+                                kp=kp,
+                                kd=kd,
+                                feed_forward_ratio=feed_forward_ratio,
+                                low_pass_alpha=low_pass_alpha,
+                            )
 
     try:
         if platform.system() == "Darwin" and show_viewer:

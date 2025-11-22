@@ -97,6 +97,14 @@ class UnitreeLeggedEnv(BaseGymRobot):
         return self.robot.dof_names
 
     @property
+    def dof_kp(self) -> torch.Tensor:
+        return torch.tensor(self.robot.kp, device=self._device, dtype=torch.float32)
+
+    @property
+    def dof_kd(self) -> torch.Tensor:
+        return torch.tensor(self.robot.kd, device=self._device, dtype=torch.float32)
+
+    @property
     def default_dof_pos(self) -> torch.Tensor:
         return torch.tensor(self.robot.default_dof_pos, device=self._device, dtype=torch.float32)[
             None, :

@@ -297,18 +297,16 @@ class LowStateMsgHandler:
     # Logging API (threaded)
     # =========================
     def _logging_loop(self) -> None:
+        next_log_time = time.time() + self.logging_interval
         while self._logging:
-            start_t = time.time()
             # Copy current measurements
             self._joint_pos_history.append(self.joint_pos.copy())
             self._joint_pos_raw_history.append(self.joint_pos_raw.copy())
             self._joint_vel_history.append(self.joint_vel.copy())
             self._joint_vel_raw_history.append(self.joint_vel_raw.copy())
             self._logging_time_stamp.append(time.time() - self._logging_start_time)
-            cur_t = time.time()
-            sleep_dt = self.logging_interval - (cur_t - start_t)
-            if sleep_dt > 0:
-                time.sleep(sleep_dt)
+            time.sleep(max(0, next_log_time - time.time()))
+            next_log_time += self.logging_interval
 
     def start_logging(self) -> None:
         self._logging = True

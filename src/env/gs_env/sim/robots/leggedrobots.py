@@ -142,7 +142,7 @@ class LeggedRobotBase(BaseGymRobot):
             CtrlType.DR_JOINT_POSITION.value: self._apply_dr_joint_pos,
             CtrlType.DR_JOINT_POSITION_VELOCITY.value: self._apply_dr_joint_pos_vel,
         }
-        self._feed_forward_ratio = self._args.feed_forward_ratio
+        self.feed_forward_ratio = self._args.feed_forward_ratio
 
         # == set up dof pos logger ==
         self._target_dof_pos_history = []
@@ -381,7 +381,7 @@ class LeggedRobotBase(BaseGymRobot):
         q_force = self._batched_dof_kp * (
             act.joint_pos + self._default_dof_pos - self._dof_pos + self._motor_offset
         ) + self._batched_dof_kd * (
-            -self._dof_vel + act.joint_vel * self.direct_drive_mask * self._feed_forward_ratio
+            -self._dof_vel + act.joint_vel * self.direct_drive_mask * self.feed_forward_ratio
         )
         q_force = q_force * self._motor_strength
         q_force = torch.clamp(q_force, -self._torque_limits, self._torque_limits)
