@@ -49,6 +49,8 @@ class UnitreeLeggedEnv(BaseGymRobot):
                 if joint_name in dof_name:
                     self.direct_drive_mask[i] = 0.0
         self.prev_target_pos = np.array(self.robot.default_dof_pos, dtype=np.float32)
+        self.target_vel_low_pass = np.zeros_like(self.robot.default_dof_pos, dtype=np.float32)
+        self.low_pass_alpha = self._args.robot_args.low_pass_alpha
         self.dt = 1.0 / self.ctrl_freq
 
     def reset(self, envs_idx: torch.IntTensor | None = None) -> None:
@@ -59,6 +61,7 @@ class UnitreeLeggedEnv(BaseGymRobot):
         action_np = action[0].cpu().numpy()
         target_pos = self.robot.default_dof_pos + action_np * self._action_scale
         target_vel = (target_pos - self.prev_target_pos) / self.dt
+        self.target_vel_low_pass += self.low_pass_alpha * (target_vel - self.target_vel_low_pass)
         self.robot.target_pos = target_pos
         self.robot.target_vel = target_vel * self.direct_drive_mask
         self.prev_target_pos = target_pos.copy()
@@ -85,6 +88,10 @@ class UnitreeLeggedEnv(BaseGymRobot):
     @property
     def action_scale(self) -> torch.Tensor:
         return torch.tensor(self._action_scale, device=self._device, dtype=torch.float32)
+
+    @property
+    def dt(self) -> float:
+        return 1.0 / self.ctrl_freq
 
     @property
     def dof_names(self) -> list[str]:

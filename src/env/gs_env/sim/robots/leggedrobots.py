@@ -328,7 +328,7 @@ class LeggedRobotBase(BaseGymRobot):
         if self._logging:
             self._dof_pos_history.append(self._dof_pos.clone())
             self._dof_vel_history.append(self._dof_vel.clone())
-            self._target_dof_pos_history.append(action.clone())
+            self._target_dof_pos_history.append(action[:, : self._dof_dim].clone() + self._default_dof_pos)
         if isinstance(action, torch.Tensor):
             match self.ctrl_type:
                 case CtrlType.DR_JOINT_POSITION:

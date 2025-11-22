@@ -16,7 +16,13 @@ from gs_env.sim.envs.config.schema import LeggedRobotEnvArgs
 
 # Add examples to path to import utils
 sys.path.insert(0, str(Path(__file__).parent.parent / "examples"))
-from utils import plot_metric_on_axis, yaml_to_config  # type: ignore
+from utils import (
+    plot_metric_on_axis,
+    yaml_to_config,
+    cross_correlation,
+    compute_SRD,
+    compute_SD,
+)  # type: ignore
 
 
 def run_single_dof_wave_diagnosis(
@@ -27,7 +33,7 @@ def run_single_dof_wave_diagnosis(
     period: int = 1,
     amplitude: float = 1.0,
     offset: float = 0.0,
-) -> tuple[list[float], list[float]]:
+) -> dict[str, Any]:
     """Run single DoF diagnosis."""
     print(f"Running DoF diagnosis for {wave_type}")
     NUM_TOTAL_PERIODS = 3
@@ -73,8 +79,7 @@ def run_single_dof_wave_diagnosis(
             + action * (i / TOTAL_RESET_STEPS)
         )
 
-    target_dof_pos_list = []
-    dof_pos_list = []
+    env.robot.start_logging()
 
     for i in range(period * NUM_TOTAL_PERIODS):
         while time.time() - last_update_time < 0.02:
@@ -83,15 +88,18 @@ def run_single_dof_wave_diagnosis(
 
         target_dof_pos = wave_func(i) + offset
         action[:, dof_idx] = target_dof_pos / env.action_scale[dof_idx]
-        dof_pos = env.dof_pos[0, dof_idx].cpu().item() - env.robot.default_dof_pos[dof_idx]
-        target_dof_pos_list.append(target_dof_pos)
-        dof_pos_list.append(dof_pos)
         env.apply_action(action)
 
         if i % period == 0:
             print(f"Step {i} of {period * NUM_TOTAL_PERIODS}")
 
-    return target_dof_pos_list, dof_pos_list
+    log = env.robot.stop_logging()
+    for key in log.keys():
+        log[key] = log[key][..., dof_idx]
+        if type(log[key]) == torch.Tensor:
+            log[key] = log[key].squeeze().cpu().numpy()
+
+    return log
 
 
 def run_single_dof_diagnosis(
@@ -103,10 +111,12 @@ def run_single_dof_diagnosis(
     amplitude: float = 1.0,
     offset: float = 0.0,
     log_dir: Path = Path(__file__).parent / "logs" / "pd_test",
+    sim: bool = True,
 ) -> None:
     fig, axes = plt.subplots(4, 1, figsize=(12, 12))
-    for i, wave_type in enumerate(["SIN", "FM-SIN"]):
-        target_dof_pos_list, dof_pos_list = run_single_dof_wave_diagnosis(
+    wave_types = ["SIN", "FM-SIN"] if sim else ["SIN"]
+    for i, wave_type in enumerate(wave_types):
+        log = run_single_dof_wave_diagnosis(
             env,
             dof_idx=dof_idx,
             num_dofs=num_dofs,
@@ -115,34 +125,90 @@ def run_single_dof_diagnosis(
             amplitude=amplitude,
             offset=offset,
         )
+        target_dof_pos_list = log["target_dof_pos"].tolist()
+        dof_pos_list = log["dof_pos"].tolist()
+        dof_vel_list = log["dof_vel"].tolist()
+
+        dof_pos_lag = cross_correlation(
+            np.array(target_dof_pos_list[::4]), np.array(dof_pos_list[::4])
+        ) * env.dt
+        print("=" * 40)
+        print(f"Lag: {dof_pos_lag:.4f}")
+        print("=" * 40)
+        print(f"target_dof_pos SRD: {compute_SRD(np.array(target_dof_pos_list)):.4f}, SD: {compute_SD(np.array(target_dof_pos_list)):.4f}")
+        print(f"target_dof_pos / 4 SRD: {compute_SRD(np.array(target_dof_pos_list[::4])):.4f}, SD: {compute_SD(np.array(target_dof_pos_list[::4])):.4f}")
+        print(f"dof_pos SRD: {compute_SRD(np.array(dof_pos_list)):.4f}, SD: {compute_SD(np.array(dof_pos_list)):.4f}")
+        print(f"dof_pos / 4 SRD: {compute_SRD(np.array(dof_pos_list[::4])):.4f}, SD: {compute_SD(np.array(dof_pos_list[::4])):.4f}")
+        if sim:
+            data_lists = [target_dof_pos_list, dof_pos_list]
+            labels = ["Target", "Dof Pos"]
+        else:
+            dof_pos_raw_list = log["dof_pos_raw"].tolist()
+            print("=" * 40)
+            dof_pos_lag = cross_correlation(
+                np.array(target_dof_pos_list[::4]), np.array(dof_pos_raw_list[::4])
+            ) * env.dt
+            print(f"Raw Lag: {dof_pos_lag:.4f}")
+            print("=" * 40)
+            print(f"dof_pos_raw SRD: {compute_SRD(np.array(dof_pos_raw_list)):.4f}, SD: {compute_SD(np.array(dof_pos_raw_list)):.4f}")
+            print(f"dof_pos_raw / 4 SRD: {compute_SRD(np.array(dof_pos_raw_list[::4])):.4f}, SD: {compute_SD(np.array(dof_pos_raw_list[::4])):.4f}")
+            data_lists = [target_dof_pos_list, dof_pos_list, dof_pos_raw_list]
+            labels = ["Target", "Dof Pos", "Dof Pos Raw"]
+
         plot_metric_on_axis(
-            axes[i],
+            axes[i * 2],
             np.arange(len(target_dof_pos_list)),
-            [target_dof_pos_list, dof_pos_list],
-            ["Target", "Dof Pos"],
+            data_lists,
+            labels,
             "Dof Pos",
             wave_type,
             yscale="linear",
         )
 
-        if wave_type == "SQ":
-            truncated_dof_pos_list = dof_pos_list[-period : -period + 10]
-            truncated_target_dof_pos_list = target_dof_pos_list[-period : -period + 10]
-            plot_metric_on_axis(
-                axes[3],
-                np.arange(len(truncated_target_dof_pos_list)),
-                [truncated_target_dof_pos_list, truncated_dof_pos_list],
-                ["Target", "Dof Pos"],
-                "Dof Pos",
-                "Truncated",
-                yscale="linear",
-                show_mean=False,
-            )
+        print("=" * 40)
+        print(f"dof_vel SRD: {compute_SRD(np.array(dof_vel_list)):.4f}, SD: {compute_SD(np.array(dof_vel_list)):.4f}")
+        print(f"dof_vel / 4 SRD: {compute_SRD(np.array(dof_vel_list[::4])):.4f}, SD: {compute_SD(np.array(dof_vel_list[::4])):.4f}")
+
+        if sim:
+            data_lists = [dof_vel_list]
+            labels = ["Dof Vel"]
+        else:
+            dof_vel_raw_list = log["dof_vel_raw"].tolist()
+            print(f"dof_vel_raw SRD: {compute_SRD(np.array(dof_vel_raw_list)):.4f}, SD: {compute_SD(np.array(dof_vel_raw_list)):.4f}")
+            data_lists = [dof_vel_list, dof_vel_raw_list]
+            labels = ["Dof Vel", "Dof Vel Raw"]
+
+        plot_metric_on_axis(
+            axes[i * 2 + 1],
+            np.arange(len(target_dof_pos_list)),
+            data_lists,
+            labels,
+            "Dof Vel",
+            wave_type,
+            yscale="linear",
+        )
+
+        # if wave_type == "SQ":
+        #     truncated_dof_pos_list = dof_pos_list[-period : -period + 10]
+        #     truncated_target_dof_pos_list = target_dof_pos_list[-period : -period + 10]
+        #     plot_metric_on_axis(
+        #         axes[3],
+        #         np.arange(len(truncated_target_dof_pos_list)),
+        #         [truncated_target_dof_pos_list, truncated_dof_pos_list],
+        #         ["Target", "Dof Pos"],
+        #         "Dof Pos",
+        #         "Truncated",
+        #         yscale="linear",
+        #         show_mean=False,
+        #     )
+
+        print("=" * 40)
 
     # Save plot
     log_dir.mkdir(parents=True, exist_ok=True)
 
-    plot_path = log_dir / f"{dof_name}.png"
+    sim_suffix = "sim" if sim else "real"
+    plot_path = log_dir / f"{dof_name}_{sim_suffix}.png"
     plt.tight_layout()
     plt.savefig(plot_path, dpi=150)
     plt.close(fig)
@@ -157,6 +223,20 @@ def main(
 ) -> None:
     # Load checkpoint and env_args
     env_args = EnvArgsRegistry["g1_fixed"]
+
+    robot_args = env_args.robot_args.model_copy(
+        update={
+            "decimation": 4,
+            "low_pass_alpha": 0.3,
+            "feed_forward_ratio": 0.5,
+        }
+    )
+    env_args = env_args.model_copy(
+        update={
+            "robot_args": robot_args,
+            "action_latency": 0,
+        }
+    )
 
     if sim:
         print("Running in SIMULATION mode")
@@ -233,6 +313,7 @@ def main(
                 amplitude=amplitude,
                 offset=offset,
                 log_dir=log_dir,
+                sim=sim,
             )
 
     try:
