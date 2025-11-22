@@ -71,11 +71,11 @@ def run_single_dof_wave_diagnosis(
     current_dof_pos = env.dof_pos[0] - env.default_dof_pos
     TOTAL_RESET_STEPS = 50
     for i in range(TOTAL_RESET_STEPS):
-        # if time.time() >= next_ctrl:
-        #     next_ctrl = time.time() + env.dt
-        # else:
-        #     time.sleep(max(0, next_ctrl - time.time()))
-        # next_ctrl += env.dt
+        if time.time() >= next_ctrl:
+            next_ctrl = time.time() + env.dt
+        else:
+            time.sleep(max(0, next_ctrl - time.time()))
+        next_ctrl += env.dt
         env.apply_action(
             current_dof_pos / env.action_scale * (1 - i / TOTAL_RESET_STEPS)
             + action * (i / TOTAL_RESET_STEPS)
@@ -84,11 +84,11 @@ def run_single_dof_wave_diagnosis(
     env.robot.start_logging()
 
     for i in range(period * NUM_TOTAL_PERIODS):
-        # if time.time() >= next_ctrl:
-        #     next_ctrl = time.time() + env.dt
-        # else:
-        #     time.sleep(max(0, next_ctrl - time.time()))
-        # next_ctrl += env.dt
+        if time.time() >= next_ctrl:
+            next_ctrl = time.time() + env.dt
+        else:
+            time.sleep(max(0, next_ctrl - time.time()))
+        next_ctrl += env.dt
 
         target_dof_pos = wave_func(i) + offset
         action[:, dof_idx] = target_dof_pos / env.action_scale[dof_idx]
