@@ -1,0 +1,12 @@
+{
+    "files.exclude": {
+      "**/__pycache__": true,
+      "**/.git": true,
+      "**/.ruff_cache": true,
+      "**/.github": true,
+      "uv.lock": true,
+      ".pre-commit-config.yaml": true,
+      "LICENSE": true,
+      "pyproject.toml": true,
+    },
+  }
