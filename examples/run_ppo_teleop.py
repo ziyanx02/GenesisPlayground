@@ -508,7 +508,7 @@ def main(
     exp_name: str | None = None,
     num_ckpt: int | None = None,
     use_wandb: bool = True,
-    env_name: str = "g1_motion",
+    env_name: str = "g1_motion_teacher",
     **cfg_overrides: Any,
 ) -> None:
     """Entry point.
