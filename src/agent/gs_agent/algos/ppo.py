@@ -23,6 +23,27 @@ _DEFAULT_DEVICE: Final[torch.device] = torch.device("cpu")
 _DEQUE_MAXLEN: Final[int] = 100
 """Max length of the deque for storing episode statistics."""
 
+K = 3
+critic_obs_key_dims = {
+    "hand_dof_pos": 20,
+    "cos_q": 20,
+    "sin_q": 20,
+    "base_state": 13,
+
+    "hand_dof_vel": 20,
+
+    "delta_wrist_pos": 3 * K,
+    "target_wrist_vel": 3 * K,
+    "delta_wrist_vel": 3 * K,
+    "target_wrist_quat": 4 * K,
+    "delta_wrist_quat": 4 * K,
+    "target_wrist_ang_vel": 3 * K,
+    "delta_wrist_ang_vel": 3 * K,
+    "delta_finger_link_pos": 20 * 3 * K,
+    "target_mano_joint_vel": 20 * 3 * K,
+    "delta_finger_link_vel": 20 * 3 * K,
+}
+
 
 class PPO(BaseAlgo):
     """
@@ -121,6 +142,10 @@ class PPO(BaseAlgo):
         actor_obs, critic_obs = self.env.get_observations()
         termination_buffer = []
         reward_terms_buffer = []
+        obs_means_terms = {}
+        obs_stds_terms = {}
+        assert critic_obs.shape[-1] == sum(critic_obs_key_dims.values()), \
+            f"Critic obs dim mismatch: expected {sum(critic_obs_key_dims.values())}, got {critic_obs.shape[-1]}"
 
         # Start video recording if needed
         if should_log_video and hasattr(self.env.env, "start_rendering"):
@@ -181,6 +206,21 @@ class PPO(BaseAlgo):
                     self._curr_ep_len[new_ids] = 0
 
                 actor_obs, critic_obs = next_actor_obs, next_critic_obs
+
+                # log observation means
+                curr_dim = 0
+                for key, dim in critic_obs_key_dims.items():
+                    if key not in obs_means_terms:
+                        obs_means_terms[key] = []
+                        obs_stds_terms[key] = []
+                    obs_means_terms[key].append(
+                        critic_obs[:, curr_dim : curr_dim + dim].mean().item()
+                    )
+                    obs_stds_terms[key].append(
+                        critic_obs[:, curr_dim : curr_dim + dim].std().item()
+                    )
+                    curr_dim += dim
+
         with torch.no_grad():
             last_value = self._critic(critic_obs)
             self._rollouts.set_final_value(last_value)
@@ -224,6 +264,12 @@ class PPO(BaseAlgo):
             "termination": mean_termination,
             "reward_terms": mean_reward_terms,
             "video_frames": video_frames,
+            "obs_means_terms": {
+                key: statistics.mean(values) for key, values in obs_means_terms.items()
+            },
+            "obs_stds_terms": {
+                key: statistics.mean(values) for key, values in obs_stds_terms.items()
+            },
         }
 
     def _train_one_batch(self, mini_batch: dict[GAEBufferKey, torch.Tensor]) -> dict[str, Any]:
@@ -368,6 +414,8 @@ class PPO(BaseAlgo):
             },
             "termination": rollout_infos["termination"],
             "reward_terms": rollout_infos["reward_terms"],
+            "obs_means_terms": rollout_infos["obs_means_terms"],
+            "obs_stds_terms": rollout_infos["obs_stds_terms"],
         }
 
         # Add video frames if available

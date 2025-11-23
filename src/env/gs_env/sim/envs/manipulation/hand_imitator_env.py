@@ -154,6 +154,9 @@ class HandImitatorEnv(BaseEnv):
         self._init()
         self.reset()
 
+        self.running_observation_means = {}
+        self.running_observation_stds = {}
+
     def _load_trajectory_data(self) -> None:
         """Load demonstration trajectory data from pickle file."""
         trajectory_path = Path(self._args.trajectory_path)
@@ -690,10 +693,29 @@ class HandImitatorEnv(BaseEnv):
         """Get actor and critic observations."""
         self.update_buffers()
 
+        # update observation means and stds for normalization
+        curr_obs_means = {}
+        curr_obs_stds = {}
+        for key in self._args.actor_obs_terms + self._args.critic_obs_terms:
+            obs_value = getattr(self, key)
+            curr_obs_means[key] = obs_value.mean(dim=0)
+            curr_obs_stds[key] = obs_value.std(dim=0)
+        for key in curr_obs_means:
+            # update running means and stds with momentum
+            self.running_observation_means[key] = (
+                0.99 * self.running_observation_means.get(key, curr_obs_means[key])
+                + 0.01 * curr_obs_means[key]
+            )
+            self.running_observation_stds[key] = (
+                0.99 * self.running_observation_stds.get(key, curr_obs_stds[key])
+                + 0.01 * curr_obs_stds[key]
+            )
+
         # Build actor observation from configured terms
         obs_components = []
         for key in self._args.actor_obs_terms:
-            obs_gt = getattr(self, key) * self._args.obs_scales.get(key, 1.0)
+            obs_gt = getattr(self, key)
+            obs_gt = (obs_gt - self.running_observation_means[key]) / (self.running_observation_stds[key] + 1e-8)
             obs_noise = torch.randn_like(obs_gt) * self._args.obs_noises.get(key, 0.0)
             if self._eval_mode:
                 obs_noise *= 0
@@ -703,7 +725,8 @@ class HandImitatorEnv(BaseEnv):
         # Build critic observation from configured terms
         obs_components = []
         for key in self._args.critic_obs_terms:
-            obs_gt = getattr(self, key) * self._args.obs_scales.get(key, 1.0)
+            obs_gt = getattr(self, key)
+            obs_gt = (obs_gt - self.running_observation_means[key]) / (self.running_observation_stds[key] + 1e-8)
             obs_components.append(obs_gt)
         critic_obs = torch.cat(obs_components, dim=-1)
 
