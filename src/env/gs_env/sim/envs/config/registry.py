@@ -184,7 +184,7 @@ EnvArgsRegistry["g1_motion_teacher"] = MotionEnvArgs(
         "DofVelReward": 0.02,
         # "BaseHeightReward": 1.0,
         "BasePosReward": 200.0,
-        "BaseHeightReward": 100.0,
+        "BaseHeightReward": 1000.0,
         "BaseQuatReward": 60.0,
         "BaseLinVelReward": 10.0,
         "BaseAngVelReward": 1.0,
