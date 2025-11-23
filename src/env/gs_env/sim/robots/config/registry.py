@@ -13,28 +13,6 @@ from gs_env.sim.robots.config.schema import (
 )
 
 # ------------------------------------------------------------
-# CFG Constants
-# ------------------------------------------------------------
-
-ARMATURE_5020 = 0.003609725
-ARMATURE_7520_14 = 0.010177520
-ARMATURE_7520_22 = 0.025101925
-ARMATURE_4010 = 0.00425
-
-NATURAL_FREQ = 25 * 2.0 * 3.1415926535
-DAMPING_RATIO = 2.0
-
-STIFFNESS_5020 = ARMATURE_5020 * NATURAL_FREQ**2
-STIFFNESS_7520_14 = ARMATURE_7520_14 * NATURAL_FREQ**2
-STIFFNESS_7520_22 = ARMATURE_7520_22 * NATURAL_FREQ**2
-STIFFNESS_4010 = ARMATURE_4010 * NATURAL_FREQ**2
-
-DAMPING_5020 = 2.0 * DAMPING_RATIO * ARMATURE_5020 * NATURAL_FREQ
-DAMPING_7520_14 = 2.0 * DAMPING_RATIO * ARMATURE_7520_14 * NATURAL_FREQ
-DAMPING_7520_22 = 2.0 * DAMPING_RATIO * ARMATURE_7520_22 * NATURAL_FREQ
-DAMPING_4010 = 2.0 * DAMPING_RATIO * ARMATURE_4010 * NATURAL_FREQ
-
-# ------------------------------------------------------------
 # Material
 # ------------------------------------------------------------
 
@@ -381,22 +359,22 @@ G1_kp_dict: dict[str, float] = {
     "wrist_yaw": 12.0,
 }
 G1_kd_dict: dict[str, float] = {
-    "hip_roll": 10.0,
-    "hip_pitch": 10.0,
-    "hip_yaw": 10.0,
-    "knee": 10.0,
-    "ankle_roll": 1.5,
-    "ankle_pitch": 1.5,
-    "waist_roll": 20.0,
-    "waist_pitch": 20.0,
-    "waist_yaw": 10.0,
-    "shoulder_roll": 3.0,
-    "shoulder_pitch": 3.0,
-    "shoulder_yaw": 1.1,
-    "elbow": 1.5,
-    "wrist_roll": 1.0,
-    "wrist_pitch": 1.3,
-    "wrist_yaw": 1.2,
+    "hip_roll": 20.0,
+    "hip_pitch": 20.0,
+    "hip_yaw": 20.0,
+    "knee": 20.0,
+    "ankle_roll": 3.0,
+    "ankle_pitch": 3.0,
+    "waist_roll": 40.0,
+    "waist_pitch": 40.0,
+    "waist_yaw": 20.0,
+    "shoulder_roll": 6.0,
+    "shoulder_pitch": 6.0,
+    "shoulder_yaw": 2.2,
+    "elbow": 3.0,
+    "wrist_roll": 2.0,
+    "wrist_pitch": 2.6,
+    "wrist_yaw": 2.4,
 }
 G1_vel_limit_dict: dict[str, float] = {
     "hip_roll": 20.0,
@@ -464,6 +442,8 @@ RobotArgsRegistry["g1_default"] = HumanoidRobotArgs(
     decimation=4,
     adaptive_action_scale=False,
     indirect_drive_joint_names=G1_indirect_drive_joints,
+    feed_forward_ratio=0.5,
+    low_pass_alpha=0.3,
 )
 
 
