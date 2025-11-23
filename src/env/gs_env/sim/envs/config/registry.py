@@ -180,8 +180,8 @@ EnvArgsRegistry["g1_motion_teacher"] = MotionEnvArgs(
     reward_term="g1",
     reward_args={
         ### Motion Tracking ###
-        "DofPosReward": 3.0,
-        "DofVelReward": 0.05,
+        "DofPosReward": 2.0,
+        "DofVelReward": 0.02,
         # "BaseHeightReward": 1.0,
         "BasePosReward": 200.0,
         "BaseHeightReward": 100.0,
@@ -190,16 +190,16 @@ EnvArgsRegistry["g1_motion_teacher"] = MotionEnvArgs(
         "BaseAngVelReward": 1.0,
         "TrackingLinkPosReward": 60.0,
         "TrackingLinkQuatReward": 3.0,
-        "FootContactForceReward": 4e-4,
+        "FootContactForceReward": 1e-4,
         ### Regularization ###
-        "TorquePenalty": 0.0001,
+        "TorquePenalty": 0.0002,
         "ActionRatePenalty": 0.3,
         "DofPosLimitPenalty": 10.0,
         "ActionLimitPenalty": 0.1,
         "AnkleTorquePenalty": 0.003,
         # "BodyAngVelXYPenalty": 1.0,
         "WaistVelPenalty": 0.5,
-        "G1FeetContactForceLimitPenalty": 2e-4,
+        "G1FeetContactForceLimitPenalty": 1e-4,
         "G1FeetSlidePenalty": 5.0,
     },
     img_resolution=(480, 270),
@@ -306,6 +306,7 @@ EnvArgsRegistry["g1_motion_teacher"] = MotionEnvArgs(
         "torso": 2.0,
     },
     no_terminate_before_motion_time=1.0,
+    no_terminate_after_reset_time=2.0,
     no_terminate_after_random_push_time=2.0,
     # [initial_threshold, [min_threshold, max_threshold]]
     terminate_after_error={
@@ -346,7 +347,7 @@ EnvArgsRegistry["g1_motion"] = MotionEnvArgs(
         "DofVelReward": 0.05,
         # "BaseHeightReward": 1.0,
         "BasePosReward": 200.0,
-        "BaseHeightReward": 100.0,
+        "BaseHeightReward": 1000.0,
         "BaseQuatReward": 60.0,
         "BaseLinVelReward": 10.0,
         "BaseAngVelReward": 1.0,
@@ -468,6 +469,7 @@ EnvArgsRegistry["g1_motion"] = MotionEnvArgs(
         "torso": 1.0,
     },
     no_terminate_before_motion_time=1.0,
+    no_terminate_after_reset_time=2.0,
     no_terminate_after_random_push_time=2.0,
     # [initial_threshold, [min_threshold, max_threshold]]
     terminate_after_error={

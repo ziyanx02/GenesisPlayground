@@ -367,8 +367,9 @@ class MotionEnv(LeggedRobotEnv):
 
         # Only enable error-based termination after a certain motion time, if specified
         terminate_by_error = self.motion_times > self._args.no_terminate_before_motion_time
+        terminate_by_error |= self.time_since_reset > self._args.no_terminate_after_reset_time
         terminate_by_error |= (
-            self.time_since_random_push > self._args.no_terminate_before_motion_time
+            self.time_since_random_push > self._args.no_terminate_after_random_push_time
         )
         base_pos_error = torch.norm(self.base_pos - self.ref_base_pos, dim=-1)
         base_height_error = torch.abs(self.base_height - self.ref_base_height)
