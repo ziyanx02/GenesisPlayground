@@ -13,13 +13,13 @@ def main():
     parser.add_argument(
         "--trajectory",
         type=str,
-        default="output_trajectories_mujoco/shadow_hand_trajectory_g0_mujoco.pkl",
+        default="output_trajectories_mujoco/wujihand_hand_trajectory_07bb1@0_mujoco.pkl",
         help="Path to trajectory pickle file",
     )
     parser.add_argument(
         "--object-mesh",
         type=str,
-        default="102_obj.obj",
+        default="output_trajectories_mujoco/scan_coacd.obj",
         help="Path to object mesh file",
     )
     parser.add_argument(
@@ -56,6 +56,7 @@ def main():
     # Extract trajectory data
     shadow_traj = data["hand_trajectory"]
     object_traj = data["object_trajectory"]
+    mano_reference = data["mano_reference"]
 
     wrist_positions = shadow_traj["wrist_positions"]  # (T, 3)
     wrist_rotations = shadow_traj["wrist_rotations_aa"]  # (T, 3) axis-angle
@@ -64,8 +65,8 @@ def main():
     object_positions = object_traj["positions"]  # (T, 3)
     object_pose_matrices = object_traj["pose_matrices"]  # (T, 4, 4)
 
-    wrist_positions[:, 2] += 0.4
-    object_pose_matrices[:, 2, 3] += 0.4
+    # wrist_positions[:, 2] += 0.4
+    # object_pose_matrices[:, 2, 3] += 0.4
 
     T = len(wrist_positions)
     print(f"Trajectory length: {T} timesteps")
@@ -80,7 +81,7 @@ def main():
         camera_pos=(0.5, -0.5, 0.5),
         camera_lookat=(0.0, 0.0, 0.4),
         camera_fov=40,
-        max_FPS=15,
+        max_FPS=5,
     )
 
     scene = gs.Scene(
@@ -120,6 +121,30 @@ def main():
                 pos=object_positions[0],
             ),
         )
+    
+    joint_markers = {}
+    for joint_name in mano_reference["finger_joints"].keys():
+        joint_markers[joint_name] = scene.add_entity(
+            gs.morphs.Sphere(
+                radius=0.005,
+                pos=mano_reference["finger_joints"][joint_name][0],
+            )
+    )
+    link_markers = {}
+    link_names = [
+        # "finger1_link1", "finger2_link1", "finger3_link1", "finger4_link1", "finger5_link1",
+        "finger1_link2", "finger2_link2", "finger3_link2", "finger4_link2", "finger5_link2",
+        "finger1_link3", "finger2_link3", "finger3_link3", "finger4_link3", "finger5_link3",
+        "finger1_link4", "finger2_link4", "finger3_link4", "finger4_link4", "finger5_link4",
+        "finger1_tip_link", "finger2_tip_link", "finger3_tip_link", "finger4_tip_link", "finger5_tip_link"
+    ]
+    for link_name in link_names:
+        link_markers[link_name] = scene.add_entity(
+            gs.morphs.Box(
+                size=(0.01, 0.01, 0.01),
+                pos=[0, 0, 0],
+            )
+        )
 
     # Add Shadow Hand
     shadow_hand = scene.add_entity(
@@ -138,7 +163,7 @@ def main():
         cam = scene.add_camera(
             res=(1920, 1080),
             pos=(0.5, -0.5, 0.5),
-            lookat=(0.0, 0.0, 0.2),
+            lookat=(0.0, 0.0, -0.3),
             fov=40,
             GUI=False,
         )
@@ -157,6 +182,7 @@ def main():
         joint = shadow_hand.get_joint(name)
         # Each joint has 1 DOF
         finger_dofs_idx.extend(joint.dofs_idx_local)
+    links_idx_local = {name: shadow_hand.get_link(name).idx_local for name in link_names}
 
     print(f"Shadow Hand total DOFs: {shadow_hand.n_dofs}")
     print(f"Finger DOFs mapped: {len(finger_dofs_idx)}")
@@ -201,6 +227,18 @@ def main():
                 obj_quat = gs.utils.geom.R_to_quat(obj_rot_matrix)
 
                 obj.set_qpos(np.concatenate([obj_pos, obj_quat]))
+
+                # Update joint marker positions
+                for joint_name, marker in joint_markers.items():
+                    marker_pose = mano_reference["finger_joints"][joint_name][t]
+                    marker.set_pos(marker_pose)
+                # Update link marker positions
+                # for link_name, marker in link_markers.items():
+                #     link_pose = shadow_hand.get_link(link_name).get_pos()
+                #     marker.set_pos(link_pose)
+                for name, marker in link_markers.items():
+                    link_pos = shadow_hand.get_links_pos(links_idx_local=links_idx_local[name])
+                    marker.set_pos(link_pos[0])
 
                 # Step scene (no physics, just visualization)
                 scene.step()

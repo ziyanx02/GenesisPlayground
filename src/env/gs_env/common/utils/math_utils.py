@@ -56,6 +56,69 @@ def quat_to_rotmat(q: torch.Tensor) -> torch.Tensor:
     return rot
 
 
+def rotmat_to_quat(rot_mat: torch.Tensor) -> torch.Tensor:
+    """
+    Converts rotation matrix/matrices to quaternion(s).
+    Input:
+        rot_mat: Tensor of shape [..., 3, 3] rotation matrix.
+    Output:
+        Quaternion tensor of shape [..., 4] in (w, x, y, z) format.
+
+    Note: Not JIT-compiled due to dynamic reshaping requirements.
+    """
+    assert rot_mat.shape[-2:] == (3, 3), "Rotation matrix must be of shape [..., 3, 3]"
+
+    batch_shape = rot_mat.shape[:-2]
+    rot_mat_flat = rot_mat.reshape(-1, 3, 3)
+    N = rot_mat_flat.shape[0]
+
+    quat = torch.zeros((N, 4), device=rot_mat.device, dtype=rot_mat.dtype)
+
+    # Compute quaternion components using Shepperd's method
+    trace = rot_mat_flat[:, 0, 0] + rot_mat_flat[:, 1, 1] + rot_mat_flat[:, 2, 2]
+
+    # Case 1: trace > 0
+    mask1 = trace > 0
+    if mask1.any():
+        s = torch.sqrt(trace[mask1] + 1.0) * 2
+        quat[mask1, 0] = 0.25 * s
+        quat[mask1, 1] = (rot_mat_flat[mask1, 2, 1] - rot_mat_flat[mask1, 1, 2]) / s
+        quat[mask1, 2] = (rot_mat_flat[mask1, 0, 2] - rot_mat_flat[mask1, 2, 0]) / s
+        quat[mask1, 3] = (rot_mat_flat[mask1, 1, 0] - rot_mat_flat[mask1, 0, 1]) / s
+
+    # Case 2: rot_mat[0,0] is largest diagonal
+    mask2 = (~mask1) & (rot_mat_flat[:, 0, 0] > rot_mat_flat[:, 1, 1]) & (rot_mat_flat[:, 0, 0] > rot_mat_flat[:, 2, 2])
+    if mask2.any():
+        s = torch.sqrt(1.0 + rot_mat_flat[mask2, 0, 0] - rot_mat_flat[mask2, 1, 1] - rot_mat_flat[mask2, 2, 2]) * 2
+        quat[mask2, 0] = (rot_mat_flat[mask2, 2, 1] - rot_mat_flat[mask2, 1, 2]) / s
+        quat[mask2, 1] = 0.25 * s
+        quat[mask2, 2] = (rot_mat_flat[mask2, 0, 1] + rot_mat_flat[mask2, 1, 0]) / s
+        quat[mask2, 3] = (rot_mat_flat[mask2, 0, 2] + rot_mat_flat[mask2, 2, 0]) / s
+
+    # Case 3: rot_mat[1,1] is largest diagonal
+    mask3 = (~mask1) & (~mask2) & (rot_mat_flat[:, 1, 1] > rot_mat_flat[:, 2, 2])
+    if mask3.any():
+        s = torch.sqrt(1.0 + rot_mat_flat[mask3, 1, 1] - rot_mat_flat[mask3, 0, 0] - rot_mat_flat[mask3, 2, 2]) * 2
+        quat[mask3, 0] = (rot_mat_flat[mask3, 0, 2] - rot_mat_flat[mask3, 2, 0]) / s
+        quat[mask3, 1] = (rot_mat_flat[mask3, 0, 1] + rot_mat_flat[mask3, 1, 0]) / s
+        quat[mask3, 2] = 0.25 * s
+        quat[mask3, 3] = (rot_mat_flat[mask3, 1, 2] + rot_mat_flat[mask3, 2, 1]) / s
+
+    # Case 4: rot_mat[2,2] is largest diagonal
+    mask4 = (~mask1) & (~mask2) & (~mask3)
+    if mask4.any():
+        s = torch.sqrt(1.0 + rot_mat_flat[mask4, 2, 2] - rot_mat_flat[mask4, 0, 0] - rot_mat_flat[mask4, 1, 1]) * 2
+        quat[mask4, 0] = (rot_mat_flat[mask4, 1, 0] - rot_mat_flat[mask4, 0, 1]) / s
+        quat[mask4, 1] = (rot_mat_flat[mask4, 0, 2] + rot_mat_flat[mask4, 2, 0]) / s
+        quat[mask4, 2] = (rot_mat_flat[mask4, 1, 2] + rot_mat_flat[mask4, 2, 1]) / s
+        quat[mask4, 3] = 0.25 * s
+
+    # Normalize quaternions
+    quat = quat / torch.norm(quat, dim=-1, keepdim=True)
+
+    return quat.reshape(*batch_shape, 4)
+
+
 @torch.jit.script
 def rotmat_to_rotation_6D(rot: torch.Tensor) -> torch.Tensor:
     """

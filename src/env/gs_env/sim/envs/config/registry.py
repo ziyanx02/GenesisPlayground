@@ -1,6 +1,7 @@
 from gs_env.sim.envs.config.schema import (
     EnvArgs,
     GenesisInitArgs,
+    HandImitatorEnvArgs,
     LeggedRobotEnvArgs,
     ManipulationEnvArgs,
     MotionEnvArgs,
@@ -564,5 +565,162 @@ EnvArgsRegistry["wuji_inhand_rotation_free_base"] = ManipulationEnvArgs(
         "cube_quat",
         "cube_lin_vel",
         "cube_ang_vel",
+    ],
+)
+
+# ------------------------------------------------------------
+# WUJI Hand Trajectory Imitation Configuration
+# ------------------------------------------------------------
+
+EnvArgsRegistry["wuji_hand_imitator"] = HandImitatorEnvArgs(
+    env_name="HandImitatorEnv",
+    gs_init_args=GenesisInitArgsRegistry["default"],
+    scene_args=SceneArgsRegistry["flat_scene_default"],
+    robot_args=RobotArgsRegistry["wuji_hand_free_base"],  # Free base for trajectory following
+    objects_args=[],  # Object mesh loaded from trajectory file
+    sensors_args=[],
+    reward_term="hand_imitator",
+    # Trajectory configuration
+    trajectory_path="output_trajectories_mujoco/wujihand_hand_trajectory_07bb1@0_mujoco.pkl",
+    object_mesh_path="102_obj.obj",
+    use_object=False,  # Set to True to visualize object
+    object_args={
+        "position": [0.0, 0.0, 0.5],
+        "size": 0.05,
+    },
+    max_episode_length=2500,  # Max steps per episode
+    obs_future_length=3,  # Number of future trajectory frames to observe (K in paper)
+    random_state_init=True,  # Randomize initial timestep in trajectory
+    joint_mapping={
+            # Thumb (finger1 in URDF)
+            "thumb_proximal": "finger1_link2",
+            "thumb_intermediate": "finger1_link3",
+            "thumb_distal": "finger1_link4",  # map to both link3 and link4
+            "thumb_tip": "finger1_tip_link",
+            # Index (finger2 in URDF)
+            "index_proximal": "finger2_link2",  # link1 is abduction
+            "index_intermediate": "finger2_link3",
+            "index_distal": "finger2_link4",
+            "index_tip": "finger2_tip_link",
+            # Middle (finger3 in URDF)
+            "middle_proximal": "finger3_link2",
+            "middle_intermediate": "finger3_link3",
+            "middle_distal": "finger3_link4",
+            "middle_tip": "finger3_tip_link",
+            # Ring (finger4 in URDF)
+            "ring_proximal": "finger4_link2",
+            "ring_intermediate": "finger4_link3",
+            "ring_distal": "finger4_link4",
+            "ring_tip": "finger4_tip_link",
+            # Pinky (finger5 in URDF)
+            "pinky_proximal": "finger5_link2",
+            "pinky_intermediate": "finger5_link3",
+            "pinky_distal": "finger5_link4",
+            "pinky_tip": "finger5_tip_link",
+        },
+    reward_args={
+        ### Trajectory Tracking Rewards ###
+        "WristPositionTrackingReward": {
+            "scale": 0.1,
+            "k": 40.0,
+        },
+        "WristRotationTrackingReward": {
+            "scale": 0.6,
+            "k": 1.0,
+        },
+        "WristVelocityTrackingReward": {
+            "scale": 0.1,
+            "k": 1.0,
+        },
+        "WristAngularVelocityTrackingReward": {
+            "scale": 0.05,
+            "k": 1.0,
+        },
+        "FingerJointPositionTrackingReward": {
+            "scale": 1.0,
+            # Per-finger weights
+            "thumb_weight": 0.9,
+            "index_weight": 0.8,
+            "middle_weight": 0.75,
+            "ring_weight": 0.6,
+            "pinky_weight": 0.6,
+            # Level weights
+            "level_1_weight": 0.5,
+            "level_2_weight": 0.3,
+            # Exponential decay rates
+            "thumb_k": 100.0,
+            "index_k": 90.0,
+            "middle_k": 80.0,
+            "ring_k": 60.0,
+            "pinky_k": 60.0,
+            "level_1_k": 50.0,
+            "level_2_k": 40.0,
+        },
+        "JointVelocityTrackingReward": {
+            "scale": 0.1,
+            "k": 1.0,
+        },
+        ### Power Penalties ###
+        "DOFPowerPenalty": {
+            "scale": 0.5,
+            "k": 10.0,
+        },
+        "WristPowerPenalty": {
+            "scale": 0.5,
+            "k": 2.0,
+        },
+    },
+    img_resolution=(480, 480),
+    action_latency=1,
+    obs_history_len=1,  # Not using history for now (paper uses single timestep)
+    obs_scales={
+        # TODO
+    },
+    obs_noises={
+        # TODO
+    },
+    actor_obs_terms=[
+        # Proprioception: robot state
+        "hand_dof_pos",  # Raw joint positions (20D), (q)
+        "cos_q",
+        "sin_q",
+        "base_state",
+
+        # # Privileged
+        # "hand_dof_vel",
+
+        # Target
+        "delta_wrist_pos",  # 3 * K
+        "target_wrist_vel",  # 3 * K
+        "delta_wrist_vel",  # 3 * K
+        "target_wrist_quat",  # 4 * K
+        "delta_wrist_quat",  # 4 * K
+        "target_wrist_ang_vel",  # 3 * K
+        "delta_wrist_ang_vel",  # 3 * K
+        "delta_finger_link_pos",  # 20 * 3 * K
+        "target_mano_joint_vel",  # 20 * 3 * K
+        "delta_finger_link_vel",  # 20 * 3 * K
+    ],
+    critic_obs_terms=[
+        # Proprioception: robot state
+        "hand_dof_pos",  # Raw joint positions (20D), (q)
+        "cos_q",
+        "sin_q",
+        "base_state",
+
+        # Privileged
+        "hand_dof_vel",
+
+        # Target
+        "delta_wrist_pos",  # 3 * K
+        "target_wrist_vel",  # 3 * K
+        "delta_wrist_vel",  # 3 * K
+        "target_wrist_quat",  # 4 * K
+        "delta_wrist_quat",  # 4 * K
+        "target_wrist_ang_vel",  # 3 * K
+        "delta_wrist_ang_vel",  # 3 * K
+        "delta_finger_link_pos",  # 20 * 3 * K
+        "target_mano_joint_vel",  # 20 * 3 * K
+        "delta_finger_link_vel",  # 20 * 3 * K
     ],
 )

@@ -1,3 +1,5 @@
+from typing import Any
+
 import genesis as gs
 import numpy as np
 from gs_schemas.base_types import genesis_pydantic_config
@@ -79,3 +81,22 @@ class ManipulationEnvArgs(EnvArgs):
     tactile_grid_path: str | None = None
     tactile_sensor_links: list[str] | None = None
     tactile_kn: float = 2000.0
+
+
+class HandImitatorEnvArgs(EnvArgs):
+    """Configuration for hand trajectory imitation environments."""
+    action_latency: int = 1
+    obs_history_len: int = 1
+    obs_scales: dict[str, float]
+    obs_noises: dict[str, float]
+    actor_obs_terms: list[str]
+    critic_obs_terms: list[str]
+    # Trajectory configuration
+    trajectory_path: str
+    object_mesh_path: str | None = None
+    use_object: bool = False  # Whether to load and visualize the object
+    object_args: dict[str, Any] = {}  # Object configuration (position, size, etc.)
+    max_episode_length: int = 500
+    obs_future_length: int = 5  # Number of future trajectory frames to observe (K)
+    random_state_init: bool = True  # Randomize initial timestep in trajectory
+    joint_mapping: dict[str, str]

@@ -52,3 +52,10 @@ RUNNER_INHAND_ROTATION_MLP = RunnerArgs(
     save_interval=500,
     save_path=Path("./logs/ppo_inhand_rotation"),
 )
+
+RUNNER_HAND_IMITATOR_MLP = RunnerArgs(
+    total_iterations=10001,  # More iterations for trajectory following
+    log_interval=10,
+    save_interval=500,
+    save_path=Path("./logs/ppo_hand_imitator"),
+)

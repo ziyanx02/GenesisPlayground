@@ -1,5 +1,5 @@
 from .locomotion import CustomEnv, MotionEnv, WalkingEnv
-from .manipulation import GoalReachingEnv, InHandRotationEnv
+from .manipulation import GoalReachingEnv, HandImitatorEnv, InHandRotationEnv
 
 __all__ = [
     "WalkingEnv",
@@ -7,4 +7,5 @@ __all__ = [
     "CustomEnv",
     "GoalReachingEnv",
     "InHandRotationEnv",
+    "HandImitatorEnv",
 ]

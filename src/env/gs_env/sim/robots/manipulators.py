@@ -35,7 +35,7 @@ class ManipulatorBase(BaseGymRobot):
         material: gs.materials.Rigid = gs.materials.Rigid()
         morph: gs.morphs.URDF = gs.morphs.URDF(
             file=args.morph_args.file,
-            merge_fixed_links=True,
+            merge_fixed_links=False,
             pos=args.morph_args.pos,
             euler=args.morph_args.euler,
             fixed=args.morph_args.fixed,
@@ -147,6 +147,15 @@ class ManipulatorBase(BaseGymRobot):
         for name in self._all_dof_names:
             all_dofs_idx_local += self._robot_entity.get_joint(name).dofs_idx_local
         self._all_dof_idx_local = all_dofs_idx_local
+
+        self._hand_dof_idx_local = []
+        for name in self._args.default_gripper_dof.keys():
+            self._hand_dof_idx_local += self._robot_entity.get_joint(name).dofs_idx_local
+
+        self._base_dof_idx_local = []
+        for name in self._args.default_arm_dof.keys():
+            self._base_dof_idx_local += self._robot_entity.get_joint(name).dofs_idx_local
+
         all_finger_links_idx_local = [
             self._robot_entity.get_link(name).idx_local for name in self._args.gripper_link_names
         ]
@@ -238,34 +247,41 @@ class ManipulatorBase(BaseGymRobot):
         self._dof_vel[envs_idx] = 0.0
         self._torque[envs_idx] = 0.0
 
-    def reset_to_pose(self, joint_positions: torch.Tensor) -> None:
+    def reset_to_pose(
+            self, 
+            dof_pos: torch.Tensor,
+            dof_vel: torch.Tensor,
+            wrist_pos: torch.Tensor,
+            wrist_quat: torch.Tensor,
+            base_dof_vel: torch.Tensor,
+            envs_idx: torch.IntTensor
+        ) -> None:
         """Reset robot to a specific joint configuration."""
+        if not self._eval_mode:
+            self._randomize_controls(envs_idx)
 
-        # Ensure the tensor has the right shape (batch_size, num_joints)
-        if joint_positions.dim() == 1:
-            joint_positions = joint_positions.unsqueeze(0)
+        self._robot_entity.set_dofs_position(
+            dof_pos,
+            dofs_idx_local=self._hand_dof_idx_local,
+            envs_idx=envs_idx,
+        )
+        self._robot_entity.set_dofs_velocity(
+            dof_vel,
+            dofs_idx_local=self._hand_dof_idx_local,
+            envs_idx=envs_idx,
+        )
+        self._robot_entity.set_pos(wrist_pos, envs_idx=envs_idx)
+        self._robot_entity.set_quat(wrist_quat, envs_idx=envs_idx)
+        self._robot_entity.set_dofs_velocity(
+            base_dof_vel,
+            dofs_idx_local=self._base_dof_idx_local,
+            envs_idx=envs_idx,
+        )
 
-        # If only arm joints are provided, pad with default gripper values
-        if joint_positions.shape[1] < len(self._default_dof_pos):
-            arm_joints = joint_positions
-            # Get gripper joint values, handling potential duplicates
-            gripper_values = (
-                list(self._args.default_gripper_dof.values())
-                if self._args.default_gripper_dof
-                else []
-            )
-            # Remove duplicates while preserving order
-            gripper_values = list(dict.fromkeys(gripper_values))
-            gripper_joints = (
-                torch.tensor(gripper_values, dtype=torch.float32, device=self._device)
-                .unsqueeze(0)
-                .repeat(joint_positions.shape[0], 1)
-            )
-            joint_positions = torch.cat([arm_joints, gripper_joints], dim=1)
-
-        # Create envs_idx for all environments
-        envs_idx = torch.arange(joint_positions.shape[0], device=self._device)
-        self._robot_entity.set_qpos(joint_positions, envs_idx=envs_idx)
+        # update buffers
+        self._dof_pos[envs_idx] = self._robot_entity.get_dofs_position(self._all_dof_idx_local, envs_idx=envs_idx)
+        self._dof_vel[envs_idx] = self._robot_entity.get_dofs_velocity(self._all_dof_idx_local, envs_idx=envs_idx)
+        self._torque[envs_idx] = 0.0
 
     def apply_action(
         self, action: JointPosAction | EEPoseAbsAction | EEPoseRelAction | torch.Tensor
@@ -434,6 +450,10 @@ class ManipulatorBase(BaseGymRobot):
     @property
     def fingertip_pos(self) -> torch.Tensor:
         return self._robot_entity.get_links_pos(links_idx_local=self._all_finger_links_idx_local)
+    
+    @property
+    def dofs_control_force(self) -> torch.Tensor:
+        return self._robot_entity.get_dofs_control_force(dofs_idx_local=self._all_dof_idx_local)
 
     def __getattr__(self, item: str) -> Any:
         # Use object.__getattribute__ to avoid recursion with hasattr
