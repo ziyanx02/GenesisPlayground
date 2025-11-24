@@ -193,7 +193,7 @@ EnvArgsRegistry["g1_motion_teacher"] = MotionEnvArgs(
         "FootContactForceReward": 1e-4,
         ### Regularization ###
         "TorquePenalty": 0.0001,
-        "ActionRatePenalty": 0.2,
+        "ActionRatePenalty": 0.3,
         "DofPosLimitPenalty": 10.0,
         "ActionLimitPenalty": 0.1,
         "AnkleTorquePenalty": 0.003,
