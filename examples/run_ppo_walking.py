@@ -209,7 +209,7 @@ def evaluate_policy(
         last_action = None
 
         # Reset environment
-        obs = wrapped_env.get_observations()
+        obs, _ = wrapped_env.get_observations()  # Unpack actor and critic obs, use actor for policy
 
         # Create a wrapper that always uses deterministic=True
         class DeterministicWrapper(torch.nn.Module):
@@ -363,7 +363,7 @@ def evaluate_policy(
                 # For viewer mode, check termination conditions
                 if terminated.item() or truncated.item():
                     print(f"Episode ended at step {step_count}, Total reward: {total_reward:.2f}")
-                    obs = wrapped_env.get_observations()
+                    obs, _ = wrapped_env.get_observations()  # Unpack actor and critic obs, use actor for policy
                     total_reward = 0.0
 
         # Stop rendering and save GIF if recording

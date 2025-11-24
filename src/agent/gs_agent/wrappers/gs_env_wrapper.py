@@ -57,15 +57,17 @@ class GenesisEnvWrapper(BaseEnvWrapper):
         next_obs, _ = self.env.get_observations(obs_args=None)
         return next_obs, reward, terminated, truncated, extra_infos
 
-    def get_observations(self, obs_args: Any = None) -> torch.Tensor:
-        """Get observations. If obs_args is provided, use it for teacher observations.
+    def get_observations(self, obs_args: Any = None) -> tuple[torch.Tensor, torch.Tensor]:
+        """Get observations. Returns both actor and critic observations.
         
         Args:
             obs_args: Optional environment args to use for observation computation.
                      If None, uses student config.
+        
+        Returns:
+            Tuple of (actor_obs, critic_obs)
         """
-        obs, _ = self.env.get_observations(obs_args=obs_args)
-        return obs
+        return self.env.get_observations(obs_args=obs_args)
 
     @property
     def action_dim(self) -> int:

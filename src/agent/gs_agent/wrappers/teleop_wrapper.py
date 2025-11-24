@@ -201,8 +201,9 @@ class KeyboardWrapper(BaseEnvWrapper):
             obs,  # extra_infos
         )
 
-    def get_observations(self, obs_args: Any = None) -> torch.Tensor:
-        """Get current observations. obs_args is ignored for teleop wrapper."""
+    def get_observations(self, obs_args: Any = None) -> tuple[torch.Tensor, torch.Tensor]:
+        """Get current observations. Returns both actor and critic observations.
+        obs_args is ignored for teleop wrapper."""
         return self._env.get_observations(obs_args=obs_args)
 
     def _convert_observation_to_dict(self) -> dict[str, Any]:

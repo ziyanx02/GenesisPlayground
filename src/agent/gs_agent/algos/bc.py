@@ -47,7 +47,11 @@ class BC(BaseAlgo):
         self._curr_ep_len = torch.zeros(self.env.num_envs, device=self.device, dtype=torch.float)
 
         # Load teacher config if provided (needed for teacher obs dim)
-        self._load_teacher_config(cfg.teacher_config_path)
+        if cfg.teacher_config_path is not None:
+            self._load_teacher_config(cfg.teacher_config_path)
+        else:
+            self._teacher_obs_dim = self._actor_obs_dim  # Use student obs dim as fallback
+            print(f"Teacher config not provided, using student observation dimension: {self._teacher_obs_dim}")
 
         # Build actor network
         self._build_actor()
@@ -105,7 +109,7 @@ class BC(BaseAlgo):
         # Otherwise, compute it by getting one observation with teacher config
         # This requires the environment to be in a valid state
         try:
-            teacher_obs = self.env.get_observations(obs_args=self._teacher_env_args)
+            teacher_obs, _ = self.env.get_observations(obs_args=self._teacher_env_args)
             return teacher_obs.shape[-1]
         except Exception as e:
             raise ValueError(
@@ -138,14 +142,14 @@ class BC(BaseAlgo):
 
     def _collect_rollouts(self, num_steps: int) -> dict[str, Any]:
         """Collect rollouts."""
-        obs = self.env.get_observations()
+        obs, _ = self.env.get_observations()  # Unpack actor and critic obs, only use actor
         with torch.inference_mode():
             # collect rollouts and compute returns & advantages
             for _step in range(num_steps):
                 student_actions = self._actor(obs)
                 # Get teacher observations if teacher config is provided
                 if hasattr(self, '_teacher_env_args'):
-                    teacher_obs = self.env.get_observations(obs_args=self._teacher_env_args)
+                    teacher_obs, _ = self.env.get_observations(obs_args=self._teacher_env_args)
                 else:
                     teacher_obs = obs  # Use student obs if no teacher config
                 teacher_action, _ = self._teacher(teacher_obs, deterministic=True)

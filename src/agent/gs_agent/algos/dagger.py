@@ -132,7 +132,7 @@ class DAgger(BaseAlgo):
         # Otherwise, compute it by getting one observation with teacher config
         # This requires the environment to be in a valid state
         try:
-            teacher_obs = self.env.get_observations(obs_args=self._teacher_env_args)
+            teacher_obs, _ = self.env.get_observations(obs_args=self._teacher_env_args)
             return teacher_obs.shape[-1]
         except Exception as e:
             raise ValueError(
@@ -151,7 +151,7 @@ class DAgger(BaseAlgo):
 
     def _collect_rollouts(self, num_steps: int) -> dict[str, Any]:
         """Collect rollouts using DAgger: student acts, teacher provides labels."""
-        obs = self.env.get_observations()
+        obs, _ = self.env.get_observations()  # Unpack actor and critic obs, only use actor
         with torch.inference_mode():
             # collect rollouts and compute returns & advantages
             for _step in range(num_steps):
@@ -159,7 +159,7 @@ class DAgger(BaseAlgo):
                 student_actions, _ = self._actor(obs, deterministic=False)
                 
                 # Get teacher observations using teacher config
-                teacher_obs = self.env.get_observations(obs_args=self._teacher_env_args)
+                teacher_obs, _ = self.env.get_observations(obs_args=self._teacher_env_args)
                 
                 # Teacher provides action labels (deterministic)
                 teacher_action, _ = self._teacher(teacher_obs, deterministic=True)
