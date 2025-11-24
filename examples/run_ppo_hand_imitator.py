@@ -238,21 +238,21 @@ def evaluate_policy(
             # Step environment
             obs, reward, terminated, truncated, info = wrapped_env.step(action)
 
-            # Track trajectory following metrics
-            if hasattr(wrapped_env.env, "base_pos") and hasattr(wrapped_env.env, "_traj_data"):
-                cur_idx = wrapped_env.env.progress_buf[0].cpu().item()
-                target_pos = wrapped_env.env._traj_data["wrist_pos"][cur_idx].cpu()
-                current_pos = wrapped_env.env.base_pos[0].cpu()
-                pos_error = torch.norm(target_pos - current_pos).item()
-                wrist_pos_errors.append(pos_error)
+            cur_idx = wrapped_env.env.progress_buf[0].cpu().item()
+            cur_traj_idx = wrapped_env.env.env_traj_idx[0].cpu().item()
+            cur_traj_length = wrapped_env.env.env_traj_lengths[0].cpu().item()
+            target_pos = wrapped_env.env._traj_data["wrist_pos"][cur_traj_idx, cur_idx].cpu()
+            current_pos = wrapped_env.env.base_pos[0].cpu()
+            pos_error = torch.norm(target_pos - current_pos).item()
+            wrist_pos_errors.append(pos_error)
 
-                target_quat = wrapped_env.env._traj_data["wrist_quat"][cur_idx].cpu()
-                current_quat = wrapped_env.env.base_quat[0].cpu()
-                # Simple rotation error: 1 - |dot product|
-                rot_error = 1 - torch.abs(torch.sum(target_quat * current_quat)).item()
-                wrist_rot_errors.append(rot_error)
+            target_quat = wrapped_env.env._traj_data["wrist_quat"][cur_traj_idx, cur_idx].cpu()
+            current_quat = wrapped_env.env.base_quat[0].cpu()
+            # Simple rotation error: 1 - |dot product|
+            rot_error = 1 - torch.abs(torch.sum(target_quat * current_quat)).item()
+            wrist_rot_errors.append(rot_error)
 
-                trajectory_progress.append(cur_idx / wrapped_env.env._traj_length)
+            trajectory_progress.append(cur_idx / cur_traj_length)
 
             # Accumulate reward
             total_reward += reward.item()

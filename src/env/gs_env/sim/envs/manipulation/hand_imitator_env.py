@@ -540,6 +540,19 @@ class HandImitatorEnv(BaseEnv):
         reset_traj_idx = self.env_traj_idx[envs_idx]
         reset_traj_lengths = self.env_traj_lengths[envs_idx]
 
+        if self._eval_mode:
+            # if in eval mode, select reference trajectory in a rotation manner
+            assert num_reset == 1, "Eval mode only supports resetting one env at a time."
+            reset_traj_idx = (reset_traj_idx + 1) % self._num_trajectories
+            reset_traj_lengths = torch.tensor(
+                [self._traj_lengths[reset_traj_idx]],
+                dtype=torch.long,
+                device=self._device
+            )
+            self.env_traj_idx[envs_idx] = reset_traj_idx
+            self.env_traj_lengths[envs_idx] = reset_traj_lengths
+
+
         # Sample initial timestep from trajectory
         # Following ManipTrans: random init or start from beginning
         random_state_init = getattr(self._args, 'random_state_init', False)
