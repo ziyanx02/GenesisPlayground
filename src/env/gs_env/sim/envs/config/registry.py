@@ -581,7 +581,7 @@ EnvArgsRegistry["wuji_hand_imitator"] = HandImitatorEnvArgs(
     sensors_args=[],
     reward_term="hand_imitator",
     # Trajectory configuration
-    trajectory_path="output_trajectories_mujoco/wujihand_hand_trajectory_07bb1@0_mujoco.pkl",
+    trajectory_path="output_trajectories_mujoco",  # Directory containing all trajectory .pkl files
     object_mesh_path="102_obj.obj",
     use_object=False,  # Set to True to visualize object
     object_args={

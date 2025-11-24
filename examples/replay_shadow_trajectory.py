@@ -57,6 +57,7 @@ def main():
     shadow_traj = data["hand_trajectory"]
     object_traj = data["object_trajectory"]
     mano_reference = data["mano_reference"]
+    metadata = data["metadata"]
 
     wrist_positions = shadow_traj["wrist_positions"]  # (T, 3)
     wrist_rotations = shadow_traj["wrist_rotations_aa"]  # (T, 3) axis-angle
@@ -81,7 +82,7 @@ def main():
         camera_pos=(0.5, -0.5, 0.5),
         camera_lookat=(0.0, 0.0, 0.4),
         camera_fov=40,
-        max_FPS=5,
+        max_FPS=60,
     )
 
     scene = gs.Scene(
@@ -102,25 +103,18 @@ def main():
     )
 
     # Add object mesh
-    object_mesh_path = Path(args.object_mesh)
-    if object_mesh_path.exists():
-        print(f"Loading object mesh from: {object_mesh_path}")
-        # Apply 90-degree rotation around X-axis to correct mesh orientation
-        obj = scene.add_entity(
-            gs.morphs.Mesh(
-                file=str(object_mesh_path),
-                pos=object_positions[0],
-                euler=(90, 0, 0),  # Rotate 90 degrees around X-axis
-            ),
-        )
-    else:
-        print(f"Warning: Object mesh not found at {object_mesh_path}, using default box")
-        obj = scene.add_entity(
-            gs.morphs.Box(
-                size=(0.04, 0.04, 0.04),
-                pos=object_positions[0],
-            ),
-        )
+    load_data_dir = "/".join(str(trajectory_path).split("/")[:-1])
+    obj_id = metadata['obj_id']
+    object_mesh_path = Path(f"{load_data_dir}/") / Path(f"{obj_id}_collision.obj")
+    print(f"Loading object mesh from: {object_mesh_path}")
+    # Apply 90-degree rotation around X-axis to correct mesh orientation
+    obj = scene.add_entity(
+        gs.morphs.Mesh(
+            file=str(object_mesh_path),
+            pos=object_positions[0],
+            euler=(90, 0, 0),  # Rotate 90 degrees around X-axis
+        ),
+    )
     
     joint_markers = {}
     for joint_name in mano_reference["finger_joints"].keys():

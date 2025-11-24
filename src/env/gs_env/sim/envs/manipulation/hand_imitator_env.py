@@ -154,36 +154,86 @@ class HandImitatorEnv(BaseEnv):
         self._init()
         self.reset()
 
-        self.running_observation_means = {}
-        self.running_observation_stds = {}
-
     def _load_trajectory_data(self) -> None:
-        """Load demonstration trajectory data from pickle file."""
+        """Load multiple demonstration trajectory data from pickle files."""
         trajectory_path = Path(self._args.trajectory_path)
-        if not trajectory_path.exists():
-            raise FileNotFoundError(f"Trajectory file not found: {trajectory_path}")
+
+        # Load all .pkl files from directory
+        traj_files = sorted(trajectory_path.glob("*.pkl"))
+        if not traj_files:
+            raise FileNotFoundError(f"No trajectory files found in directory: {trajectory_path}")
 
         print(f"\n{'='*80}")
-        print(f"Loading trajectory from: {trajectory_path}")
+        print(f"Loading {len(traj_files)} trajectories from: {trajectory_path}")
         print(f"{'='*80}")
 
-        with open(trajectory_path, "rb") as f:
-            data = pickle.load(f)
+        all_demo_data = []
+        all_wrist_positions = []
+        all_wrist_rotations_aa = []
+        all_dof_positions = []
+        all_traj_lengths = []
 
-        # Extract trajectory data
-        self._demo_data_raw = data
-        self._hand_traj = data["hand_trajectory"]
-        self._object_traj = data["object_trajectory"]
+        for traj_file in traj_files:
+            print(f"Loading: {traj_file.name}")
+            with open(traj_file, "rb") as f:
+                data = pickle.load(f)
 
-        # Hand trajectory components (numpy arrays)
-        self._wrist_positions = self._hand_traj["wrist_positions"]  # (T, 3)
-        self._wrist_rotations_aa = self._hand_traj["wrist_rotations_aa"]  # (T, 3) axis-angle
-        self._dof_positions = self._hand_traj["dof_positions"]  # (T, n_dofs)
+            all_demo_data.append(data)
+            hand_traj = data["hand_trajectory"]
 
-        self._traj_length = len(self._wrist_positions)
-        print(f"Trajectory length: {self._traj_length} timesteps")
-        print(f"Hand DOF count: {self._dof_positions.shape[1]}")
+            wrist_pos = hand_traj["wrist_positions"]  # (T, 3)
+            wrist_rot = hand_traj["wrist_rotations_aa"]  # (T, 3)
+            dof_pos = hand_traj["dof_positions"]  # (T, n_dofs)
+
+            all_wrist_positions.append(wrist_pos)
+            all_wrist_rotations_aa.append(wrist_rot)
+            all_dof_positions.append(dof_pos)
+            all_traj_lengths.append(len(wrist_pos))
+
+            print(f"  - Length: {len(wrist_pos)} timesteps")
+
+        # Store raw data and individual trajectory lengths
+        self._demo_data_raw = all_demo_data
+        self._num_trajectories = len(traj_files)
+        self._traj_lengths = np.array(all_traj_lengths)
+        self._max_traj_length = max(all_traj_lengths)
+
+        # Pad and combine trajectories
+        self._wrist_positions = self._pad_and_stack(all_wrist_positions)  # (num_traj, max_T, 3)
+        self._wrist_rotations_aa = self._pad_and_stack(all_wrist_rotations_aa)  # (num_traj, max_T, 3)
+        self._dof_positions = self._pad_and_stack(all_dof_positions)  # (num_traj, max_T, n_dofs)
+
+        print(f"\nCombined trajectory shapes:")
+        print(f"  - Wrist positions: {self._wrist_positions.shape}")
+        print(f"  - Wrist rotations: {self._wrist_rotations_aa.shape}")
+        print(f"  - DOF positions: {self._dof_positions.shape}")
+        print(f"  - Max trajectory length: {self._max_traj_length}")
+        print(f"  - Trajectory lengths: {self._traj_lengths}")
         print(f"{'='*80}\n")
+
+    def _pad_and_stack(self, arrays: list[np.ndarray]) -> np.ndarray:
+        """Pad arrays to same length and stack them.
+
+        Args:
+            arrays: List of arrays with shape (T_i, ...) where T_i can vary
+
+        Returns:
+            Stacked array with shape (num_arrays, max_T, ...)
+        """
+        max_len = max(arr.shape[0] for arr in arrays)
+        padded_arrays = []
+
+        for arr in arrays:
+            if arr.shape[0] < max_len:
+                # Pad by repeating the last frame
+                pad_len = max_len - arr.shape[0]
+                last_frame = arr[-1:].repeat(pad_len, axis=0)
+                padded_arr = np.concatenate([arr, last_frame], axis=0)
+            else:
+                padded_arr = arr
+            padded_arrays.append(padded_arr)
+
+        return np.stack(padded_arrays, axis=0)
 
     def _process_trajectory_data(self) -> None:
         """Process raw trajectory data for RL training.
@@ -192,43 +242,70 @@ class HandImitatorEnv(BaseEnv):
         Gaussian smoothing, following ManipTrans approach.
         """
         # Convert to torch tensors on device
+        # Shape: (num_traj, max_T, ...)
         wrist_pos = torch.from_numpy(self._wrist_positions).float().to(self._device)
         wrist_rot_aa = torch.from_numpy(self._wrist_rotations_aa).float().to(self._device)
         dof_pos = torch.from_numpy(self._dof_positions).float().to(self._device)
 
         # Time delta for velocity computation
-        # Assuming original trajectory at 120 Hz with skip=2 (from ManipTrans)
-        # Genesis default dt is 0.01s, but we need the original trajectory dt
         time_delta = 1 / 60.0  # 60 Hz after skip=2 from 120 Hz
 
         # Compute velocities using ManipTrans methods with Gaussian smoothing
-        wrist_vel = compute_velocity(wrist_pos.unsqueeze(1), time_delta, gaussian_filter=True).squeeze(1)
-        wrist_ang_vel = compute_angular_velocity(
-            wrist_rot_aa.unsqueeze(1), time_delta, gaussian_filter=True
-        ).squeeze(1)
-        dof_vel = compute_dof_velocity(dof_pos, time_delta, gaussian_filter=True)
+        # Functions expect (T, K, ...) format, we have (num_traj, max_T, ...)
+        # Transpose to (max_T, num_traj, ...)
+        num_traj, max_T, n_dofs = dof_pos.shape
+
+        wrist_pos_T = wrist_pos.transpose(0, 1)  # (max_T, num_traj, 3)
+        wrist_rot_aa_T = wrist_rot_aa.transpose(0, 1)  # (max_T, num_traj, 3)
+        dof_pos_T = dof_pos.transpose(0, 1)  # (max_T, num_traj, n_dofs)
+
+        wrist_vel_T = compute_velocity(wrist_pos_T, time_delta, gaussian_filter=True)  # (max_T, num_traj, 3)
+        wrist_ang_vel_T = compute_angular_velocity(wrist_rot_aa_T, time_delta, gaussian_filter=True)  # (max_T, num_traj, 3)
+        dof_vel_T = compute_dof_velocity(dof_pos_T, time_delta, gaussian_filter=True)  # (max_T, num_traj, n_dofs)
+
+        # Transpose back to (num_traj, max_T, ...)
+        wrist_vel = wrist_vel_T.transpose(0, 1)
+        wrist_ang_vel = wrist_ang_vel_T.transpose(0, 1)
+        dof_vel = dof_vel_T.transpose(0, 1)
+
         # Convert wrist rotations to quaternions (for easier manipulation)
-        # quat_from_angle_axis expects (angle, axis), so extract from axis-angle
-        angle = torch.norm(wrist_rot_aa, dim=-1)  # (T,)
-        axis = wrist_rot_aa / (angle.unsqueeze(-1) + 1e-8)  # (T, 3)
-        wrist_quat = quat_from_angle_axis(angle, axis)  # (T, 4) [w, x, y, z]
+        # Reshape for batch processing
+        wrist_rot_aa_flat = wrist_rot_aa.reshape(-1, 3)
+        angle = torch.norm(wrist_rot_aa_flat, dim=-1)  # (num_traj * max_T,)
+        axis = wrist_rot_aa_flat / (angle.unsqueeze(-1) + 1e-8)  # (num_traj * max_T, 3)
+        wrist_quat = quat_from_angle_axis(angle, axis)  # (num_traj * max_T, 4) [w, x, y, z]
+        wrist_quat = wrist_quat.reshape(num_traj, max_T, 4)  # (num_traj, max_T, 4)
+
         # Convert quaternions to Euler angles (roll, pitch, yaw)
-        wrist_euler = quat_to_euler(wrist_quat)  # (T, 3) [roll, pitch, yaw]
+        wrist_euler = quat_to_euler(wrist_quat.reshape(-1, 4))  # (num_traj * max_T, 3)
+        wrist_euler = wrist_euler.reshape(num_traj, max_T, 3)  # (num_traj, max_T, 3)
 
         # Load finger link's positions and velocities from MANO reference
-        mano_joint_poses = []
-        mano_joint_velocities = []
-        for joint_name in self._args.joint_mapping.keys():
-            mano_joint_poses.append(
-                self._demo_data_raw["mano_reference"]["finger_joints"][joint_name]  # (T, 3
-            )
-            mano_joint_velocities.append(
-                self._demo_data_raw["mano_reference"]["finger_joints_velocity"][joint_name]  # (T, 3)
-            )
-        mano_joint_poses = np.stack(mano_joint_poses, axis=1)  # (T, n_joints, 3)
-        self._mano_joint_poses = torch.from_numpy(mano_joint_poses).float().to(self._device)
-        mano_joint_velocities = np.stack(mano_joint_velocities, axis=1)  # (T, n_joints, 3)
-        self._mano_joint_velocities = torch.from_numpy(mano_joint_velocities).float().to(self._device)
+        all_mano_joint_poses = []
+        all_mano_joint_velocities = []
+
+        for traj_idx, demo_data in enumerate(self._demo_data_raw):
+            mano_joint_poses = []
+            mano_joint_velocities = []
+            for joint_name in self._args.joint_mapping.keys():
+                mano_joint_poses.append(
+                    demo_data["mano_reference"]["finger_joints"][joint_name]  # (T, 3)
+                )
+                mano_joint_velocities.append(
+                    demo_data["mano_reference"]["finger_joints_velocity"][joint_name]  # (T, 3)
+                )
+            mano_joint_poses = np.stack(mano_joint_poses, axis=1)  # (T, n_joints, 3)
+            mano_joint_velocities = np.stack(mano_joint_velocities, axis=1)  # (T, n_joints, 3)
+
+            all_mano_joint_poses.append(mano_joint_poses)
+            all_mano_joint_velocities.append(mano_joint_velocities)
+
+        # Pad and stack MANO data
+        mano_joint_poses_padded = self._pad_and_stack(all_mano_joint_poses)  # (num_traj, max_T, n_joints, 3)
+        mano_joint_velocities_padded = self._pad_and_stack(all_mano_joint_velocities)  # (num_traj, max_T, n_joints, 3)
+
+        self._mano_joint_poses = torch.from_numpy(mano_joint_poses_padded).float().to(self._device)
+        self._mano_joint_velocities = torch.from_numpy(mano_joint_velocities_padded).float().to(self._device)
 
         # get the corresponding link idx for hand
         self._finger_link_idxs = []
@@ -237,15 +314,14 @@ class HandImitatorEnv(BaseEnv):
 
         # Store processed trajectory data
         self._traj_data = {
-            "wrist_pos": wrist_pos,  # (T, 3)
-            "wrist_rot": wrist_rot_aa,  # (T, 3) axis-angle
-            "wrist_quat": wrist_quat,  # (T, 4) quaternion [w, x, y, z]
-            "wrist_euler": wrist_euler,  # (T, 3) euler angles [roll, pitch, yaw]
-            "wrist_vel": wrist_vel,  # (T, 3)
-            "wrist_ang_vel": wrist_ang_vel,  # (T, 3)
-            "dof_pos": dof_pos,  # (T, n_dofs)
-            "dof_vel": dof_vel,  # (T, n_dofs)
-            "seq_len": torch.tensor([self._traj_length], device=self._device),
+            "wrist_pos": wrist_pos,  # (num_traj, max_T, 3)
+            "wrist_rot": wrist_rot_aa,  # (num_traj, max_T, 3) axis-angle
+            "wrist_quat": wrist_quat,  # (num_traj, max_T, 4) quaternion [w, x, y, z]
+            "wrist_euler": wrist_euler,  # (num_traj, max_T, 3) euler angles [roll, pitch, yaw]
+            "wrist_vel": wrist_vel,  # (num_traj, max_T, 3)
+            "wrist_ang_vel": wrist_ang_vel,  # (num_traj, max_T, 3)
+            "dof_pos": dof_pos,  # (num_traj, max_T, n_dofs)
+            "dof_vel": dof_vel,  # (num_traj, max_T, n_dofs)
         }
 
         print(f"Processed trajectory data:")
@@ -256,6 +332,8 @@ class HandImitatorEnv(BaseEnv):
         print(f"  - Wrist velocities: {wrist_vel.shape}")
         print(f"  - DOF positions: {dof_pos.shape}")
         print(f"  - DOF velocities: {dof_vel.shape}")
+        print(f"  - MANO joint poses: {self._mano_joint_poses.shape}")
+        print(f"  - MANO joint velocities: {self._mano_joint_velocities.shape}")
 
     def _setup_object(self, args: HandImitatorEnvArgs) -> None:
         """Setup manipulated object (optional)."""
@@ -291,6 +369,21 @@ class HandImitatorEnv(BaseEnv):
         # Action space: hand is free-floating, so actions include base control (6D) + finger joints
         # Following ManipTrans: 6D wrist control (3D translation + 3D rotation) + n_dofs finger joints
         self._action_space = self._robot.action_space
+
+        # Assign trajectories to environments in round-robin fashion
+        # E.g., with 4 trajectories and 10 environments: [0, 1, 2, 3, 0, 1, 2, 3, 0, 1]
+        self.env_traj_idx = torch.tensor(
+            [i % self._num_trajectories for i in range(self.num_envs)],
+            dtype=torch.long,
+            device=self._device
+        )
+
+        # Per-environment trajectory lengths
+        self.env_traj_lengths = torch.tensor(
+            [self._traj_lengths[i % self._num_trajectories] for i in range(self.num_envs)],
+            dtype=torch.long,
+            device=self._device
+        )
 
         # Trajectory progress tracking
         # progress_buf: current position in trajectory timeline (for indexing trajectory data)
@@ -443,13 +536,18 @@ class HandImitatorEnv(BaseEnv):
 
         num_reset = len(envs_idx)
 
+        # Get trajectory indices and lengths for the environments being reset
+        reset_traj_idx = self.env_traj_idx[envs_idx]
+        reset_traj_lengths = self.env_traj_lengths[envs_idx]
+
         # Sample initial timestep from trajectory
         # Following ManipTrans: random init or start from beginning
         random_state_init = getattr(self._args, 'random_state_init', False)
         if random_state_init and not self._eval_mode:
             # Random timestep initialization (up to 99% of trajectory length)
+            # Use per-environment trajectory lengths
             seq_idx = torch.floor(
-                self._traj_length * 0.99 * torch.rand(num_reset, device=self._device)
+                reset_traj_lengths.float() * 0.99 * torch.rand(num_reset, device=self._device)
             ).long()
         else:
             # Always start from beginning
@@ -482,15 +580,15 @@ class HandImitatorEnv(BaseEnv):
 
         # ===== Initialize wrist pose from trajectory with noise =====
         # Get wrist position from trajectory at sampled timestep
-        # For single trajectory, we index directly; for multiple trajectories, would need per-env indexing
-        wrist_pos = self._traj_data["wrist_pos"][seq_idx]  # (num_reset, 3)
+        # Index using both trajectory index and timestep: [reset_traj_idx, seq_idx]
+        wrist_pos = self._traj_data["wrist_pos"][reset_traj_idx, seq_idx]  # (num_reset, 3)
 
         # Add position noise (std = 0.01m = 1cm)
         if not self._eval_mode:
             wrist_pos = wrist_pos + torch.randn_like(wrist_pos) * 0.01
 
         # Get wrist rotation from trajectory
-        wrist_rot_aa = self._traj_data["wrist_rot"][seq_idx]  # (num_reset, 3)
+        wrist_rot_aa = self._traj_data["wrist_rot"][reset_traj_idx, seq_idx]  # (num_reset, 3)
 
         # Convert to rotation matrix for noise application
         wrist_rot_mat = axis_angle_to_rotmat_batch(wrist_rot_aa.unsqueeze(1)).squeeze(1)  # (num_reset, 3, 3)
@@ -515,8 +613,8 @@ class HandImitatorEnv(BaseEnv):
         wrist_quat = rotmat_to_quat(wrist_rot_mat)
 
         # Get wrist velocities from trajectory with noise
-        wrist_vel = self._traj_data["wrist_vel"][seq_idx]  # (num_reset, 3)
-        wrist_ang_vel = self._traj_data["wrist_ang_vel"][seq_idx]  # (num_reset, 3)
+        wrist_vel = self._traj_data["wrist_vel"][reset_traj_idx, seq_idx]  # (num_reset, 3)
+        wrist_ang_vel = self._traj_data["wrist_ang_vel"][reset_traj_idx, seq_idx]  # (num_reset, 3)
 
         if not self._eval_mode:
             wrist_vel = wrist_vel + torch.randn_like(wrist_vel) * 0.01
@@ -593,7 +691,7 @@ class HandImitatorEnv(BaseEnv):
         # === Success condition ===
         # Reached within lookahead steps of trajectory end without failure
         lookahead = 3
-        succeeded = (self.progress_buf + 1 + lookahead >= self._traj_length) & ~failed_execute
+        succeeded = (self.progress_buf + 1 + lookahead >= self.env_traj_lengths) & ~failed_execute
 
         # Update reset buffer with failure and success conditions
         reset_buf |= succeeded | failed_execute
@@ -651,13 +749,19 @@ class HandImitatorEnv(BaseEnv):
         K = self._obs_future_length
         cur_idx = self.progress_buf  # (num_envs,) Current timestep in trajectory
         future_indices = cur_idx.unsqueeze(-1) + torch.arange(1, K + 1, device=self._device).unsqueeze(0)
-        future_indices = torch.clamp(future_indices, 0, self._traj_length - 1)  # (num_envs, K)
+        # Clamp using per-environment trajectory lengths
+        # Use torch.min to clamp the max per environment
+        max_indices = (self.env_traj_lengths.unsqueeze(-1) - 1).expand(-1, K)  # (num_envs, K)
+        future_indices = torch.clamp(future_indices, min=0)
+        future_indices = torch.min(future_indices, max_indices)  # (num_envs, K)
 
-        # Index trajectory data - this gathers K future frames for each environment
-        target_wrist_pos = self._traj_data["wrist_pos"][future_indices]  # (num_envs, K, 3)
-        target_wrist_quat = self._traj_data["wrist_quat"][future_indices]  # (num_envs, K, 4)
-        target_wrist_vel = self._traj_data["wrist_vel"][future_indices]  # (num_envs, K, 3)
-        target_wrist_ang_vel = self._traj_data["wrist_ang_vel"][future_indices]  # (num_envs, K, 3)
+        # Index trajectory data using both trajectory index and timestep
+        traj_indices = self.env_traj_idx.unsqueeze(-1).expand(-1, K)  # (num_envs, K)
+
+        target_wrist_pos = self._traj_data["wrist_pos"][traj_indices, future_indices]  # (num_envs, K, 3)
+        target_wrist_quat = self._traj_data["wrist_quat"][traj_indices, future_indices]  # (num_envs, K, 4)
+        target_wrist_vel = self._traj_data["wrist_vel"][traj_indices, future_indices]  # (num_envs, K, 3)
+        target_wrist_ang_vel = self._traj_data["wrist_ang_vel"][traj_indices, future_indices]  # (num_envs, K, 3)
 
         self.target_wrist_pos[:] = target_wrist_pos.reshape(self.num_envs, -1)
         self.delta_wrist_pos[:] = (target_wrist_pos - self.base_pos.unsqueeze(1)).reshape(self.num_envs, -1)
@@ -672,10 +776,10 @@ class HandImitatorEnv(BaseEnv):
         self.delta_wrist_ang_vel[:] = (target_wrist_ang_vel - self.base_ang_vel.unsqueeze(1)).reshape(self.num_envs, -1)
 
         # Update MANO joint poses
-        self.target_mano_joint_pos[:] = self._mano_joint_poses[future_indices]  # (num_envs, K, 20, 3)
+        self.target_mano_joint_pos[:] = self._mano_joint_poses[traj_indices, future_indices]  # (num_envs, K, 20, 3)
         self.finger_link_pos[:] = self._robot.get_links_pos(links_idx_local=self._finger_link_idxs)  # (num_envs, 20, 3)
         self.finger_link_vel[:] = self._robot.get_links_vel(links_idx_local=self._finger_link_idxs)  # (num_envs, 20, 3)
-        target_mano_joint_vel = self._mano_joint_velocities[future_indices]  # (num_envs, K, 20, 3)
+        target_mano_joint_vel = self._mano_joint_velocities[traj_indices, future_indices]  # (num_envs, K, 20, 3)
         self.delta_finger_link_pos[:] = (self.target_mano_joint_pos - self.finger_link_pos.unsqueeze(1)).reshape(self.num_envs, -1)
         self.delta_finger_link_vel[:] = (target_mano_joint_vel - self.finger_link_vel.unsqueeze(1)).reshape(self.num_envs, -1)
         self.target_mano_joint_vel[:] = target_mano_joint_vel.reshape(self.num_envs, -1)
@@ -693,29 +797,10 @@ class HandImitatorEnv(BaseEnv):
         """Get actor and critic observations."""
         self.update_buffers()
 
-        # update observation means and stds for normalization
-        curr_obs_means = {}
-        curr_obs_stds = {}
-        for key in self._args.actor_obs_terms + self._args.critic_obs_terms:
-            obs_value = getattr(self, key)
-            curr_obs_means[key] = obs_value.mean(dim=0)
-            curr_obs_stds[key] = obs_value.std(dim=0)
-        for key in curr_obs_means:
-            # update running means and stds with momentum
-            self.running_observation_means[key] = (
-                0.99 * self.running_observation_means.get(key, curr_obs_means[key])
-                + 0.01 * curr_obs_means[key]
-            )
-            self.running_observation_stds[key] = (
-                0.99 * self.running_observation_stds.get(key, curr_obs_stds[key])
-                + 0.01 * curr_obs_stds[key]
-            )
-
         # Build actor observation from configured terms
         obs_components = []
         for key in self._args.actor_obs_terms:
-            obs_gt = getattr(self, key)
-            obs_gt = (obs_gt - self.running_observation_means[key]) / (self.running_observation_stds[key] + 1e-8)
+            obs_gt = getattr(self, key) * self._args.obs_scales.get(key, 1.0)
             obs_noise = torch.randn_like(obs_gt) * self._args.obs_noises.get(key, 0.0)
             if self._eval_mode:
                 obs_noise *= 0
@@ -725,8 +810,7 @@ class HandImitatorEnv(BaseEnv):
         # Build critic observation from configured terms
         obs_components = []
         for key in self._args.critic_obs_terms:
-            obs_gt = getattr(self, key)
-            obs_gt = (obs_gt - self.running_observation_means[key]) / (self.running_observation_stds[key] + 1e-8)
+            obs_gt = getattr(self, key) * self._args.obs_scales.get(key, 1.0)
             obs_components.append(obs_gt)
         critic_obs = torch.cat(obs_components, dim=-1)
 
