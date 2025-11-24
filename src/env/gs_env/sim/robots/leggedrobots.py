@@ -152,6 +152,9 @@ class LeggedRobotBase(BaseGymRobot):
         self._time_stamp = 0.0
         self._logging = False
 
+        self._steps_since_randomize_pds = 0
+        self._steps_to_randomize_pds = 10
+
     def post_build_init(self, eval_mode: bool = False) -> None:
         if not eval_mode:
             self._init_domain_randomization()
@@ -183,6 +186,7 @@ class LeggedRobotBase(BaseGymRobot):
         envs_idx: torch.IntTensor = torch.arange(0, self._num_envs, device=self._device)  # type: ignore
         self._randomize_rigids(envs_idx)
         self._randomize_controls(envs_idx)
+        self._steps_since_randomize_pds = 0
 
     def _randomize_rigids(self, envs_idx: torch.IntTensor) -> None:
         # friction
@@ -244,6 +248,18 @@ class LeggedRobotBase(BaseGymRobot):
         self._motor_offset[envs_idx] = (
             torch.rand(len(envs_idx), self._dof_dim) * (max_offset - min_offset) + min_offset
         )
+
+    def _randomize_pds(self) -> None:
+        # kp
+        min_kp, max_kp = self._args.dr_args.kp_range
+        ratios = torch.rand(self._num_envs, self._dof_dim) * (max_kp - min_kp) + min_kp
+        self._batched_dof_kp[:] = ratios * self._dof_kp[None, :]
+        self._kp_ratio[:] = ratios
+        # kd
+        min_kd, max_kd = self._args.dr_args.kd_range
+        ratios = torch.rand(self._num_envs, self._dof_dim) * (max_kd - min_kd) + min_kd
+        self._batched_dof_kd[:] = ratios * self._dof_kd[None, :]
+        self._kd_ratio[:] = ratios
 
     def reset(self, envs_idx: torch.Tensor | None = None) -> None:
         if envs_idx is None:
@@ -348,6 +364,11 @@ class LeggedRobotBase(BaseGymRobot):
         self._dispatch[self._args.ctrl_type](action)
         self._dof_pos[:] = self._robot.get_dofs_position(self._dofs_idx_local)
         self._dof_vel[:] = self._robot.get_dofs_velocity(self._dofs_idx_local)
+
+        self._steps_since_randomize_pds += 1
+        if self._steps_since_randomize_pds >= self._steps_to_randomize_pds:
+            self._randomize_pds()
+            self._steps_since_randomize_pds = 0
 
     def _apply_dr_joint_pos(self, act: DRJointPosAction) -> None:
         """
