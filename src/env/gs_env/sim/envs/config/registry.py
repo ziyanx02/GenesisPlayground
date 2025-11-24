@@ -313,9 +313,9 @@ EnvArgsRegistry["g1_motion_teacher"] = MotionEnvArgs(
     terminate_after_error={
         "base_pos_error": [1.0, [0.1, 1.0]],
         # "base_height_error": [0.2, [0.05, 0.2]],
-        "base_quat_error": [1.0, [0.1, 1.0]],
+        "base_quat_error": [2.0, [0.1, 2.0]],
         # "dof_pos_error": [6.0, [1.0, 6.0]],
-        "tracking_link_pos_error": [0.5, [0.03, 1.0]],
+        # "tracking_link_pos_error": [0.7, [0.03, 1.0]],
         # "foot_contact_force_error": [500.0, [50.0, 500.0]],
     },
     adaptive_termination_ratio=None,
