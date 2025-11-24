@@ -51,13 +51,17 @@ class BC(BaseAlgo):
             self._load_teacher_config(cfg.teacher_config_path)
         else:
             self._teacher_obs_dim = self._actor_obs_dim  # Use student obs dim as fallback
-            print(f"Teacher config not provided, using student observation dimension: {self._teacher_obs_dim}")
+            print(
+                f"Teacher config not provided, using student observation dimension: {self._teacher_obs_dim}"
+            )
 
         # Build actor network
         self._build_actor()
-        if not cfg.teacher_path.is_file():
-            raise ValueError("Teacher path must be a file.")
-        self._build_teacher(cfg.teacher_path)
+        if cfg.teacher_path.is_file():
+            self._build_teacher(cfg.teacher_path)
+        else:
+            self._teacher = None
+            print("Teacher network not provided.")
         self._build_rollouts()
 
     def _build_actor(self) -> None:
@@ -78,44 +82,27 @@ class BC(BaseAlgo):
         """Load teacher environment config from yaml file."""
         if not teacher_config_path.is_file():
             raise ValueError(f"Teacher config path must be a file: {teacher_config_path}")
-        
+
         # Import here to avoid circular dependencies
         import sys
         from pathlib import Path as PathLib
-        
+
         # Add examples to path to import utils
         examples_path = PathLib(__file__).parent.parent.parent.parent / "examples"
         if str(examples_path) not in sys.path:
             sys.path.insert(0, str(examples_path))
-        
-        from utils import yaml_to_config  # type: ignore
-        
+
         # Import the appropriate config class based on environment type
         from gs_env.sim.envs.config.schema import MotionEnvArgs
+        from utils import yaml_to_config  # type: ignore
 
         # Try to load as different config types
         self._teacher_env_args = yaml_to_config(teacher_config_path, MotionEnvArgs)
 
-        # Calculate teacher observation dimension
-        self._teacher_obs_dim = self._compute_teacher_obs_dim()
+        # Compute teacher observation dimension
+        teacher_obs, _ = self.env.get_observations(obs_args=self._teacher_env_args)
+        self._teacher_obs_dim = teacher_obs.shape[-1]
         print(f"Teacher observation dimension: {self._teacher_obs_dim}")
-
-    def _compute_teacher_obs_dim(self) -> int:
-        """Compute teacher observation dimension from teacher config."""
-        # If provided in config, use it
-        if self.cfg.teacher_obs_dim is not None:
-            return self.cfg.teacher_obs_dim
-        
-        # Otherwise, compute it by getting one observation with teacher config
-        # This requires the environment to be in a valid state
-        try:
-            teacher_obs, _ = self.env.get_observations(obs_args=self._teacher_env_args)
-            return teacher_obs.shape[-1]
-        except Exception as e:
-            raise ValueError(
-                f"Could not compute teacher observation dimension. "
-                f"Please provide teacher_obs_dim in BCArgs. Error: {e}"
-            )
 
     def _build_teacher(self, teacher_path: Path) -> None:
         teacher_backbone = NetworkFactory.create_network(
@@ -128,7 +115,9 @@ class BC(BaseAlgo):
             policy_backbone=teacher_backbone,
             action_dim=self._action_dim,
         ).to(self.device)
-        self._teacher.load_state_dict(torch.load(teacher_path, map_location=self.device)["model_state_dict"])
+        self._teacher.load_state_dict(
+            torch.load(teacher_path, map_location=self.device)["model_state_dict"]
+        )
         self._teacher.eval()
 
     def _build_rollouts(self) -> None:
@@ -142,13 +131,14 @@ class BC(BaseAlgo):
 
     def _collect_rollouts(self, num_steps: int) -> dict[str, Any]:
         """Collect rollouts."""
+        assert self._teacher is not None, "Teacher network not built"
         obs, _ = self.env.get_observations()  # Unpack actor and critic obs, only use actor
         with torch.inference_mode():
             # collect rollouts and compute returns & advantages
             for _step in range(num_steps):
                 student_actions = self._actor(obs)
                 # Get teacher observations if teacher config is provided
-                if hasattr(self, '_teacher_env_args'):
+                if hasattr(self, "_teacher_env_args"):
                     teacher_obs, _ = self.env.get_observations(obs_args=self._teacher_env_args)
                 else:
                     teacher_obs = obs  # Use student obs if no teacher config
@@ -257,7 +247,7 @@ class BC(BaseAlgo):
         torch.save(saved_dict, path)
 
     def load(self, path: Path, load_optimizer: bool = True) -> None:
-        checkpoint = torch.load(path)
+        checkpoint = torch.load(path, map_location=self.device)
         self._actor.load_state_dict(checkpoint["model_state_dict"])
         if load_optimizer:
             self._actor_optimizer.load_state_dict(checkpoint["optimizer_state_dict"])

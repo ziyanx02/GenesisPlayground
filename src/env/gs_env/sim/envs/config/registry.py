@@ -402,7 +402,7 @@ EnvArgsRegistry["g1_motion"] = MotionEnvArgs(
         "motion_obs",
         # Privileged
         # "dr_obs",
-        "base_lin_vel_local",
+        # "base_lin_vel_local",
         # "tracking_link_pos_local_yaw",
         # "diff_base_pos_local_yaw",
         # "diff_base_lin_vel_local",

@@ -36,7 +36,8 @@ class DAgger(BaseAlgo):
         self._action_dim = self.env.action_dim
         #
         self._num_envs = self.env.num_envs
-        self._num_steps = cfg.max_buffer_size
+        self._num_steps = cfg.rollout_length
+        self._max_steps = cfg.max_buffer_size
         #
 
         self.current_iter = 0
@@ -89,23 +90,22 @@ class DAgger(BaseAlgo):
         """Load teacher environment config from yaml file."""
         if not teacher_config_path.is_file():
             raise ValueError(f"Teacher config path must be a file: {teacher_config_path}")
-        
+
         # Import here to avoid circular dependencies
         import sys
         from pathlib import Path as PathLib
-        
+
         # Add examples to path to import utils
         examples_path = PathLib(__file__).parent.parent.parent.parent / "examples"
         if str(examples_path) not in sys.path:
             sys.path.insert(0, str(examples_path))
-        
-        from utils import yaml_to_config  # type: ignore
-        
+
         # Import the appropriate config class based on environment type
         # For now, we'll try to detect it from the yaml or use a generic approach
         # The user should ensure the teacher config matches the environment type
-        from gs_env.sim.envs.config.schema import LeggedRobotEnvArgs, WalkingEnvArgs, MotionEnvArgs
-        
+        from gs_env.sim.envs.config.schema import LeggedRobotEnvArgs, MotionEnvArgs, WalkingEnvArgs
+        from utils import yaml_to_config  # type: ignore
+
         # Try to load as different config types
         try:
             self._teacher_env_args = yaml_to_config(teacher_config_path, WalkingEnvArgs)
@@ -114,36 +114,16 @@ class DAgger(BaseAlgo):
                 self._teacher_env_args = yaml_to_config(teacher_config_path, MotionEnvArgs)
             except Exception:
                 self._teacher_env_args = yaml_to_config(teacher_config_path, LeggedRobotEnvArgs)
-        
-        # Calculate teacher observation dimension
-        # We need to compute this from the teacher config's actor_obs_terms
-        # For now, we'll need to create a temporary environment or compute it
-        # This is a simplified approach - in practice, you might want to compute this
-        # by instantiating a temporary env or by parsing the config more carefully
-        self._teacher_obs_dim = self._compute_teacher_obs_dim()
-        print(f"Teacher observation dimension: {self._teacher_obs_dim}")
 
-    def _compute_teacher_obs_dim(self) -> int:
-        """Compute teacher observation dimension from teacher config."""
-        # If provided in config, use it
-        if self.cfg.teacher_obs_dim is not None:
-            return self.cfg.teacher_obs_dim
-        
-        # Otherwise, compute it by getting one observation with teacher config
-        # This requires the environment to be in a valid state
-        try:
-            teacher_obs, _ = self.env.get_observations(obs_args=self._teacher_env_args)
-            return teacher_obs.shape[-1]
-        except Exception as e:
-            raise ValueError(
-                f"Could not compute teacher observation dimension. "
-                f"Please provide teacher_obs_dim in DaggerArgs. Error: {e}"
-            )
+        # Calculate teacher observation dimension
+        teacher_obs, _ = self.env.get_observations(obs_args=self._teacher_env_args)
+        self._teacher_obs_dim = teacher_obs.shape[-1]
+        print(f"Teacher observation dimension: {self._teacher_obs_dim}")
 
     def _build_rollouts(self) -> None:
         self._rollouts = BCBuffer(
             num_envs=self._num_envs,
-            max_steps=self._num_steps,
+            max_steps=self._max_steps,
             obs_size=self._actor_obs_dim,  # Student obs size
             action_size=self._action_dim,
             device=self.device,
@@ -157,13 +137,13 @@ class DAgger(BaseAlgo):
             for _step in range(num_steps):
                 # Student acts (indeterministic)
                 student_actions, _ = self._actor(obs, deterministic=False)
-                
+
                 # Get teacher observations using teacher config
                 teacher_obs, _ = self.env.get_observations(obs_args=self._teacher_env_args)
-                
+
                 # Teacher provides action labels (deterministic)
                 teacher_action, _ = self._teacher(teacher_obs, deterministic=True)
-                
+
                 # Step environment with student actions
                 next_obs, reward, terminated, truncated, _extra_infos = self.env.step(
                     student_actions
@@ -213,7 +193,7 @@ class DAgger(BaseAlgo):
         student_actions, _ = self._actor(obs, deterministic=False)
         # Compute MSE loss for behavior cloning
         loss = (act - student_actions).pow(2).mean()
-        
+
         # Optimization step
         self._actor_optimizer.zero_grad()
         loss.backward()
@@ -287,4 +267,3 @@ class DAgger(BaseAlgo):
         if device is not None:
             self._actor.to(device)
         return self._actor
-
