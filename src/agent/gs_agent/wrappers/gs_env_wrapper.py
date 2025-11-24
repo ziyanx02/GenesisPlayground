@@ -17,14 +17,14 @@ class GenesisEnvWrapper(BaseEnvWrapper):
     ) -> None:
         super().__init__(env, device)
         self.env.reset()
-        self._curr_obs = self.env.get_observations()
+        self._curr_obs, _ = self.env.get_observations(obs_args=None)
 
     # ---------------------------
     # BatchEnvWrapper API (batch)
     # ---------------------------
     def reset(self) -> tuple[torch.Tensor, dict[str, Any]]:
         self.env.reset()
-        self._curr_obs = self.env.get_observations()
+        self._curr_obs, _ = self.env.get_observations(obs_args=None)
         return self._curr_obs, self.env.get_extra_infos()
 
     def step(
@@ -54,11 +54,18 @@ class GenesisEnvWrapper(BaseEnvWrapper):
         if len(done_idx) > 0:
             self.env.reset_idx(done_idx)
         # get observations
-        next_obs, _ = self.env.get_observations()
+        next_obs, _ = self.env.get_observations(obs_args=None)
         return next_obs, reward, terminated, truncated, extra_infos
 
-    def get_observations(self) -> torch.Tensor:
-        return self.env.get_observations()
+    def get_observations(self, obs_args: Any = None) -> torch.Tensor:
+        """Get observations. If obs_args is provided, use it for teacher observations.
+        
+        Args:
+            obs_args: Optional environment args to use for observation computation.
+                     If None, uses student config.
+        """
+        obs, _ = self.env.get_observations(obs_args=obs_args)
+        return obs
 
     @property
     def action_dim(self) -> int:

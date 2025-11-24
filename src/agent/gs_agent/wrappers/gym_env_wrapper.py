@@ -44,7 +44,8 @@ class GymEnvWrapper(BaseEnvWrapper):
         truncated_batch = torch.as_tensor([[truncated]], device=self.device)
         return self._curr_obs, reward_batch, terminated_batch, truncated_batch, info
 
-    def get_observations(self) -> torch.Tensor:
+    def get_observations(self, obs_args: Any = None) -> torch.Tensor:
+        """Get observations. obs_args is ignored for gym environments."""
         return self._curr_obs
 
     @property

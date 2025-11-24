@@ -293,21 +293,30 @@ class LeggedRobotEnv(BaseEnv):
         self.time_out_buf[:] = time_out_buf
         return time_out_buf
 
-    def get_observations(self) -> tuple[torch.Tensor, torch.Tensor]:
+    def get_observations(self, obs_args: Any = None) -> tuple[torch.Tensor, torch.Tensor]:
+        """Get observations. If obs_args is provided, use it instead of self._args.
+        
+        Args:
+            obs_args: Optional environment args to use for observation computation.
+                     If None, uses self._args (student config).
+        """
         self.update_buffers()
+        # Use provided obs_args if available, otherwise use self._args
+        args_to_use = obs_args if obs_args is not None else self._args
+        
         obs_components = []
-        for key in self._args.actor_obs_terms:
-            obs_gt = getattr(self, key) * self._args.obs_scales.get(key, 1.0)
+        for key in args_to_use.actor_obs_terms:
+            obs_gt = getattr(self, key) * args_to_use.obs_scales.get(key, 1.0)
             if len(obs_gt.shape) > 2:
                 obs_gt = obs_gt.view(self.num_envs, -1)
-            obs_noise = torch.randn_like(obs_gt) * self._args.obs_noises.get(key, 0.0)
+            obs_noise = torch.randn_like(obs_gt) * args_to_use.obs_noises.get(key, 0.0)
             if self._eval_mode:
                 obs_noise *= 0
             obs_components.append(obs_gt + obs_noise)
         actor_obs = torch.cat(obs_components, dim=-1)
         obs_components = []
-        for key in self._args.critic_obs_terms:
-            obs_gt = getattr(self, key) * self._args.obs_scales.get(key, 1.0)
+        for key in args_to_use.critic_obs_terms:
+            obs_gt = getattr(self, key) * args_to_use.obs_scales.get(key, 1.0)
             if len(obs_gt.shape) > 2:
                 obs_gt = obs_gt.view(self.num_envs, -1)
             obs_components.append(obs_gt)

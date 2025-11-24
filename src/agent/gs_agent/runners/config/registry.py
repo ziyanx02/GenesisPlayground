@@ -45,3 +45,10 @@ RUNNER_TELEOP_MLP = RunnerArgs(
     save_interval=100,
     save_path=Path("./logs/ppo_gs_teleop"),
 )
+
+RUNNER_BC_MOTION_MLP = RunnerArgs(
+    total_iterations=1001,
+    log_interval=10,
+    save_interval=100,
+    save_path=Path("./logs/bc_motion"),
+)

@@ -131,3 +131,19 @@ PPO_TELEOP_MLP = PPOArgs(
     optimizer_type=OptimizerType.ADAM,
     weight_decay=0.0,
 )
+
+# BC motion config (for distilling from g1_motion_teacher to g1_motion)
+BC_MOTION_MLP = BCArgs(
+    policy_backbone=DEFAULT_MLP,
+    teacher_backbone=DEFAULT_MLP,
+    lr=3e-4,
+    teacher_path=Path(""),  # Will be set dynamically
+    num_epochs=10,
+    batch_size=256,
+    rollout_length=1000,
+    max_buffer_size=1_000_000,
+    max_num_batches=4,
+    max_grad_norm=1.0,
+    optimizer_type=OptimizerType.ADAM,
+    weight_decay=0.0,
+)

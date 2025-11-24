@@ -46,6 +46,9 @@ class BC(BaseAlgo):
         )
         self._curr_ep_len = torch.zeros(self.env.num_envs, device=self.device, dtype=torch.float)
 
+        # Load teacher config if provided (needed for teacher obs dim)
+        self._load_teacher_config(cfg.teacher_config_path)
+
         # Build actor network
         self._build_actor()
         if not cfg.teacher_path.is_file():
@@ -67,10 +70,53 @@ class BC(BaseAlgo):
         ).to(self.device)
         self._actor_optimizer = torch.optim.Adam(self._actor.parameters(), lr=self.cfg.lr)
 
+    def _load_teacher_config(self, teacher_config_path: Path) -> None:
+        """Load teacher environment config from yaml file."""
+        if not teacher_config_path.is_file():
+            raise ValueError(f"Teacher config path must be a file: {teacher_config_path}")
+        
+        # Import here to avoid circular dependencies
+        import sys
+        from pathlib import Path as PathLib
+        
+        # Add examples to path to import utils
+        examples_path = PathLib(__file__).parent.parent.parent.parent / "examples"
+        if str(examples_path) not in sys.path:
+            sys.path.insert(0, str(examples_path))
+        
+        from utils import yaml_to_config  # type: ignore
+        
+        # Import the appropriate config class based on environment type
+        from gs_env.sim.envs.config.schema import MotionEnvArgs
+
+        # Try to load as different config types
+        self._teacher_env_args = yaml_to_config(teacher_config_path, MotionEnvArgs)
+
+        # Calculate teacher observation dimension
+        self._teacher_obs_dim = self._compute_teacher_obs_dim()
+        print(f"Teacher observation dimension: {self._teacher_obs_dim}")
+
+    def _compute_teacher_obs_dim(self) -> int:
+        """Compute teacher observation dimension from teacher config."""
+        # If provided in config, use it
+        if self.cfg.teacher_obs_dim is not None:
+            return self.cfg.teacher_obs_dim
+        
+        # Otherwise, compute it by getting one observation with teacher config
+        # This requires the environment to be in a valid state
+        try:
+            teacher_obs = self.env.get_observations(obs_args=self._teacher_env_args)
+            return teacher_obs.shape[-1]
+        except Exception as e:
+            raise ValueError(
+                f"Could not compute teacher observation dimension. "
+                f"Please provide teacher_obs_dim in BCArgs. Error: {e}"
+            )
+
     def _build_teacher(self, teacher_path: Path) -> None:
         teacher_backbone = NetworkFactory.create_network(
             network_backbone_args=self.cfg.teacher_backbone,
-            input_dim=self._actor_obs_dim,
+            input_dim=self._teacher_obs_dim,  # Use teacher obs dim instead of student
             output_dim=self._action_dim,
             device=self.device,
         )
@@ -78,7 +124,8 @@ class BC(BaseAlgo):
             policy_backbone=teacher_backbone,
             action_dim=self._action_dim,
         ).to(self.device)
-        self._teacher.load_state_dict(torch.load(teacher_path)["model_state_dict"])
+        self._teacher.load_state_dict(torch.load(teacher_path, map_location=self.device)["model_state_dict"])
+        self._teacher.eval()
 
     def _build_rollouts(self) -> None:
         self._rollouts = BCBuffer(
@@ -96,7 +143,12 @@ class BC(BaseAlgo):
             # collect rollouts and compute returns & advantages
             for _step in range(num_steps):
                 student_actions = self._actor(obs)
-                teacher_action, _ = self._teacher(obs, deterministic=True)
+                # Get teacher observations if teacher config is provided
+                if hasattr(self, '_teacher_env_args'):
+                    teacher_obs = self.env.get_observations(obs_args=self._teacher_env_args)
+                else:
+                    teacher_obs = obs  # Use student obs if no teacher config
+                teacher_action, _ = self._teacher(teacher_obs, deterministic=True)
                 # Step environment
                 next_obs, reward, terminated, truncated, _extra_infos = self.env.step(
                     student_actions

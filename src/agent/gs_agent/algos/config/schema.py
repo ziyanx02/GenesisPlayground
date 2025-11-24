@@ -20,6 +20,7 @@ class LearningRateType(GenesisEnum):
 class AlgorithmType(GenesisEnum):
     PPO = "PPO"
     BC = "BC"
+    DAGGER = "DAGGER"
 
 
 class PPOArgs(BaseModel):
@@ -87,8 +88,12 @@ class BCArgs(BaseModel):
     """Policy learning rate"""
     max_grad_norm: PositiveFloat = 1.0
 
-    # Teacher path
+    # Teacher path and config
     teacher_path: Path
+    teacher_config_path: Path | None = None
+    """Path to teacher environment config yaml file. If None, uses student obs dim."""
+    teacher_obs_dim: NonNegativeInt | None = None
+    """Teacher observation dimension. If None, will be computed from teacher config or use student obs dim."""
 
     # Training
     num_epochs: NonNegativeInt = 10
@@ -102,4 +107,40 @@ class BCArgs(BaseModel):
     weight_decay: NonNegativeFloat = 0.0
 
 
-AlgorithmArgs = PPOArgs | BCArgs
+class DaggerArgs(BaseModel):
+    """Configuration for DAgger algorithm."""
+
+    model_config = genesis_pydantic_config(frozen=True)
+
+    # Algorithm type
+    algorithm_type: AlgorithmType = AlgorithmType.DAGGER
+
+    # Network architecture
+    policy_backbone: NetworkBackboneConfig = MLPConfig()
+    teacher_backbone: NetworkBackboneConfig = MLPConfig()
+
+    # Learning rates
+    lr: PositiveFloat = 3e-4
+    """Policy learning rate"""
+    max_grad_norm: PositiveFloat = 1.0
+
+    # Teacher path and config
+    teacher_path: Path
+    teacher_config_path: Path
+    """Path to teacher environment config yaml file"""
+    teacher_obs_dim: NonNegativeInt | None = None
+    """Teacher observation dimension. If None, will be computed from teacher config."""
+
+    # Training
+    num_epochs: NonNegativeInt = 10
+    batch_size: NonNegativeInt = 256
+    rollout_length: NonNegativeInt = 1000
+    max_buffer_size: NonNegativeInt = 1_000_000
+    max_num_batches: NonNegativeInt = 4
+
+    # Optimizer
+    optimizer_type: OptimizerType = OptimizerType.ADAM
+    weight_decay: NonNegativeFloat = 0.0
+
+
+AlgorithmArgs = PPOArgs | BCArgs | DaggerArgs
