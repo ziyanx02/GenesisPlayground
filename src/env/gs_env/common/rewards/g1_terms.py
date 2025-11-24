@@ -440,5 +440,5 @@ class FootContactForceReward(RewardTerm):
     def _compute(
         self, feet_contact_force: torch.Tensor, ref_foot_contact: torch.Tensor
     ) -> torch.Tensor:  # type: ignore
-        contact_force = feet_contact_force * (1 - ref_foot_contact)
+        contact_force = feet_contact_force * (1 - ref_foot_contact) ** 2
         return -torch.square(contact_force).sum(dim=-1)

@@ -15,18 +15,6 @@ motions:
     weight: 100.0
   - file: dance2_subject5.pkl
     weight: 100.0
-  - file: fallAndGetUp1_subject1.pkl
-    weight: 100.0
-  - file: fallAndGetUp1_subject4.pkl
-    weight: 100.0
-  - file: fallAndGetUp1_subject5.pkl
-    weight: 100.0
-  - file: fallAndGetUp2_subject2.pkl
-    weight: 100.0
-  - file: fallAndGetUp2_subject3.pkl
-    weight: 100.0
-  - file: fallAndGetUp3_subject1.pkl
-    weight: 100.0
   - file: fight1_subject2.pkl
     weight: 100.0
   - file: fight1_subject3.pkl
