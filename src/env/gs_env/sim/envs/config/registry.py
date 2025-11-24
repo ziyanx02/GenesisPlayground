@@ -188,7 +188,7 @@ EnvArgsRegistry["g1_motion_teacher"] = MotionEnvArgs(
         "BaseQuatReward": 20.0,
         "BaseLinVelReward": 10.0,
         "BaseAngVelReward": 1.0,
-        "TrackingLinkPosReward": 20.0,
+        "TrackingLinkPosReward": 30.0,
         "TrackingLinkQuatReward": 1.0,
         "FootContactForceReward": 1e-4,
         ### Regularization ###
@@ -303,7 +303,7 @@ EnvArgsRegistry["g1_motion_teacher"] = MotionEnvArgs(
     },
     link_weights={
         "ankle": 1.0,
-        "wrist": 1.0,
+        "wrist": 2.0,
         "torso": 2.0,
     },
     no_terminate_before_motion_time=1.0,
