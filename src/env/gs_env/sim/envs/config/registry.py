@@ -674,7 +674,12 @@ EnvArgsRegistry["wuji_hand_imitator"] = HandImitatorEnvArgs(
     action_latency=1,
     obs_history_len=1,  # Not using history for now (paper uses single timestep)
     obs_scales={
-        # TODO
+        "target_wrist_vel": 10,
+        "target_mano_joint_vel": 10,
+        "delta_wrist_vel": 5,
+        "delta_wrist_pos": 10,
+        "delta_finger_link_vel": 5,
+        "delta_finger_link_pos": 10,
     },
     obs_noises={
         # TODO
