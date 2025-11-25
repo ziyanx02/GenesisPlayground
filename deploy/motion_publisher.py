@@ -55,7 +55,7 @@ def publish_motion(
     motion_lib = MotionLib(motion_file=motion_file, device=device_t)
 
     motion_id_t = torch.tensor([motion_id], dtype=torch.long, device=device_t)
-    dt = float(motion_lib.get_motion_dt(motion_id_t).item())
+    dt = 1.0 / motion_lib.fps
 
     # Match publishing rate to either provided freq or motion dt, whichever is smaller to avoid skipping
     publish_dt = 1.0 / freq_hz if freq_hz > 0 else dt
@@ -81,6 +81,11 @@ def publish_motion(
             last_ts = t_now
             t_val += publish_dt
 
+            if t_val > motion_lib.get_motion_length(motion_id_t):
+                t_val = 0.0
+                motion_id_t += 1
+                if motion_id_t >= motion_lib.num_motions:
+                    motion_id_t = torch.tensor([0], dtype=torch.long, device=device_t)
             motion_time_t = torch.tensor([t_val], dtype=torch.float32, device=device_t)
             (
                 base_pos,
@@ -91,11 +96,13 @@ def publish_motion(
                 dof_vel,
                 link_pos_local,
                 link_quat_local,
+                foot_contact,
                 motion_obs,
             ) = motion_lib.get_ref_motion_frame(
-                motion_ids=motion_id_t, motion_times=motion_time_t, motion_obs=True
+                motion_ids=motion_id_t, motion_times=motion_time_t
             )
 
+            _ = foot_contact
             _ = motion_obs
 
             payload: dict[str, Any] = {

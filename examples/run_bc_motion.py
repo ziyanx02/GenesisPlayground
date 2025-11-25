@@ -248,7 +248,7 @@ def evaluate_policy(
             link_name_to_idx[link_name] = env.robot.link_names.index(link_name)
 
         while True:
-            env.time_since_reset[0] = 5.0
+            env.time_since_reset[0] = 0.0
             env.hard_reset_motion(torch.IntTensor([0]), motion_id)
             env.hard_sync_motion(torch.IntTensor([0]))
             obs, _ = wrapped_env.get_observations()

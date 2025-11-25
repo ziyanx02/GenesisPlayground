@@ -634,7 +634,7 @@ class MotionLib:
         assert motion_times.min() >= 0.0, "motion_times must be non-negative"
         # snap to discrete frame grid using unified fps and clamp within motion length
         fps = self.fps
-        motion_len = self._motion_lengths[motion_ids]  # unchanged logical length
+        motion_len = self._motion_lengths[motion_ids] - 1.0 / fps
         motion_times = torch.min(motion_times, motion_len)
         steps = torch.round(motion_times * fps).long()
 
@@ -676,7 +676,7 @@ class MotionLib:
         assert motion_times.min() >= 0.0, "motion_times must be non-negative"
         # snap to discrete frame grid using unified fps and clamp within motion length
         fps = self.fps
-        motion_len = self._motion_lengths[motion_ids] - 1  # unchanged logical length
+        motion_len = self._motion_lengths[motion_ids] - 1.0 / fps
         motion_times = torch.min(motion_times, motion_len)
         steps = torch.round(motion_times * fps).long()
 

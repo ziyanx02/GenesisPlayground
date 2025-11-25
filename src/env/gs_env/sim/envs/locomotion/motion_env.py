@@ -342,7 +342,8 @@ class MotionEnv(LeggedRobotEnv):
         # termination dictionary for extra info
         termination_dict = {}
 
-        reset_buf = self.get_truncated()
+        time_out_buf = self.get_truncated()
+        reset_buf = time_out_buf.clone()
 
         # tilt_mask = torch.logical_or(
         #     torch.abs(self.base_euler[:, 0]) > 0.5,
@@ -363,7 +364,8 @@ class MotionEnv(LeggedRobotEnv):
         # terminate if motino_time will exceed motion length after next step
         # avoid passing overlimit motion time to get_motion_frame
         motion_end_mask = self.motion_times + self.dt > self._motion_lengths
-        reset_buf |= motion_end_mask
+        if not self._eval_mode:
+            reset_buf |= motion_end_mask
 
         # Only enable error-based termination after a certain motion time, if specified
         terminate_by_error = self.motion_times > self._args.no_terminate_before_motion_time
@@ -412,6 +414,7 @@ class MotionEnv(LeggedRobotEnv):
 
         self.reset_buf[:] = reset_buf
 
+        termination_dict["time_out"] = time_out_buf.clone()
         # termination_dict["tilt"] = tilt_mask.clone()
         # termination_dict["height"] = height_mask.clone()
         # termination_dict["motion_end"] = motion_end_mask.clone()

@@ -131,7 +131,19 @@ def main(
         dof_dim_cfg = len(getattr(env_args.robot_args, "dof_names", []))
         if dof_dim_cfg <= 0:
             dof_dim_cfg = int(last_action_t.shape[-1])
-        ref_client = RedisClient(url=redis_url, key=redis_key, device=device)
+        
+        # Get link names and tracking link names for Redis client
+        link_names: list[str] = []
+        if hasattr(env, "robot"):
+            link_names = getattr(env.robot, "link_names", [])
+        tracking_link_names = getattr(env_args, "tracking_link_names", [])
+        ref_client = RedisClient(
+            url=redis_url,
+            key=redis_key,
+            device=device,
+            link_names=link_names,
+            tracking_link_names=tracking_link_names,
+        )
 
         while True:
             # Check termination condition (only for real robot)
