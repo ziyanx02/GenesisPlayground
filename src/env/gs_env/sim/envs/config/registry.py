@@ -1,3 +1,4 @@
+import math
 from gs_env.sim.envs.config.schema import (
     EnvArgs,
     GenesisInitArgs,
@@ -591,6 +592,10 @@ EnvArgsRegistry["wuji_hand_imitator"] = HandImitatorEnvArgs(
     max_episode_length=2500,  # Max steps per episode
     obs_future_length=3,  # Number of future trajectory frames to observe (K in paper)
     random_state_init=True,  # Randomize initial timestep in trajectory
+    use_augmentation=True,
+    aug_translation_range=(-0.5, 0.5),  # XY translation range (meters)
+    aug_rotation_z_range=(-math.pi, math.pi),  # Z-axis rotation range (radians)
+    aug_scale_range=(1.0, 2.0),  # Uniform scale range for workspace
     joint_mapping={
             # Thumb (finger1 in URDF)
             "thumb_proximal": "finger1_link2",

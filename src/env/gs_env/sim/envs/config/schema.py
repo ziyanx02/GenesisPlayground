@@ -100,3 +100,8 @@ class HandImitatorEnvArgs(EnvArgs):
     obs_future_length: int = 5  # Number of future trajectory frames to observe (K)
     random_state_init: bool = True  # Randomize initial timestep in trajectory
     joint_mapping: dict[str, str]
+    # Trajectory augmentation configuration
+    use_augmentation: bool = False  # Enable trajectory augmentation on reset
+    aug_translation_range: tuple[float, float] = (-0.1, 0.1)  # XY translation range (meters)
+    aug_rotation_z_range: tuple[float, float] = (-np.pi / 4, np.pi / 4)  # Z-axis rotation range (radians)
+    aug_scale_range: tuple[float, float] = (0.9, 1.1)  # Uniform scale range for workspace

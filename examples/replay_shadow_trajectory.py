@@ -8,6 +8,136 @@ from scipy.spatial.transform import Rotation as R
 import genesis as gs
 
 
+def augment_trajectory(
+    shadow_traj,
+    object_traj,
+    mano_reference,
+    translation_range=(-0.1, 0.1),
+    rotation_z_range=(-np.pi / 4, np.pi / 4),
+    uniform_scale_range=(0.9, 1.1),
+    seed=None,
+):
+    """
+    Augment hand-object trajectory while preserving physical plausibility.
+
+    Applies three types of augmentation:
+    1. Random translation (XYZ) - applied to all positions
+    2. Random rotation around Z-axis - applied to all orientations and positions
+    3. Uniform scaling - applied only to wrist and object positions (NOT to MANO joints or finger DOFs)
+
+    Args:
+        shadow_traj: Dictionary containing hand trajectory data
+        object_traj: Dictionary containing object trajectory data
+        mano_reference: Dictionary containing MANO reference joint positions
+        translation_range: (min, max) for random translation in meters for each axis
+        rotation_z_range: (min, max) for random rotation around Z-axis in radians
+        uniform_scale_range: (min, max) for uniform scaling of wrist/object positions only
+        seed: Random seed for reproducibility
+
+    Returns:
+        Tuple of (augmented_shadow_traj, augmented_object_traj, augmented_mano_reference)
+    """
+    if seed is not None:
+        np.random.seed(seed)
+
+    # Deep copy to avoid modifying original data
+    aug_shadow_traj = {k: v.copy() if isinstance(v, np.ndarray) else v for k, v in shadow_traj.items()}
+    aug_object_traj = {k: v.copy() if isinstance(v, np.ndarray) else v for k, v in object_traj.items()}
+    aug_mano_reference = {
+        k: {kk: vv.copy() if isinstance(vv, np.ndarray) else vv for kk, vv in v.items()}
+        if isinstance(v, dict) else (v.copy() if isinstance(v, np.ndarray) else v)
+        for k, v in mano_reference.items()
+    }
+
+    # 1. Random uniform scaling (applied only to wrist and object, NOT to MANO joints)
+    scale = np.random.uniform(uniform_scale_range[0], uniform_scale_range[1])
+
+    # 2. Random translation (apply after scaling) - only horizontal (X, Y), not vertical (Z)
+    translation = np.array([
+        np.random.uniform(translation_range[0], translation_range[1]),  # X
+        np.random.uniform(translation_range[0], translation_range[1]),  # Y
+        0.0  # Z - no vertical translation to keep hand above ground
+    ])
+
+    # 3. Random rotation around Z-axis
+    theta_z = np.random.uniform(rotation_z_range[0], rotation_z_range[1])
+    cos_z, sin_z = np.cos(theta_z), np.sin(theta_z)
+    R_z = np.array([
+        [cos_z, -sin_z, 0],
+        [sin_z, cos_z, 0],
+        [0, 0, 1]
+    ])
+
+    # Get original data
+    wrist_positions = aug_shadow_traj["wrist_positions"]  # (T, 3)
+    object_positions = aug_object_traj["positions"]  # (T, 3)
+    object_pose_matrices = aug_object_traj["pose_matrices"]  # (T, 4, 4)
+
+    # Compute relative offsets - these will be preserved (NOT scaled)
+    hand_to_object = object_positions - wrist_positions  # (T, 3)
+
+    # Apply scaling and rotation to wrist trajectory (workspace size)
+    scaled_wrist = scale * wrist_positions
+    rotated_wrist = (R_z @ scaled_wrist.T).T
+    aug_shadow_traj["wrist_positions"] = rotated_wrist + translation
+
+    # Apply rotation to wrist orientations (axis-angle)
+    wrist_rotations_aa = aug_shadow_traj["wrist_rotations_aa"]
+    for t in range(len(wrist_rotations_aa)):
+        # Convert axis-angle to rotation matrix
+        aa = wrist_rotations_aa[t]
+        angle = np.linalg.norm(aa)
+        if angle > 1e-6:
+            R_wrist = R.from_rotvec(aa).as_matrix()
+        else:
+            R_wrist = np.eye(3)
+
+        # Apply Z-rotation: R_new = R_z @ R_wrist
+        R_new = R_z @ R_wrist
+        # Convert back to axis-angle
+        aug_shadow_traj["wrist_rotations_aa"][t] = R.from_matrix(R_new).as_rotvec()
+
+    # DOF positions (finger joint angles) remain unchanged - they are intrinsic
+    # aug_shadow_traj["dof_positions"] stays the same
+
+    # Compute new object positions: new_wrist + rotated(original hand_to_object offset)
+    rotated_hand_to_object = (R_z @ hand_to_object.T).T
+    aug_object_traj["positions"] = aug_shadow_traj["wrist_positions"] + rotated_hand_to_object
+
+    # Update object pose matrices
+    for t in range(len(object_pose_matrices)):
+        pose = object_pose_matrices[t].copy()
+
+        # Use the new object position
+        new_obj_pos = aug_object_traj["positions"][t]
+
+        # Apply rotation to object orientation
+        obj_rot = pose[:3, :3]
+        new_obj_rot = R_z @ obj_rot
+
+        # Update pose matrix
+        aug_object_traj["pose_matrices"][t, :3, 3] = new_obj_pos
+        aug_object_traj["pose_matrices"][t, :3, :3] = new_obj_rot
+
+    # Update MANO reference finger joints: new_wrist + rotated(original hand_to_joint offset)
+    if "finger_joints" in aug_mano_reference:
+        for joint_name in aug_mano_reference["finger_joints"]:
+            joint_positions = aug_mano_reference["finger_joints"][joint_name]  # (T, 3)
+
+            # Compute original relative offset from wrist to joint (NOT scaled)
+            hand_to_joint = joint_positions - wrist_positions
+
+            # Rotate the offset (but do NOT scale it)
+            rotated_hand_to_joint = (R_z @ hand_to_joint.T).T
+
+            # New joint position = new wrist position + rotated (unscaled) offset
+            aug_mano_reference["finger_joints"][joint_name] = (
+                aug_shadow_traj["wrist_positions"] + rotated_hand_to_joint
+            )
+
+    return aug_shadow_traj, aug_object_traj, aug_mano_reference
+
+
 def main():
     parser = argparse.ArgumentParser(description="Replay Shadow Hand trajectory")
     parser.add_argument(
@@ -38,6 +168,41 @@ def main():
         type=str,
         default=None,
         help="Path to save rendered video",
+    )
+    parser.add_argument(
+        "--augment",
+        action="store_true",
+        help="Apply random augmentation to the trajectory",
+    )
+    parser.add_argument(
+        "--aug-translation",
+        type=float,
+        default=0.1,
+        help="Range for random translation (±meters) in each axis",
+    )
+    parser.add_argument(
+        "--aug-rotation-z",
+        type=float,
+        default=45.0,
+        help="Range for random Z-axis rotation (±degrees)",
+    )
+    parser.add_argument(
+        "--aug-scale-min",
+        type=float,
+        default=0.9,
+        help="Minimum uniform scale factor",
+    )
+    parser.add_argument(
+        "--aug-scale-max",
+        type=float,
+        default=1.1,
+        help="Maximum uniform scale factor",
+    )
+    parser.add_argument(
+        "--aug-seed",
+        type=int,
+        default=None,
+        help="Random seed for augmentation (for reproducibility)",
     )
     args = parser.parse_args()
 
@@ -73,6 +238,36 @@ def main():
     print(f"Trajectory length: {T} timesteps")
     print(f"Shadow DOF count: {dof_positions.shape[1]}")
     print(f"{'='*80}\n")
+
+    ########################## Apply augmentation if requested ##########################
+    if args.augment:
+        print(f"{'='*80}")
+        print("Applying trajectory augmentation...")
+        print(f"  Translation range: ±{args.aug_translation:.3f}m")
+        print(f"  Z-rotation range: ±{args.aug_rotation_z:.1f}°")
+        print(f"  Scale range: [{args.aug_scale_min:.2f}, {args.aug_scale_max:.2f}]")
+        if args.aug_seed is not None:
+            print(f"  Random seed: {args.aug_seed}")
+        print(f"{'='*80}")
+
+        shadow_traj, object_traj, mano_reference = augment_trajectory(
+            shadow_traj,
+            object_traj,
+            mano_reference,
+            translation_range=(-args.aug_translation, args.aug_translation),
+            rotation_z_range=(-np.deg2rad(args.aug_rotation_z), np.deg2rad(args.aug_rotation_z)),
+            uniform_scale_range=(args.aug_scale_min, args.aug_scale_max),
+            seed=args.aug_seed,
+        )
+
+        # Re-extract augmented data
+        wrist_positions = shadow_traj["wrist_positions"]
+        wrist_rotations = shadow_traj["wrist_rotations_aa"]
+        dof_positions = shadow_traj["dof_positions"]
+        object_positions = object_traj["positions"]
+        object_pose_matrices = object_traj["pose_matrices"]
+
+        print("Augmentation applied successfully!\n")
 
     ########################## init ##########################
     gs.init(backend=gs.cpu)
@@ -132,13 +327,13 @@ def main():
         "finger1_link4", "finger2_link4", "finger3_link4", "finger4_link4", "finger5_link4",
         "finger1_tip_link", "finger2_tip_link", "finger3_tip_link", "finger4_tip_link", "finger5_tip_link"
     ]
-    for link_name in link_names:
-        link_markers[link_name] = scene.add_entity(
-            gs.morphs.Box(
-                size=(0.01, 0.01, 0.01),
-                pos=[0, 0, 0],
-            )
-        )
+    # for link_name in link_names:
+    #     link_markers[link_name] = scene.add_entity(
+    #         gs.morphs.Box(
+    #             size=(0.01, 0.01, 0.01),
+    #             pos=[0, 0, 0],
+    #         )
+    #     )
 
     # Add Shadow Hand
     shadow_hand = scene.add_entity(
@@ -227,12 +422,9 @@ def main():
                     marker_pose = mano_reference["finger_joints"][joint_name][t]
                     marker.set_pos(marker_pose)
                 # Update link marker positions
-                # for link_name, marker in link_markers.items():
-                #     link_pose = shadow_hand.get_link(link_name).get_pos()
-                #     marker.set_pos(link_pose)
-                for name, marker in link_markers.items():
-                    link_pos = shadow_hand.get_links_pos(links_idx_local=links_idx_local[name])
-                    marker.set_pos(link_pos[0])
+                # for name, marker in link_markers.items():
+                #     link_pos = shadow_hand.get_links_pos(links_idx_local=links_idx_local[name])
+                #     marker.set_pos(link_pos[0])
 
                 # Step scene (no physics, just visualization)
                 scene.step()

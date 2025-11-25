@@ -24,6 +24,7 @@ from gs_env.common.utils.math_utils import (
     quat_to_rotmat,
     rotmat_to_quat,
 )
+from scipy.spatial.transform import Rotation as R
 from gs_env.common.utils.misc_utils import get_space_dim
 from gs_env.common.utils.maniptrans_util import (
     compute_velocity,
@@ -276,10 +277,6 @@ class HandImitatorEnv(BaseEnv):
         wrist_quat = quat_from_angle_axis(angle, axis)  # (num_traj * max_T, 4) [w, x, y, z]
         wrist_quat = wrist_quat.reshape(num_traj, max_T, 4)  # (num_traj, max_T, 4)
 
-        # Convert quaternions to Euler angles (roll, pitch, yaw)
-        wrist_euler = quat_to_euler(wrist_quat.reshape(-1, 4))  # (num_traj * max_T, 3)
-        wrist_euler = wrist_euler.reshape(num_traj, max_T, 3)  # (num_traj, max_T, 3)
-
         # Load finger link's positions and velocities from MANO reference
         all_mano_joint_poses = []
         all_mano_joint_velocities = []
@@ -312,12 +309,12 @@ class HandImitatorEnv(BaseEnv):
         for link_name in self._args.joint_mapping.values():
             self._finger_link_idxs.append(self._robot.get_link(link_name).idx_local)
 
-        # Store processed trajectory data
-        self._traj_data = {
+        # Store ORIGINAL processed trajectory data (per trajectory)
+        # This will be used as a template for creating per-environment copies
+        self._traj_data_template = {
             "wrist_pos": wrist_pos,  # (num_traj, max_T, 3)
             "wrist_rot": wrist_rot_aa,  # (num_traj, max_T, 3) axis-angle
             "wrist_quat": wrist_quat,  # (num_traj, max_T, 4) quaternion [w, x, y, z]
-            "wrist_euler": wrist_euler,  # (num_traj, max_T, 3) euler angles [roll, pitch, yaw]
             "wrist_vel": wrist_vel,  # (num_traj, max_T, 3)
             "wrist_ang_vel": wrist_ang_vel,  # (num_traj, max_T, 3)
             "dof_pos": dof_pos,  # (num_traj, max_T, n_dofs)
@@ -328,12 +325,171 @@ class HandImitatorEnv(BaseEnv):
         print(f"  - Wrist positions: {wrist_pos.shape}")
         print(f"  - Wrist rotations (axis-angle): {wrist_rot_aa.shape}")
         print(f"  - Wrist rotations (quaternion): {wrist_quat.shape}")
-        print(f"  - Wrist rotations (euler): {wrist_euler.shape}")
         print(f"  - Wrist velocities: {wrist_vel.shape}")
         print(f"  - DOF positions: {dof_pos.shape}")
         print(f"  - DOF velocities: {dof_vel.shape}")
         print(f"  - MANO joint poses: {self._mano_joint_poses.shape}")
         print(f"  - MANO joint velocities: {self._mano_joint_velocities.shape}")
+
+    def _augment_trajectory(self, envs_idx: torch.Tensor) -> dict[str, torch.Tensor]:
+        """Apply trajectory augmentation to specified environments.
+
+        Following the augmentation strategy from replay_shadow_trajectory.py:
+        1. Augment raw data (wrist position, wrist rotation axis-angle, MANO joint poses)
+        2. Reuse processing logic to compute velocities and quaternions
+
+        Args:
+            envs_idx: Environment indices to augment (num_envs_to_aug,)
+
+        Returns:
+            Dictionary containing augmented trajectory data for these environments:
+                - wrist_pos: (num_envs_to_aug, max_T, 3)
+                - wrist_rot_aa: (num_envs_to_aug, max_T, 3)
+                - wrist_quat: (num_envs_to_aug, max_T, 4)
+                - wrist_vel: (num_envs_to_aug, max_T, 3)
+                - wrist_ang_vel: (num_envs_to_aug, max_T, 3)
+                - mano_joint_poses: (num_envs_to_aug, max_T, 20, 3)
+                - mano_joint_velocities: (num_envs_to_aug, max_T, 20, 3)
+        """
+        num_envs = len(envs_idx)
+        device = self.env_traj_idx.device
+
+        # Get trajectory indices for these environments
+        traj_idx = self.env_traj_idx[envs_idx]
+
+        # Load original data from numpy arrays (not processed tensors)
+        wrist_pos_orig = torch.from_numpy(
+            self._wrist_positions[traj_idx.cpu().numpy()]
+        ).float().to(device)  # (num_envs, max_T, 3)
+
+        wrist_rot_aa_orig = torch.from_numpy(
+            self._wrist_rotations_aa[traj_idx.cpu().numpy()]
+        ).float().to(device)  # (num_envs, max_T, 3)
+
+        mano_joint_poses_orig = self._mano_joint_poses[traj_idx]  # (num_envs, max_T, 20, 3)
+
+        # ===== Sample augmentation parameters =====
+        # 1. Random uniform scaling (applied only to wrist workspace, NOT to MANO joints)
+        scale = torch.rand(num_envs, device=device) * (
+            self._args.aug_scale_range[1] - self._args.aug_scale_range[0]
+        ) + self._args.aug_scale_range[0]  # (num_envs,)
+
+        # 2. Random translation (XY only, not Z to keep hand above ground)
+        translation = torch.zeros(num_envs, 3, device=device)
+        translation[:, 0] = torch.rand(num_envs, device=device) * (
+            self._args.aug_translation_range[1] - self._args.aug_translation_range[0]
+        ) + self._args.aug_translation_range[0]
+        translation[:, 1] = torch.rand(num_envs, device=device) * (
+            self._args.aug_translation_range[1] - self._args.aug_translation_range[0]
+        ) + self._args.aug_translation_range[0]
+        # translation[:, 2] = 0.0  # No vertical translation
+
+        # 3. Random rotation around Z-axis
+        theta_z = torch.rand(num_envs, device=device) * (
+            self._args.aug_rotation_z_range[1] - self._args.aug_rotation_z_range[0]
+        ) + self._args.aug_rotation_z_range[0]  # (num_envs,)
+
+        # Build rotation matrices around Z-axis
+        cos_z = torch.cos(theta_z)
+        sin_z = torch.sin(theta_z)
+        zeros = torch.zeros_like(cos_z)
+        ones = torch.ones_like(cos_z)
+
+        R_z = torch.stack([
+            torch.stack([cos_z, -sin_z, zeros], dim=-1),
+            torch.stack([sin_z, cos_z, zeros], dim=-1),
+            torch.stack([zeros, zeros, ones], dim=-1),
+        ], dim=-2)  # (num_envs, 3, 3)
+
+        # ===== Augment wrist positions =====
+        # Apply scaling and rotation to wrist trajectory
+        max_T = wrist_pos_orig.shape[1]
+
+        # Reshape for batch matrix multiplication
+        scaled_wrist = scale.unsqueeze(-1).unsqueeze(-1) * wrist_pos_orig  # (num_envs, max_T, 3)
+        rotated_wrist = torch.bmm(
+            R_z.unsqueeze(1).expand(-1, max_T, -1, -1).reshape(-1, 3, 3),
+            scaled_wrist.reshape(-1, 3).unsqueeze(-1)
+        ).squeeze(-1).reshape(num_envs, max_T, 3)  # (num_envs, max_T, 3)
+
+        aug_wrist_pos = rotated_wrist + translation.unsqueeze(1)  # (num_envs, max_T, 3)
+
+        # ===== Augment wrist rotations (axis-angle) =====
+        # Apply rotation to wrist orientations
+        aug_wrist_rot_aa = torch.zeros_like(wrist_rot_aa_orig)
+
+        for t in range(max_T):
+            # Convert axis-angle to rotation matrix
+            wrist_rot_mat = axis_angle_to_rotmat_batch(
+                wrist_rot_aa_orig[:, t:t+1, :]
+            ).squeeze(1)  # (num_envs, 3, 3)
+
+            # Apply Z-rotation: R_new = R_z @ R_wrist
+            aug_wrist_rot_mat = torch.bmm(R_z, wrist_rot_mat)  # (num_envs, 3, 3)
+
+            # Convert back to axis-angle
+            aug_wrist_rot_aa[:, t, :] = rotmat_to_axis_angle_batch(
+                aug_wrist_rot_mat.unsqueeze(1)
+            ).squeeze(1)  # (num_envs, 3)
+
+        # ===== Augment MANO joint poses =====
+        # Compute offsets from original wrist (NOT scaled, only rotated)
+        hand_to_joint = mano_joint_poses_orig - wrist_pos_orig.unsqueeze(2)  # (num_envs, max_T, 20, 3)
+
+        # Apply rotation to offsets
+        rotated_hand_to_joint = torch.bmm(
+            R_z.unsqueeze(1).unsqueeze(1).expand(-1, max_T, 20, -1, -1).reshape(-1, 3, 3),
+            hand_to_joint.reshape(-1, 3).unsqueeze(-1)
+        ).squeeze(-1).reshape(num_envs, max_T, 20, 3)  # (num_envs, max_T, 20, 3)
+
+        # New joint positions = new wrist + rotated offset
+        aug_mano_joint_poses = aug_wrist_pos.unsqueeze(2) + rotated_hand_to_joint  # (num_envs, max_T, 20, 3)
+
+        # ===== Compute velocities using same logic as _process_trajectory_data =====
+        time_delta = 1 / 60.0  # 60 Hz after skip=2 from 120 Hz
+
+        # Transpose to (max_T, num_envs, ...) for velocity computation
+        wrist_pos_T = aug_wrist_pos.transpose(0, 1)  # (max_T, num_envs, 3)
+        wrist_rot_aa_T = aug_wrist_rot_aa.transpose(0, 1)  # (max_T, num_envs, 3)
+
+        wrist_vel_T = compute_velocity(wrist_pos_T, time_delta, gaussian_filter=True)  # (max_T, num_envs, 3)
+        wrist_ang_vel_T = compute_angular_velocity(wrist_rot_aa_T, time_delta, gaussian_filter=True)  # (max_T, num_envs, 3)
+
+        # Transpose back to (num_envs, max_T, ...)
+        aug_wrist_vel = wrist_vel_T.transpose(0, 1)  # (num_envs, max_T, 3)
+        aug_wrist_ang_vel = wrist_ang_vel_T.transpose(0, 1)  # (num_envs, max_T, 3)
+
+        # ===== Convert wrist rotations to quaternions =====
+        wrist_rot_aa_flat = aug_wrist_rot_aa.reshape(-1, 3)
+        angle = torch.norm(wrist_rot_aa_flat, dim=-1)  # (num_envs * max_T,)
+        axis = wrist_rot_aa_flat / (angle.unsqueeze(-1) + 1e-8)  # (num_envs * max_T, 3)
+        aug_wrist_quat = quat_from_angle_axis(angle, axis)  # (num_envs * max_T, 4) [w, x, y, z]
+        aug_wrist_quat = aug_wrist_quat.reshape(num_envs, max_T, 4)  # (num_envs, max_T, 4)
+
+        # ===== Compute MANO joint velocities =====
+        # Transpose to (max_T, num_envs, 20, 3)
+        mano_joint_poses_T = aug_mano_joint_poses.permute(1, 0, 2, 3)  # (max_T, num_envs, 20, 3)
+
+        # Compute velocity for each joint separately
+        aug_mano_joint_vels = torch.zeros_like(mano_joint_poses_T)
+        for joint_idx in range(20):
+            aug_mano_joint_vels[:, :, joint_idx, :] = compute_velocity(
+                mano_joint_poses_T[:, :, joint_idx, :], time_delta, gaussian_filter=True
+            )  # (max_T, num_envs, 3)
+
+        # Transpose back to (num_envs, max_T, 20, 3)
+        aug_mano_joint_vels = aug_mano_joint_vels.permute(1, 0, 2, 3)
+
+        return {
+            "wrist_pos": aug_wrist_pos,  # (num_envs, max_T, 3)
+            "wrist_rot": aug_wrist_rot_aa,  # (num_envs, max_T, 3)
+            "wrist_quat": aug_wrist_quat,  # (num_envs, max_T, 4)
+            "wrist_vel": aug_wrist_vel,  # (num_envs, max_T, 3)
+            "wrist_ang_vel": aug_wrist_ang_vel,  # (num_envs, max_T, 3)
+            "mano_joint_poses": aug_mano_joint_poses,  # (num_envs, max_T, 20, 3)
+            "mano_joint_velocities": aug_mano_joint_vels,  # (num_envs, max_T, 20, 3)
+        }
+
 
     def _setup_object(self, args: HandImitatorEnvArgs) -> None:
         """Setup manipulated object (optional)."""
@@ -384,6 +540,35 @@ class HandImitatorEnv(BaseEnv):
             dtype=torch.long,
             device=self._device
         )
+
+        # Create per-environment trajectory data (duplicated from template)
+        # This allows each environment to have its own augmented trajectory
+        max_T = self._max_traj_length
+        self._traj_data = {
+            "wrist_pos": torch.zeros((self.num_envs, max_T, 3), device=self._device),
+            "wrist_rot": torch.zeros((self.num_envs, max_T, 3), device=self._device),
+            "wrist_quat": torch.zeros((self.num_envs, max_T, 4), device=self._device),
+            "wrist_vel": torch.zeros((self.num_envs, max_T, 3), device=self._device),
+            "wrist_ang_vel": torch.zeros((self.num_envs, max_T, 3), device=self._device),
+            "dof_pos": torch.zeros((self.num_envs, max_T, self._hand_dof_dim), device=self._device),
+            "dof_vel": torch.zeros((self.num_envs, max_T, self._hand_dof_dim), device=self._device),
+        }
+
+        # Initialize with template data based on env_traj_idx
+        for env_idx in range(self.num_envs):
+            traj_idx = self.env_traj_idx[env_idx]
+            for key in self._traj_data.keys():
+                self._traj_data[key][env_idx] = self._traj_data_template[key][traj_idx]
+
+        # Per-environment MANO joint data
+        self.env_mano_joint_poses = torch.zeros((self.num_envs, max_T, 20, 3), device=self._device)
+        self.env_mano_joint_velocities = torch.zeros((self.num_envs, max_T, 20, 3), device=self._device)
+
+        # Initialize with original data
+        for env_idx in range(self.num_envs):
+            traj_idx = self.env_traj_idx[env_idx]
+            self.env_mano_joint_poses[env_idx] = self._mano_joint_poses[traj_idx]
+            self.env_mano_joint_velocities[env_idx] = self._mano_joint_velocities[traj_idx]
 
         # Trajectory progress tracking
         # progress_buf: current position in trajectory timeline (for indexing trajectory data)
@@ -552,6 +737,20 @@ class HandImitatorEnv(BaseEnv):
             self.env_traj_idx[envs_idx] = reset_traj_idx
             self.env_traj_lengths[envs_idx] = reset_traj_lengths
 
+        # ===== Apply trajectory augmentation if enabled =====
+        if self._args.use_augmentation and not self._eval_mode:
+            # Augment trajectories for the environments being reset
+            aug_traj_data = self._augment_trajectory(envs_idx)
+
+            # Update trajectory data for these environments
+            for i, env_idx in enumerate(envs_idx):
+                self._traj_data["wrist_pos"][env_idx] = aug_traj_data["wrist_pos"][i]
+                self._traj_data["wrist_rot"][env_idx] = aug_traj_data["wrist_rot"][i]
+                self._traj_data["wrist_quat"][env_idx] = aug_traj_data["wrist_quat"][i]
+                self._traj_data["wrist_vel"][env_idx] = aug_traj_data["wrist_vel"][i]
+                self._traj_data["wrist_ang_vel"][env_idx] = aug_traj_data["wrist_ang_vel"][i]
+                self.env_mano_joint_poses[env_idx] = aug_traj_data["mano_joint_poses"][i]
+                self.env_mano_joint_velocities[env_idx] = aug_traj_data["mano_joint_velocities"][i]
 
         # Sample initial timestep from trajectory
         # Following ManipTrans: random init or start from beginning
@@ -593,15 +792,15 @@ class HandImitatorEnv(BaseEnv):
 
         # ===== Initialize wrist pose from trajectory with noise =====
         # Get wrist position from trajectory at sampled timestep
-        # Index using both trajectory index and timestep: [reset_traj_idx, seq_idx]
-        wrist_pos = self._traj_data["wrist_pos"][reset_traj_idx, seq_idx]  # (num_reset, 3)
+        # Index using environment index and timestep: [envs_idx, seq_idx]
+        wrist_pos = self._traj_data["wrist_pos"][envs_idx, seq_idx]  # (num_reset, 3)
 
         # Add position noise (std = 0.01m = 1cm)
         if not self._eval_mode:
             wrist_pos = wrist_pos + torch.randn_like(wrist_pos) * 0.01
 
         # Get wrist rotation from trajectory
-        wrist_rot_aa = self._traj_data["wrist_rot"][reset_traj_idx, seq_idx]  # (num_reset, 3)
+        wrist_rot_aa = self._traj_data["wrist_rot"][envs_idx, seq_idx]  # (num_reset, 3)
 
         # Convert to rotation matrix for noise application
         wrist_rot_mat = axis_angle_to_rotmat_batch(wrist_rot_aa.unsqueeze(1)).squeeze(1)  # (num_reset, 3, 3)
@@ -626,8 +825,8 @@ class HandImitatorEnv(BaseEnv):
         wrist_quat = rotmat_to_quat(wrist_rot_mat)
 
         # Get wrist velocities from trajectory with noise
-        wrist_vel = self._traj_data["wrist_vel"][reset_traj_idx, seq_idx]  # (num_reset, 3)
-        wrist_ang_vel = self._traj_data["wrist_ang_vel"][reset_traj_idx, seq_idx]  # (num_reset, 3)
+        wrist_vel = self._traj_data["wrist_vel"][envs_idx, seq_idx]  # (num_reset, 3)
+        wrist_ang_vel = self._traj_data["wrist_ang_vel"][envs_idx, seq_idx]  # (num_reset, 3)
 
         if not self._eval_mode:
             wrist_vel = wrist_vel + torch.randn_like(wrist_vel) * 0.01
@@ -768,13 +967,13 @@ class HandImitatorEnv(BaseEnv):
         future_indices = torch.clamp(future_indices, min=0)
         future_indices = torch.min(future_indices, max_indices)  # (num_envs, K)
 
-        # Index trajectory data using both trajectory index and timestep
-        traj_indices = self.env_traj_idx.unsqueeze(-1).expand(-1, K)  # (num_envs, K)
+        # Index trajectory data using environment index and timestep
+        env_indices = torch.arange(self.num_envs, device=self._device).unsqueeze(-1).expand(-1, K)  # (num_envs, K)
 
-        target_wrist_pos = self._traj_data["wrist_pos"][traj_indices, future_indices]  # (num_envs, K, 3)
-        target_wrist_quat = self._traj_data["wrist_quat"][traj_indices, future_indices]  # (num_envs, K, 4)
-        target_wrist_vel = self._traj_data["wrist_vel"][traj_indices, future_indices]  # (num_envs, K, 3)
-        target_wrist_ang_vel = self._traj_data["wrist_ang_vel"][traj_indices, future_indices]  # (num_envs, K, 3)
+        target_wrist_pos = self._traj_data["wrist_pos"][env_indices, future_indices]  # (num_envs, K, 3)
+        target_wrist_quat = self._traj_data["wrist_quat"][env_indices, future_indices]  # (num_envs, K, 4)
+        target_wrist_vel = self._traj_data["wrist_vel"][env_indices, future_indices]  # (num_envs, K, 3)
+        target_wrist_ang_vel = self._traj_data["wrist_ang_vel"][env_indices, future_indices]  # (num_envs, K, 3)
 
         self.target_wrist_pos[:] = target_wrist_pos.reshape(self.num_envs, -1)
         self.delta_wrist_pos[:] = (target_wrist_pos - self.base_pos.unsqueeze(1)).reshape(self.num_envs, -1)
@@ -789,10 +988,10 @@ class HandImitatorEnv(BaseEnv):
         self.delta_wrist_ang_vel[:] = (target_wrist_ang_vel - self.base_ang_vel.unsqueeze(1)).reshape(self.num_envs, -1)
 
         # Update MANO joint poses
-        self.target_mano_joint_pos[:] = self._mano_joint_poses[traj_indices, future_indices]  # (num_envs, K, 20, 3)
+        self.target_mano_joint_pos[:] = self.env_mano_joint_poses[env_indices, future_indices]  # (num_envs, K, 20, 3)
         self.finger_link_pos[:] = self._robot.get_links_pos(links_idx_local=self._finger_link_idxs)  # (num_envs, 20, 3)
         self.finger_link_vel[:] = self._robot.get_links_vel(links_idx_local=self._finger_link_idxs)  # (num_envs, 20, 3)
-        target_mano_joint_vel = self._mano_joint_velocities[traj_indices, future_indices]  # (num_envs, K, 20, 3)
+        target_mano_joint_vel = self.env_mano_joint_velocities[env_indices, future_indices]  # (num_envs, K, 20, 3)
         self.delta_finger_link_pos[:] = (self.target_mano_joint_pos - self.finger_link_pos.unsqueeze(1)).reshape(self.num_envs, -1)
         self.delta_finger_link_vel[:] = (target_mano_joint_vel - self.finger_link_vel.unsqueeze(1)).reshape(self.num_envs, -1)
         self.target_mano_joint_vel[:] = target_mano_joint_vel.reshape(self.num_envs, -1)
@@ -865,12 +1064,25 @@ class HandImitatorEnv(BaseEnv):
         # For free base, hand_dof_pos includes both base (6D) and fingers (20D)
         target_dof_pos = self._robot.dof_pos + exec_action
 
+        # TEMPT
+        # env_indices = torch.arange(self.num_envs, device=self._device)
+        # target_hand_dof = self._traj_data["dof_pos"][env_indices, self.progress_buf + 1]
+        # target_base_dof = self._robot.dof_pos[:, :6]
+        # target_dof_pos = torch.cat([target_base_dof, target_hand_dof], dim=-1)
+
+
         # Apply actions and simulate physics with decimation
         for _ in range(self._args.robot_args.decimation):
             self._pre_step()
 
             self._robot.apply_action(action=target_dof_pos)
             self._scene.scene.step()
+        
+        # TEMPT
+        # target_base_pos = self._traj_data["wrist_pos"][env_indices, self.progress_buf + 1]
+        # target_base_quat = self._traj_data["wrist_quat"][env_indices, self.progress_buf + 1]
+        # self._robot.set_pos(target_base_pos)
+        # self._robot.set_quat(target_base_quat)
 
         self.update_buffers()
 
