@@ -239,14 +239,13 @@ def evaluate_policy(
             obs, reward, terminated, truncated, info = wrapped_env.step(action)
 
             cur_idx = wrapped_env.env.progress_buf[0].cpu().item()
-            cur_traj_idx = wrapped_env.env.env_traj_idx[0].cpu().item()
             cur_traj_length = wrapped_env.env.env_traj_lengths[0].cpu().item()
-            target_pos = wrapped_env.env._traj_data["wrist_pos"][cur_traj_idx, cur_idx].cpu()
+            target_pos = wrapped_env.env._traj_data["wrist_pos"][0, cur_idx].cpu()
             current_pos = wrapped_env.env.base_pos[0].cpu()
             pos_error = torch.norm(target_pos - current_pos).item()
             wrist_pos_errors.append(pos_error)
 
-            target_quat = wrapped_env.env._traj_data["wrist_quat"][cur_traj_idx, cur_idx].cpu()
+            target_quat = wrapped_env.env._traj_data["wrist_quat"][0, cur_idx].cpu()
             current_quat = wrapped_env.env.base_quat[0].cpu()
             # Simple rotation error: 1 - |dot product|
             rot_error = 1 - torch.abs(torch.sum(target_quat * current_quat)).item()

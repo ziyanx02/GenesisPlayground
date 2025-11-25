@@ -415,22 +415,19 @@ class HandImitatorEnv(BaseEnv):
         aug_wrist_pos = rotated_wrist + translation.unsqueeze(1)  # (num_envs, max_T, 3)
 
         # ===== Augment wrist rotations (axis-angle) =====
-        # Apply rotation to wrist orientations
-        aug_wrist_rot_aa = torch.zeros_like(wrist_rot_aa_orig)
+        # Apply rotation to wrist orientations (fully vectorized)
+        # Convert all axis-angles to rotation matrices at once: (num_envs, max_T, 3) -> (num_envs, max_T, 3, 3)
+        wrist_rot_mat = axis_angle_to_rotmat_batch(wrist_rot_aa_orig)  # (num_envs, max_T, 3, 3)
 
-        for t in range(max_T):
-            # Convert axis-angle to rotation matrix
-            wrist_rot_mat = axis_angle_to_rotmat_batch(
-                wrist_rot_aa_orig[:, t:t+1, :]
-            ).squeeze(1)  # (num_envs, 3, 3)
+        # Apply Z-rotation: R_new = R_z @ R_wrist for all timesteps
+        # Expand R_z: (num_envs, 3, 3) -> (num_envs, 1, 3, 3) -> (num_envs, max_T, 3, 3)
+        R_z_expanded = R_z.unsqueeze(1).expand(-1, max_T, -1, -1)  # (num_envs, max_T, 3, 3)
 
-            # Apply Z-rotation: R_new = R_z @ R_wrist
-            aug_wrist_rot_mat = torch.bmm(R_z, wrist_rot_mat)  # (num_envs, 3, 3)
+        # Batch matrix multiply: (num_envs, max_T, 3, 3) @ (num_envs, max_T, 3, 3)
+        aug_wrist_rot_mat = torch.matmul(R_z_expanded, wrist_rot_mat)  # (num_envs, max_T, 3, 3)
 
-            # Convert back to axis-angle
-            aug_wrist_rot_aa[:, t, :] = rotmat_to_axis_angle_batch(
-                aug_wrist_rot_mat.unsqueeze(1)
-            ).squeeze(1)  # (num_envs, 3)
+        # Convert back to axis-angle: (num_envs, max_T, 3, 3) -> (num_envs, max_T, 3)
+        aug_wrist_rot_aa = rotmat_to_axis_angle_batch(aug_wrist_rot_mat)  # (num_envs, max_T, 3)
 
         # ===== Augment MANO joint poses =====
         # Compute offsets from original wrist (NOT scaled, only rotated)
@@ -467,18 +464,15 @@ class HandImitatorEnv(BaseEnv):
         aug_wrist_quat = aug_wrist_quat.reshape(num_envs, max_T, 4)  # (num_envs, max_T, 4)
 
         # ===== Compute MANO joint velocities =====
-        # Transpose to (max_T, num_envs, 20, 3)
+        # Reshape to (max_T, num_envs * 20, 3) to compute all joints at once
         mano_joint_poses_T = aug_mano_joint_poses.permute(1, 0, 2, 3)  # (max_T, num_envs, 20, 3)
+        mano_joint_poses_reshaped = mano_joint_poses_T.reshape(max_T, -1, 3)  # (max_T, num_envs*20, 3)
 
-        # Compute velocity for each joint separately
-        aug_mano_joint_vels = torch.zeros_like(mano_joint_poses_T)
-        for joint_idx in range(20):
-            aug_mano_joint_vels[:, :, joint_idx, :] = compute_velocity(
-                mano_joint_poses_T[:, :, joint_idx, :], time_delta, gaussian_filter=True
-            )  # (max_T, num_envs, 3)
+        # Compute velocities for all joints at once
+        aug_mano_joint_vels_flat = compute_velocity(mano_joint_poses_reshaped, time_delta, gaussian_filter=True)  # (max_T, num_envs*20, 3)
 
-        # Transpose back to (num_envs, max_T, 20, 3)
-        aug_mano_joint_vels = aug_mano_joint_vels.permute(1, 0, 2, 3)
+        # Reshape back to (max_T, num_envs, 20, 3) then transpose to (num_envs, max_T, 20, 3)
+        aug_mano_joint_vels = aug_mano_joint_vels_flat.reshape(max_T, num_envs, 20, 3).permute(1, 0, 2, 3)
 
         return {
             "wrist_pos": aug_wrist_pos,  # (num_envs, max_T, 3)
@@ -625,6 +619,7 @@ class HandImitatorEnv(BaseEnv):
         self.time_since_reset = torch.zeros(self.num_envs, device=self._device)  # Episode time for warmup checks
         self.reset_buf = torch.zeros(self.num_envs, dtype=torch.bool, device=self._device)
         self.time_out_buf = torch.zeros(self.num_envs, dtype=torch.bool, device=self._device)
+        self.success_count_buf = torch.zeros(self.num_envs, dtype=torch.long, device=self._device)
 
         # Action scale
         self._action_scale = self._args.robot_args.action_scale
@@ -739,18 +734,25 @@ class HandImitatorEnv(BaseEnv):
 
         # ===== Apply trajectory augmentation if enabled =====
         if self._args.use_augmentation and not self._eval_mode:
-            # Augment trajectories for the environments being reset
-            aug_traj_data = self._augment_trajectory(envs_idx)
+            # Only augment trajectories if it has succeeded a certain number of times
+            do_augment = self.success_count_buf[envs_idx] >= 100
+            envs_to_augment = envs_idx[do_augment.cpu()]
 
-            # Update trajectory data for these environments
-            for i, env_idx in enumerate(envs_idx):
-                self._traj_data["wrist_pos"][env_idx] = aug_traj_data["wrist_pos"][i]
-                self._traj_data["wrist_rot"][env_idx] = aug_traj_data["wrist_rot"][i]
-                self._traj_data["wrist_quat"][env_idx] = aug_traj_data["wrist_quat"][i]
-                self._traj_data["wrist_vel"][env_idx] = aug_traj_data["wrist_vel"][i]
-                self._traj_data["wrist_ang_vel"][env_idx] = aug_traj_data["wrist_ang_vel"][i]
-                self.env_mano_joint_poses[env_idx] = aug_traj_data["mano_joint_poses"][i]
-                self.env_mano_joint_velocities[env_idx] = aug_traj_data["mano_joint_velocities"][i]
+            # Update success count buffer for environments that will be augmented
+            self.success_count_buf[envs_to_augment] = 0
+
+            if len(envs_to_augment) > 0:
+                # Augment trajectories for the environments that meet the success threshold
+                aug_traj_data = self._augment_trajectory(envs_to_augment)
+
+                # Update trajectory data for these environments (using tensor indexing - no loop)
+                self._traj_data["wrist_pos"][envs_to_augment] = aug_traj_data["wrist_pos"]
+                self._traj_data["wrist_rot"][envs_to_augment] = aug_traj_data["wrist_rot"]
+                self._traj_data["wrist_quat"][envs_to_augment] = aug_traj_data["wrist_quat"]
+                self._traj_data["wrist_vel"][envs_to_augment] = aug_traj_data["wrist_vel"]
+                self._traj_data["wrist_ang_vel"][envs_to_augment] = aug_traj_data["wrist_ang_vel"]
+                self.env_mano_joint_poses[envs_to_augment] = aug_traj_data["mano_joint_poses"]
+                self.env_mano_joint_velocities[envs_to_augment] = aug_traj_data["mano_joint_velocities"]
 
         # Sample initial timestep from trajectory
         # Following ManipTrans: random init or start from beginning
@@ -908,12 +910,15 @@ class HandImitatorEnv(BaseEnv):
         # Update reset buffer with failure and success conditions
         reset_buf |= succeeded | failed_execute
         self.reset_buf[:] = reset_buf
+        # Update success count buffer
+        self.success_count_buf += succeeded.long()
 
         termination_dict = {
             "error_termination": error_buf,
             "failed_execution": failed_execute,
             "succeeded": succeeded,
             "any": reset_buf,
+            "trajectory_updated": self.success_count_buf >= 100
         }
         self._extra_info["termination"] = termination_dict
 
