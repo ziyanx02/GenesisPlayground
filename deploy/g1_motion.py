@@ -218,6 +218,9 @@ def main(
         if dof_dim_cfg <= 0:
             dof_dim_cfg = int(last_action_t.shape[-1])
 
+        redis_client.update()
+        redis_client.update_quat(env.base_quat)
+
         while True:
             # Check termination condition (only for real robot)
             if not sim and hasattr(env, "is_emergency_stop") and env.is_emergency_stop:  # type: ignore

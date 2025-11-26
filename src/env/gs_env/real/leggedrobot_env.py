@@ -119,7 +119,7 @@ class UnitreeLeggedEnv(BaseGymRobot):
         return torch.tensor(self.robot.joint_vel, device=self._device, dtype=torch.float32)[None, :]
 
     @property
-    def quat(self) -> torch.Tensor:
+    def base_quat(self) -> torch.Tensor:
         return torch.tensor(self.robot.quat, device=self._device, dtype=torch.float32)[None, :]
 
     @property

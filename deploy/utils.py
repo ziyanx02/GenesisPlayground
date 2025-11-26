@@ -4,7 +4,9 @@ import redis
 import torch
 from gs_env.common.utils.math_utils import (
     quat_apply,
+    quat_from_euler,
     quat_inv,
+    quat_mul,
     quat_to_euler,
     quat_to_rotation_6D,
 )
@@ -52,6 +54,10 @@ class RedisClient:
         self.ref_tracking_link_quat_local_yaw = torch.zeros(
             1, len(self._tracking_link_idx_local), 4, device=device
         )
+
+        # Yaw difference quaternion (stored and applied to all subsequent updates)
+        self._yaw_diff_quat = torch.zeros(1, 4, device=device)
+        self._yaw_diff_quat[:, 0] = 1.0
 
     def _zero_all(self) -> None:
         self.ref_dof_pos.zero_()
@@ -116,12 +122,14 @@ class RedisClient:
             dof_vel = self._fit_dim(msg.get("dof_vel", []), self._dof_dim)
 
             inv_quat = quat_inv(base_quat)
-            self.ref_base_pos = base_pos
-            self.ref_base_quat = base_quat
+            self.ref_base_pos = quat_apply(self._yaw_diff_quat, base_pos)
+            self.ref_base_quat = quat_mul(self._yaw_diff_quat, base_quat)
             self.ref_dof_pos = dof_pos
             self.ref_dof_vel = dof_vel
-            self.ref_base_euler = quat_to_euler(base_quat)
-            self.ref_base_rotation_6D = quat_to_rotation_6D(base_quat)
+            self.ref_base_euler = quat_to_euler(self.ref_base_quat)
+            self.ref_base_rotation_6D = quat_to_rotation_6D(self.ref_base_quat)
+            # Recompute inv_quat after applying yaw_diff
+            inv_quat = quat_inv(self.ref_base_quat)
             self.ref_base_lin_vel_local = quat_apply(inv_quat, base_lin_vel)
             self.ref_base_ang_vel_local = quat_apply(inv_quat, base_ang_vel)
 
@@ -147,3 +155,35 @@ class RedisClient:
         except Exception as e:
             print(f"Error updating Redis client: {e}")
             self._zero_all()
+
+    def update_quat(self, quat: torch.Tensor) -> None:
+        """Compute and store yaw difference from input quaternion.
+        The stored yaw difference will be applied to all subsequent updates.
+        
+        Args:
+            quat: Input quaternion tensor of shape (1, 4) in (w, x, y, z) format.
+        """
+        # Extract yaw from input quaternion
+        input_euler = quat_to_euler(quat)
+        input_yaw = input_euler[:, 2]  # yaw is the third element (z-axis rotation)
+        
+        # Extract yaw from current ref_base_quat
+        current_euler = quat_to_euler(self.ref_base_quat)
+        current_yaw = current_euler[:, 2]
+        
+        # Compute yaw difference
+        yaw_diff = input_yaw - current_yaw
+        
+        # Create a quaternion representing only the yaw rotation (around z-axis)
+        # Euler angles: (roll, pitch, yaw) - we only want yaw rotation
+        yaw_only_euler = torch.zeros(1, 3, device=self._device)
+        yaw_only_euler[:, 2] = yaw_diff  # only set yaw component
+        self._yaw_diff_quat = quat_from_euler(yaw_only_euler)
+        print(yaw_only_euler)
+        
+        # Apply yaw difference to current ref_base_quat
+        self.ref_base_quat = quat_mul(self._yaw_diff_quat, self.ref_base_quat)
+        
+        # Update derived quantities
+        self.ref_base_euler = quat_to_euler(self.ref_base_quat)
+        self.ref_base_rotation_6D = quat_to_rotation_6D(self.ref_base_quat)

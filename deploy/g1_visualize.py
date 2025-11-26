@@ -36,7 +36,7 @@ def main(
             sim_env.set_dof_pos(real_env.dof_pos[0])
             # sim_env.robot.set_state(quat=real_env.quat[0])
             link_idx_local = sim_env.get_link_idx_local_by_name("pelvis")
-            sim_env.set_link_pose(link_idx_local, quat=real_env.quat[0])
+            sim_env.set_link_pose(link_idx_local, quat=real_env.base_quat[0])
             sim_env.step_visualizer()
 
     except KeyboardInterrupt:
