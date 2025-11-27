@@ -570,27 +570,29 @@ class MotionLib:
         motion_times = steps.float() / float(self.fps)
         return motion_times
 
-    def _fetch_motion_files(self, motion_file: str) -> tuple[list[str], list[float]]:
+    def _fetch_motion_files(
+        self, motion_file: str, motion_weight: float = 1.0
+    ) -> tuple[list[str], list[float]]:
+        # Recursively expand YAML motion manifests into flat file and weight lists.
         if motion_file.endswith(".yaml"):
-            motion_files = []
-            motion_weights = []
+            all_files: list[str] = []
+            all_weights: list[float] = []
             with open(motion_file) as f:
                 motion_config = yaml.load(f, Loader=yaml.SafeLoader)
-
             motion_base_path = motion_config["root_path"]
             motion_list = motion_config["motions"]
             for motion_entry in motion_list:
                 curr_file = os.path.join(motion_base_path, motion_entry["file"])
-                curr_weight = motion_entry["weight"]
+                curr_weight = float(motion_entry.get("weight", 1.0))
                 assert curr_weight >= 0
-
-                motion_weights.append(curr_weight)
-                motion_files.append(curr_file)
+                sub_files, sub_weights = self._fetch_motion_files(
+                    curr_file, curr_weight * motion_weight
+                )
+                all_files.extend(sub_files)
+                all_weights.extend(sub_weights)
+            return all_files, all_weights
         else:
-            motion_files = [motion_file]
-            motion_weights = [1.0]
-
-        return motion_files, motion_weights
+            return [motion_file], [motion_weight]
 
     def set_observed_steps(self, observed_steps: dict[str, list[int]]) -> None:
         obs_terms = {
