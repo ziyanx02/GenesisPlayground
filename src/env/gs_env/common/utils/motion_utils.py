@@ -612,14 +612,6 @@ class MotionLib:
                 self._motion_obs_steps[term] = torch.tensor(
                     observed_steps[term], dtype=torch.long, device=self._device
                 )
-            else:
-                self._motion_obs_steps[term] = torch.tensor(
-                    [
-                        1,
-                    ],
-                    dtype=torch.long,
-                    device=self._device,
-                )
 
     def get_motion_frame(
         self,

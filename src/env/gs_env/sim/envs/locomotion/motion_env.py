@@ -181,17 +181,22 @@ class MotionEnv(LeggedRobotEnv):
                 len(tracking_link_names), device=self._device, dtype=torch.float32
             )
 
-        NUM_MOTION_OBS = (
-            len(observed_steps["base_pos"]) * 3
-            + len(observed_steps["base_quat"]) * 6
-            + len(observed_steps["base_lin_vel"]) * 3
-            + len(observed_steps["base_ang_vel"]) * 3
-            + len(observed_steps["dof_pos"]) * 29
-            + len(observed_steps["dof_vel"]) * 29
-            + len(observed_steps["link_pos_local"]) * len(self.tracking_link_idx_local) * 3
-            + len(observed_steps["link_quat_local"]) * len(self.tracking_link_idx_local) * 6
-            + len(observed_steps["foot_contact"]) * len(self._robot.foot_links_idx)
-        )
+        NUM_MOTION_OBS = 0
+        for term in observed_steps.keys():
+            try:
+                NUM_MOTION_OBS += len(observed_steps[term]) * {
+                    "base_pos": 3,
+                    "base_quat": 6,
+                    "base_lin_vel": 3,
+                    "base_ang_vel": 3,
+                    "dof_pos": self._robot.dof_dim,
+                    "dof_vel": self._robot.dof_dim,
+                    "link_pos_local": len(self.tracking_link_idx_local) * 3,
+                    "link_quat_local": len(self.tracking_link_idx_local) * 6,
+                    "foot_contact": len(self._robot.foot_links_idx),
+                }[term]
+            except KeyError:
+                print(f"Unknown observed step term: {term}")
         # motion observation buffer (future-step observations after post-processing)
         self.motion_obs = torch.zeros(self.num_envs, NUM_MOTION_OBS, device=self._device)
 
@@ -587,45 +592,56 @@ class MotionEnv(LeggedRobotEnv):
             B = envs_idx.shape[0]
             # Precompute robot inv yaw quat for current state (used for all conversions to robot local_yaw)
 
+            motion_obs_list = []
+
             quat_yaw = quat_from_angle_axis(
                 quat_to_euler(self.ref_base_quat[envs_idx])[:, -1],
                 torch.tensor([0, 0, 1], device=self._device, dtype=torch.float),
             )  # (B, 4)
 
-            base_pos_diff = motion_obs["base_pos"] - self.ref_base_pos[envs_idx][:, None, :]
-            base_pos_obs = self.batched_global_to_local(quat_yaw, base_pos_diff).reshape(B, -1)
+            if "base_pos" in motion_obs.keys():
+                base_pos_diff = motion_obs["base_pos"] - self.ref_base_pos[envs_idx][:, None, :]
+                base_pos_obs = self.batched_global_to_local(quat_yaw, base_pos_diff).reshape(B, -1)
+                motion_obs_list.append(base_pos_obs)
 
-            base_quat_diff = self.batched_global_to_local(quat_yaw, motion_obs["base_quat"])
-            base_quat_obs = quat_to_rotation_6D(base_quat_diff).reshape(B, -1)
+            if "base_quat" in motion_obs.keys():
+                base_quat_diff = self.batched_global_to_local(quat_yaw, motion_obs["base_quat"])
+                base_quat_obs = quat_to_rotation_6D(base_quat_diff).reshape(B, -1)
+                motion_obs_list.append(base_quat_obs)
 
-            base_lin_obs = self.batched_global_to_local(
-                quat_yaw, motion_obs["base_lin_vel"]
-            ).reshape(B, -1)
-            base_ang_obs = motion_obs["base_ang_vel"].reshape(B, -1)
-            dof_pos_obs = motion_obs["dof_pos"].reshape(B, -1)
-            dof_vel_obs = motion_obs["dof_vel"].reshape(B, -1)
-            link_pos_obs = motion_obs["link_pos_local"][
-                :, :, self.tracking_link_idx_local, :
-            ].reshape(B, -1)
-            link_quat_obs = quat_to_rotation_6D(
-                motion_obs["link_quat_local"][:, :, self.tracking_link_idx_local, :]
-            ).reshape(B, -1)
-            foot_contact_obs = motion_obs["foot_contact"].reshape(B, -1)
+            if "base_lin_vel" in motion_obs.keys():
+                base_lin_obs = self.batched_global_to_local(
+                    quat_yaw, motion_obs["base_lin_vel"]
+                ).reshape(B, -1)
+                motion_obs_list.append(base_lin_obs)
 
-            self.motion_obs[envs_idx] = torch.cat(
-                [
-                    base_pos_obs,
-                    base_quat_obs,
-                    base_lin_obs,
-                    base_ang_obs,
-                    dof_pos_obs,
-                    0.1 * dof_vel_obs,
-                    link_pos_obs,
-                    link_quat_obs,
-                    foot_contact_obs,
-                ],
-                dim=-1,
-            )
+            if "base_ang_vel" in motion_obs.keys():
+                base_ang_obs = motion_obs["base_ang_vel"].reshape(B, -1)
+                motion_obs_list.append(base_ang_obs)
+
+            if "dof_pos" in motion_obs.keys():
+                dof_pos_obs = motion_obs["dof_pos"].reshape(B, -1)
+                motion_obs_list.append(dof_pos_obs)
+
+            if "dof_vel" in motion_obs.keys():
+                dof_vel_obs = motion_obs["dof_vel"].reshape(B, -1)
+                motion_obs_list.append(0.1 * dof_vel_obs)
+                
+            if "link_pos_local" in motion_obs.keys():
+                link_pos_obs = motion_obs["link_pos_local"][
+                    :, :, self.tracking_link_idx_local, :
+                ].reshape(B, -1)
+                link_quat_obs = quat_to_rotation_6D(
+                    motion_obs["link_quat_local"][:, :, self.tracking_link_idx_local, :]
+                ).reshape(B, -1)
+                motion_obs_list.append(link_pos_obs)
+                motion_obs_list.append(link_quat_obs)
+
+            if "foot_contact" in motion_obs.keys():
+                foot_contact_obs = motion_obs["foot_contact"].reshape(B, -1)
+                motion_obs_list.append(foot_contact_obs)
+
+            self.motion_obs[envs_idx] = torch.cat(motion_obs_list, dim=-1,)
 
         self.ref_base_pos[envs_idx] = base_pos
         self.ref_base_quat[envs_idx] = base_quat

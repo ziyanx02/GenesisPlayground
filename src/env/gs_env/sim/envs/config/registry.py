@@ -399,9 +399,7 @@ EnvArgsRegistry["g1_motion"] = MotionEnvArgs(
         # "diff_base_euler",
         # "diff_base_ang_vel_local",
         # Reference
-        # "motion_obs",
-        "ref_tracking_link_pos_local_yaw",
-        "ref_base_lin_vel_local",
+        "motion_obs",
         # Privileged
         # "dr_obs",
         # "base_lin_vel_local",
@@ -486,15 +484,15 @@ EnvArgsRegistry["g1_motion"] = MotionEnvArgs(
     adaptive_termination_ratio=None,
     motion_file=None,
     observed_steps={
-        "base_pos": [1, 2, 3, 4, 5, 6, 7, 8],
-        "base_quat": [1, 2, 3, 4, 5, 6, 7, 8],
-        "base_lin_vel": [1, 2, 3, 4, 5, 6, 7, 8],
-        "base_ang_vel": [1, 2, 3, 4, 5, 6, 7, 8],
-        "dof_pos": [1, 2, 3],
-        "dof_vel": [1, 2, 3],
-        "link_pos_local": [1, 2, 3],
-        "link_quat_local": [1, 2, 3],
-        "foot_contact": [1, 2, 3, 4, 5, 6, 7, 8],
+        # "base_pos": [1,],
+        "base_quat": [1,],
+        "base_lin_vel": [1,],
+        "base_ang_vel": [1,],
+        # "dof_pos": [1,],
+        # "dof_vel": [1,],
+        "link_pos_local": [1,],
+        "link_quat_local": [1,],
+        "foot_contact": [1,],
     },
 )
 
