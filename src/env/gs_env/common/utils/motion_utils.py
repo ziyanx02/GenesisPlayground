@@ -9,6 +9,7 @@ from tqdm import tqdm
 from gs_env.common.utils.math_utils import (
     quat_apply,
     quat_diff,
+    quat_from_angle_axis,
     quat_from_euler,
     quat_mul,
     quat_to_angle_axis,
@@ -594,7 +595,8 @@ class MotionLib:
         else:
             return [motion_file], [motion_weight]
 
-    def set_observed_steps(self, observed_steps: dict[str, list[int]]) -> None:
+    def get_observed_steps(self, observed_steps: dict[str, list[int]]) -> dict[str, torch.Tensor]:
+        """Convert observed steps lists into tensors on the correct device."""
         obs_terms = {
             "base_pos",
             "base_quat",
@@ -606,12 +608,13 @@ class MotionLib:
             "link_quat_local",
             "foot_contact",
         }
-        self._motion_obs_steps = {}
+        steps_map: dict[str, torch.Tensor] = {}
         for term in obs_terms:
             if term in observed_steps.keys():
-                self._motion_obs_steps[term] = torch.tensor(
+                steps_map[term] = torch.tensor(
                     observed_steps[term], dtype=torch.long, device=self._device
                 )
+        return steps_map
 
     def get_motion_frame(
         self,
@@ -665,7 +668,6 @@ class MotionLib:
         torch.Tensor,
         torch.Tensor,
         torch.Tensor,
-        dict[str, torch.Tensor],
     ]:
         assert motion_times.min() >= 0.0, "motion_times must be non-negative"
         # snap to discrete frame grid using unified fps and clamp within motion length
@@ -687,27 +689,6 @@ class MotionLib:
         link_quat_local = self._motion_link_quat_local[frame_idx]
         foot_contact = self._motion_foot_contact[frame_idx]
 
-        # Assemble future-steps observations if configured
-        obs_dict: dict[str, torch.Tensor] = {}
-        if self._motion_obs_steps is not None:
-            max_steps = self._motion_num_frames[motion_ids] - 1
-
-            steps_map = self._motion_obs_steps
-
-            def get_obs_tensor(term: str) -> torch.Tensor:
-                steps_tensor = steps_map[term]
-                future_steps = steps[:, None] + steps_tensor[None, :]
-                future_steps = torch.minimum(future_steps, max_steps[:, None])
-                future_idx_local = frame_start_idx[:, None] + future_steps  # (B, K)
-                B, K = future_idx_local.shape
-                tensor = getattr(self, f"_motion_{term}")
-                extra_shape = tensor.shape[1:]
-                flat = tensor[future_idx_local.reshape(-1)]
-                return flat.reshape(B, K, *extra_shape)
-
-            for key in self._motion_obs_steps.keys():
-                obs_dict[key] = get_obs_tensor(key)
-
         return (
             base_pos,
             base_quat,
@@ -718,8 +699,55 @@ class MotionLib:
             link_pos_local,
             link_quat_local,
             foot_contact,
-            obs_dict,
         )
+
+    def get_motion_future_obs(
+        self,
+        motion_ids: torch.Tensor,
+        motion_times: torch.Tensor,
+        observed_steps: dict[str, torch.Tensor],
+    ) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
+        """Compute current-frame and future-step motion observations.
+
+        Returns:
+            (curr_obs_dict, future_obs_dict)
+        """
+        if len(observed_steps) == 0:
+            return {}, {}
+        assert motion_times.min() >= 0.0, "motion_times must be non-negative"
+        fps = self.fps
+        motion_len = self._motion_lengths[motion_ids] - 1.0 / fps
+        motion_times = torch.min(motion_times, motion_len)
+        steps = torch.round(motion_times * fps).long()
+
+        frame_start_idx = self._motion_start_idx[motion_ids]
+        max_steps = self._motion_num_frames[motion_ids] - 1
+
+        # current frame (step = 0)
+        curr_idx = frame_start_idx + steps + 1
+        curr_obs: dict[str, torch.Tensor] = {}
+        for key in observed_steps.keys():
+            tensor = getattr(self, f"_motion_{key}")
+            curr_obs[key] = tensor[curr_idx]
+        curr_obs["quat_yaw"] = quat_from_angle_axis(
+            quat_to_euler(curr_obs["base_quat"])[:, -1],
+            torch.tensor([0, 0, 1], device=self._device, dtype=torch.float),
+        )  # (B, 4)
+
+        def gather(term: str) -> torch.Tensor:
+            steps_tensor = observed_steps[term]
+            future_steps = steps[:, None] + steps_tensor[None, :]
+            future_steps = torch.minimum(future_steps, max_steps[:, None])
+            future_idx_local = frame_start_idx[:, None] + future_steps  # (B, K)
+            B, K = future_idx_local.shape
+            tensor = getattr(self, f"_motion_{term}")
+            flat = tensor[future_idx_local.reshape(-1)]
+            return flat.reshape(B, K, *tensor.shape[1:])
+
+        future_obs_dict: dict[str, torch.Tensor] = {}
+        for key in observed_steps.keys():
+            future_obs_dict[key] = gather(key)
+        return curr_obs, future_obs_dict
 
     def get_link_idx_local_by_name(self, name: str) -> int:
         return self._link_names.index(name)
