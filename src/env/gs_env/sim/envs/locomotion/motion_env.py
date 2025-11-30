@@ -163,9 +163,7 @@ class MotionEnv(LeggedRobotEnv):
         # tracking link indices
         tracking_link_names = self._args.tracking_link_names
         self.tracking_link_idx_local = (
-            [self._motion_lib.get_link_idx_local_by_name(name) for name in tracking_link_names]
-            if self._args.motion_file is not None
-            else []
+            [self._robot.link_names.index(name) for name in tracking_link_names]
         )
         if self._args.link_weights is not None:
             tracking_link_weights_list = []
@@ -183,25 +181,26 @@ class MotionEnv(LeggedRobotEnv):
                 len(tracking_link_names), device=self._device, dtype=torch.float32
             )
 
-        NUM_MOTION_OBS = 0
-        for term in observed_steps.keys():
-            try:
-                NUM_MOTION_OBS += (
-                    len(observed_steps[term])
-                    * {
-                        "base_pos": 3,
-                        "base_quat": 6,
-                        "base_lin_vel": 3,
-                        "base_ang_vel": 3,
-                        "dof_pos": self._robot.dof_dim,
-                        "dof_vel": self._robot.dof_dim,
-                        "link_pos_local": len(self.tracking_link_idx_local) * 3,
-                        "link_quat_local": len(self.tracking_link_idx_local) * 6,
-                        "foot_contact": len(self._robot.foot_links_idx),
-                    }[term]
-                )
-            except KeyError:
-                print(f"Unknown observed step term: {term}")
+        # Get NUM_MOTION_OBS by using motionlib and _build_motion_obs_from_dict
+        if len(self._motion_obs_steps) > 0 and self._args.motion_file is not None:
+            # Create dummy data for size calculation
+            dummy_motion_ids = torch.zeros(1, device=self._device, dtype=torch.long)
+            dummy_motion_times = torch.zeros(1, device=self._device, dtype=torch.float32)
+            dummy_envs_idx = torch.zeros(1, device=self._device, dtype=torch.long)
+
+            curr_motion_obs_dict, future_motion_obs_dict = self.motion_lib.get_motion_future_obs(
+                dummy_motion_ids, dummy_motion_times, self._motion_obs_steps
+            )
+
+            self.base_quat = torch.zeros(1, 4, device=self._device, dtype=torch.float32)
+            self.base_quat[:, 0] = 1.0  # identity quaternion
+
+            motion_obs_sample = self._build_motion_obs_from_dict(
+                curr_motion_obs_dict, future_motion_obs_dict, dummy_envs_idx
+            )
+            NUM_MOTION_OBS = motion_obs_sample.shape[1]
+        else:
+            NUM_MOTION_OBS = 0
         # motion observation buffer (future-step observations after post-processing)
         self.motion_obs = torch.zeros(self.num_envs, NUM_MOTION_OBS, device=self._device)
 
@@ -262,7 +261,7 @@ class MotionEnv(LeggedRobotEnv):
             if error_name not in self._args.terminate_after_error.keys():
                 continue
             terminate_after_error = self._args.terminate_after_error[error_name][0]
-            min_terminate_after_error, max_terminate_after_error = self._args.terminate_after_error[
+            min_terminate_after_error, max_terminate_after_error = self._args.terminate_after_error[  # pyright: ignore[reportGeneralTypeIssues]
                 error_name
             ][1]
             if terminate_after_error:
@@ -272,6 +271,12 @@ class MotionEnv(LeggedRobotEnv):
                     error_name
                 ][0]
                 self._error_mask_buffer[error_name] = []
+
+        # randomize base yaw offset
+        self.base_yaw_offset = torch.zeros(self.num_envs, device=self._device, dtype=torch.float32)
+        self.base_yaw_offset_quat = torch.zeros(self.num_envs, 4, device=self._device, dtype=torch.float32)
+        self.base_yaw_offset_quat[:, 0] = 1.0
+        self.base_pos_offset = torch.zeros(self.num_envs, 3, device=self._device, dtype=torch.float32)
 
         # Let base class set up common buffers, spaces, and rendering
         super()._init()
@@ -544,6 +549,11 @@ class MotionEnv(LeggedRobotEnv):
         self._motion_ids[envs_idx] = motion_ids
         self._motion_time_offsets[envs_idx] = motion_times
         self._motion_lengths[envs_idx] = self._motion_lib.get_motion_length(motion_ids)
+        self.base_yaw_offset[envs_idx] = torch.rand(len(envs_idx), device=self._device, dtype=torch.float32) * 2 * torch.pi
+        self.base_yaw_offset_quat[envs_idx] = quat_from_angle_axis(
+            self.base_yaw_offset[envs_idx], torch.tensor([0, 0, 1], device=self._device, dtype=torch.float)
+        )
+        self.base_pos_offset[envs_idx, :2] = torch.rand(len(envs_idx), 2, device=self._device, dtype=torch.float32) - 0.5
         self.hard_sync_motion(envs_idx=envs_idx)
 
     def hard_reset_motion(self, envs_idx: torch.Tensor, motion_id: int) -> None:
@@ -584,6 +594,7 @@ class MotionEnv(LeggedRobotEnv):
             base_quat,
             base_lin_vel,
             base_ang_vel,
+            base_ang_vel_local,
             dof_pos,
             dof_vel,
             link_pos_local,
@@ -598,6 +609,11 @@ class MotionEnv(LeggedRobotEnv):
             curr_motion_obs_dict, future_motion_obs_dict, envs_idx
         )
 
+        base_pos = quat_apply(self.base_yaw_offset_quat[envs_idx], base_pos) + self.base_pos_offset[envs_idx]
+        base_quat = quat_mul(self.base_yaw_offset_quat[envs_idx], base_quat)
+        base_lin_vel = quat_apply(self.base_yaw_offset_quat[envs_idx], base_lin_vel)
+        base_ang_vel = quat_apply(self.base_yaw_offset_quat[envs_idx], base_ang_vel)
+
         self.ref_base_pos[envs_idx] = base_pos
         self.ref_base_quat[envs_idx] = base_quat
         self.ref_base_height[envs_idx] = self.ref_base_pos[envs_idx, 2]
@@ -608,9 +624,7 @@ class MotionEnv(LeggedRobotEnv):
         self.ref_base_lin_vel_local[envs_idx] = self.batched_global_to_local(
             self.ref_base_quat[envs_idx], base_lin_vel
         )
-        self.ref_base_ang_vel_local[envs_idx] = self.batched_global_to_local(
-            self.ref_base_quat[envs_idx], base_ang_vel
-        )
+        self.ref_base_ang_vel_local[envs_idx] = base_ang_vel_local
         self.ref_dof_pos[envs_idx] = dof_pos[:, self.ref_joint_idx_local]
         self.ref_dof_vel[envs_idx] = dof_vel[:, self.ref_joint_idx_local]
         self.ref_link_pos_local_yaw[envs_idx] = link_pos_local[:, self.ref_link_idx_local]
@@ -664,17 +678,24 @@ class MotionEnv(LeggedRobotEnv):
 
         if "base_pos" in future_obs:
             pos_diff = future_obs["base_pos"] - curr_obs["base_pos"][:, None, :]
-            motion_obs_list.append(self.batched_global_to_local(quat_yaw, pos_diff).reshape(B, -1))
+            motion_obs_list.append(LeggedRobotEnv.batched_global_to_local(quat_yaw, pos_diff).reshape(B, -1))
         if "base_quat" in future_obs:
             qy = quat_yaw[:, None, :].repeat(1, future_obs["base_quat"].shape[1], 1)
             base_quat_local = quat_mul(quat_inv(qy), future_obs["base_quat"])
+            base_quat = self.base_quat[envs_idx, None, :].repeat(1, future_obs["base_quat"].shape[1], 1)
+            base_quat_diff = quat_mul(quat_inv(base_quat), future_obs["base_quat"])
             motion_obs_list.append(quat_to_rotation_6D(base_quat_local).reshape(B, -1))
+            motion_obs_list.append(quat_to_rotation_6D(base_quat_diff).reshape(B, -1))
         if "base_lin_vel" in future_obs:
             motion_obs_list.append(
-                self.batched_global_to_local(quat_yaw, future_obs["base_lin_vel"]).reshape(B, -1)
+                LeggedRobotEnv.batched_global_to_local(quat_yaw, future_obs["base_lin_vel"]).reshape(B, -1)
             )
         if "base_ang_vel" in future_obs:
-            motion_obs_list.append(future_obs["base_ang_vel"].reshape(B, -1))
+            motion_obs_list.append(
+                LeggedRobotEnv.batched_global_to_local(quat_yaw, future_obs["base_ang_vel"]).reshape(B, -1)
+            )
+        if "base_ang_vel_local" in future_obs:
+            motion_obs_list.append(future_obs["base_ang_vel_local"].reshape(B, -1))
         if "dof_pos" in future_obs:
             motion_obs_list.append(future_obs["dof_pos"].reshape(B, -1))
         if "dof_vel" in future_obs:
@@ -749,6 +770,10 @@ class MotionEnv(LeggedRobotEnv):
             dof_pos,
             dof_vel,
         ) = self._motion_lib.get_motion_frame(motion_ids, motion_times)
+        base_pos = quat_apply(self.base_yaw_offset_quat[envs_idx], base_pos) + self.base_pos_offset[envs_idx]
+        base_quat = quat_mul(self.base_yaw_offset_quat[envs_idx], base_quat)
+        base_lin_vel = quat_apply(self.base_yaw_offset_quat[envs_idx], base_lin_vel)
+        base_ang_vel = quat_apply(self.base_yaw_offset_quat[envs_idx], base_ang_vel)
         self._robot.set_state(
             pos=base_pos,
             quat=base_quat,

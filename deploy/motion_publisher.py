@@ -32,22 +32,30 @@ def load_motion_file_from_exp(exp_name: str) -> str:
 def publish_motion(
     motion_file: str,
     redis_url: str = "redis://localhost:6379/0",
-    key: str = "motion:ref:latest",
+    key: str = "ref:",
     motion_id: int = 0,
     freq_hz: float = 50.0,
     device: str = "cpu",
 ) -> None:
-    """Publish reference motion frames to Redis at a fixed rate.
+    f"""Publish reference motion frames to Redis at a fixed rate.
 
-    The publisher writes a JSON blob to a Redis string key `key` with fields:
-      - motion_id
-      - t (seconds)
-      - base_pos [3]
-      - base_quat [4] (w, x, y, z)
-      - base_lin_vel [3]
-      - base_ang_vel [3]
-      - dof_pos [D]
-      - dof_vel [D]
+    The publisher writes each field as a separate Redis key:
+      - {key}:motion:base_pos [3]
+      - {key}:motion:base_quat [4] (w, x, y, z)
+      - {key}:motion:base_lin_vel [3]
+      - {key}:motion:base_ang_vel [3]
+      - {key}:motion:dof_pos [D]
+      - {key}:motion:dof_vel [D]
+      - {key}:motion:link_pos_local [N*3]
+      - {key}:motion:link_quat_local [N*4]
+      - {key}:timestamp:base_pos [1]
+      - {key}:timestamp:base_quat [1]
+      - {key}:timestamp:base_lin_vel [1]
+      - {key}:timestamp:base_ang_vel [1]
+      - {key}:timestamp:dof_pos [1]
+      - {key}:timestamp:dof_vel [1]
+      - {key}:timestamp:link_pos_local [1]
+      - {key}:timestamp:link_quat_local [1]
     """
     r = redis.from_url(redis_url)
 
@@ -69,6 +77,8 @@ def publish_motion(
     print(f"Motion id: {motion_id}")
     print(f"Publish rate: {1.0 / publish_dt:.2f} Hz")
     print("=" * 80)
+
+    timestamp = 0
 
     try:
         last_ts = time.time()
@@ -92,30 +102,37 @@ def publish_motion(
                 base_quat,
                 base_lin_vel,
                 base_ang_vel,
+                base_ang_vel_local,
                 dof_pos,
                 dof_vel,
                 link_pos_local,
                 link_quat_local,
                 foot_contact,
-                motion_obs,
             ) = motion_lib.get_ref_motion_frame(
                 motion_ids=motion_id_t, motion_times=motion_time_t
             )
 
             _ = foot_contact
-            _ = motion_obs
+            _ = base_ang_vel_local
 
-            payload: dict[str, Any] = {
-                "base_pos": _to_list(base_pos),
-                "base_quat": _to_list(base_quat),  # (w, x, y, z)
-                "base_lin_vel": _to_list(base_lin_vel),
-                "base_ang_vel": _to_list(base_ang_vel),
-                "dof_pos": _to_list(dof_pos),
-                "dof_vel": _to_list(dof_vel),
-                "link_pos_local": _to_list(link_pos_local),
-                "link_quat_local": _to_list(link_quat_local),
-            }
-            r.set(key, json.dumps(payload))
+            # Publish each field as a separate Redis key
+            r.set(f"{key}:motion:base_pos", json.dumps(_to_list(base_pos)))
+            r.set(f"{key}:motion:base_quat", json.dumps(_to_list(base_quat)))  # (w, x, y, z)
+            r.set(f"{key}:motion:base_lin_vel", json.dumps(_to_list(base_lin_vel)))
+            r.set(f"{key}:motion:base_ang_vel", json.dumps(_to_list(base_ang_vel)))
+            r.set(f"{key}:motion:dof_pos", json.dumps(_to_list(dof_pos)))
+            r.set(f"{key}:motion:dof_vel", json.dumps(_to_list(dof_vel)))
+            r.set(f"{key}:motion:link_pos_local", json.dumps(_to_list(link_pos_local)))
+            r.set(f"{key}:motion:link_quat_local", json.dumps(_to_list(link_quat_local)))
+            r.set(f"{key}:timestamp:base_pos", timestamp)
+            r.set(f"{key}:timestamp:base_quat", timestamp)
+            r.set(f"{key}:timestamp:base_lin_vel", timestamp)
+            r.set(f"{key}:timestamp:base_ang_vel", timestamp)
+            r.set(f"{key}:timestamp:dof_pos", timestamp)
+            r.set(f"{key}:timestamp:dof_vel", timestamp)
+            r.set(f"{key}:timestamp:link_pos_local", timestamp)
+            r.set(f"{key}:timestamp:link_quat_local", timestamp)
+            timestamp += 1
     except KeyboardInterrupt:
         print("\nStopping motion publisher...")
 

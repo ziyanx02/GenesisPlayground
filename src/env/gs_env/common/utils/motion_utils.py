@@ -8,6 +8,7 @@ from tqdm import tqdm
 #
 from gs_env.common.utils.math_utils import (
     quat_apply,
+    quat_inv,
     quat_diff,
     quat_from_angle_axis,
     quat_from_euler,
@@ -363,6 +364,7 @@ class MotionLib:
         motion_base_quat = []
         motion_base_lin_vel = []
         motion_base_ang_vel = []
+        motion_base_ang_vel_local = []
         motion_dof_pos = []
         motion_dof_vel = []
         motion_link_pos_global = []
@@ -481,6 +483,8 @@ class MotionLib:
                     base_ang_vel[-1, :] = base_ang_vel[-2, :]
                     base_ang_vel = self.smooth(base_ang_vel, 19, device=self._device)
 
+                    base_ang_vel_local = quat_apply(quat_inv(base_quat), base_ang_vel)
+
                     dof_vel = torch.zeros_like(dof_pos)  # (num_frames, num_dof)
                     dof_vel[:-1, :] = fps * (dof_pos[1:, :] - dof_pos[:-1, :])
                     dof_vel[-1, :] = dof_vel[-2, :]
@@ -508,6 +512,7 @@ class MotionLib:
                     motion_base_quat.append(base_quat)
                     motion_base_lin_vel.append(base_lin_vel)
                     motion_base_ang_vel.append(base_ang_vel)
+                    motion_base_ang_vel_local.append(base_ang_vel_local)
                     motion_dof_pos.append(dof_pos)
                     motion_dof_vel.append(dof_vel)
                     motion_link_pos_global.append(link_pos_global)
@@ -534,6 +539,7 @@ class MotionLib:
         self._motion_base_quat = torch.cat(motion_base_quat, dim=0)
         self._motion_base_lin_vel = torch.cat(motion_base_lin_vel, dim=0)
         self._motion_base_ang_vel = torch.cat(motion_base_ang_vel, dim=0)
+        self._motion_base_ang_vel_local = torch.cat(motion_base_ang_vel_local, dim=0)
         self._motion_dof_pos = torch.cat(motion_dof_pos, dim=0)
         self._motion_dof_vel = torch.cat(motion_dof_vel, dim=0)
         self._motion_link_pos_global = torch.cat(motion_link_pos_global, dim=0)
@@ -602,6 +608,7 @@ class MotionLib:
             "base_quat",
             "base_lin_vel",
             "base_ang_vel",
+            "base_ang_vel_local",
             "dof_pos",
             "dof_vel",
             "link_pos_local",
@@ -668,6 +675,7 @@ class MotionLib:
         torch.Tensor,
         torch.Tensor,
         torch.Tensor,
+        torch.Tensor,
     ]:
         assert motion_times.min() >= 0.0, "motion_times must be non-negative"
         # snap to discrete frame grid using unified fps and clamp within motion length
@@ -683,6 +691,7 @@ class MotionLib:
         base_quat = self._motion_base_quat[frame_idx]
         base_lin_vel = self._motion_base_lin_vel[frame_idx]
         base_ang_vel = self._motion_base_ang_vel[frame_idx]
+        base_ang_vel_local = self._motion_base_ang_vel_local[frame_idx]
         dof_pos = self._motion_dof_pos[frame_idx]
         dof_vel = self._motion_dof_vel[frame_idx]
         link_pos_local = self._motion_link_pos_local[frame_idx]
@@ -694,6 +703,7 @@ class MotionLib:
             base_quat,
             base_lin_vel,
             base_ang_vel,
+            base_ang_vel_local,
             dof_pos,
             dof_vel,
             link_pos_local,
