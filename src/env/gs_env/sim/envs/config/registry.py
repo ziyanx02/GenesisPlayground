@@ -291,6 +291,7 @@ EnvArgsRegistry["g1_motion_teacher"] = MotionEnvArgs(
         "left_wrist_yaw_link",
         "right_wrist_yaw_link",
         "torso_link",
+        "pelvis",
     ],
     dof_weights={
         "hip": 1.0,
@@ -452,6 +453,7 @@ EnvArgsRegistry["g1_motion"] = MotionEnvArgs(
         "left_wrist_yaw_link",
         "right_wrist_yaw_link",
         "torso_link",
+        "pelvis",
     ],
     dof_weights={
         "hip": 1.0,
@@ -476,13 +478,15 @@ EnvArgsRegistry["g1_motion"] = MotionEnvArgs(
         # "base_height_error": [0.2, [0.05, 0.2]],
         "base_quat_error": [1.0, [0.1, 1.0]],
         # "dof_pos_error": [6.0, [1.0, 6.0]],
-        "tracking_link_pos_error": [0.5, [0.03, 1.0]],
+        # "tracking_link_pos_error": [0.5, [0.03, 1.0]],
         # "foot_contact_force_error": [500.0, [50.0, 500.0]],
     },
     adaptive_termination_ratio=None,
     motion_file=None,
     observed_steps={
-        # "base_pos": [1,],
+        "base_pos": [
+            1,
+        ],
         "base_quat": [
             1,
         ],

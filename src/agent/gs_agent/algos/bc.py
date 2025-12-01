@@ -253,7 +253,9 @@ class BC(BaseAlgo):
                 "mean_length": rollout_infos["mean_ep_len"],
             },
             "train": {
-                "imitation_loss": statistics.mean([metrics["loss"] for metrics in train_metrics_list]),
+                "imitation_loss": statistics.mean(
+                    [metrics["loss"] for metrics in train_metrics_list]
+                ),
             },
             "speed": {
                 "rollout_time": rollouts_time,

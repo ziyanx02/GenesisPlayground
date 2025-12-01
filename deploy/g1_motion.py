@@ -120,14 +120,7 @@ def main(
         while not env.robot.Start:
             time.sleep(0.1)
 
-    # Define tracking links in order from registry.py (pelvis is the base, not tracked)
-    tracking_link_names = [
-        "left_ankle_roll_link",
-        "right_ankle_roll_link",
-        "left_wrist_yaw_link",
-        "right_wrist_yaw_link",
-        "torso_link",
-    ]
+    tracking_link_names = getattr(env_args, "tracking_link_names", [])
     num_tracking_links = len(tracking_link_names)
 
     # Initialize Redis client with tracking links
