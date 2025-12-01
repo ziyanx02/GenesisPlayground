@@ -133,6 +133,9 @@ class BC(BaseAlgo):
         """Collect rollouts."""
         assert self._teacher is not None, "Teacher network not built"
         obs, _ = self.env.get_observations()  # Unpack actor and critic obs, only use actor
+        termination_buffer = []
+        reward_terms_buffer = []
+        info_buffer = []
         with torch.inference_mode():
             # collect rollouts and compute returns & advantages
             for _step in range(num_steps):
@@ -161,6 +164,11 @@ class BC(BaseAlgo):
                 self._curr_reward_sum += reward.squeeze(-1)
                 self._curr_ep_len += 1
 
+                # Update termination buffer
+                termination_buffer.append(_extra_infos["termination"])
+                reward_terms_buffer.append(_extra_infos["reward_terms"])
+                if "info" in _extra_infos:
+                    info_buffer.append(_extra_infos["info"])
                 # Check for episode completions and reset tracking
                 done_mask = terminated.unsqueeze(-1) | truncated.unsqueeze(-1)
                 new_ids = (done_mask > 0).nonzero(as_tuple=False)
@@ -181,9 +189,29 @@ class BC(BaseAlgo):
         if len(self._rewbuffer) > 0:
             mean_reward = statistics.mean(self._rewbuffer)
             mean_ep_len = statistics.mean(self._lenbuffer)
+        mean_termination = {}
+        mean_reward_terms = {}
+        mean_info = {}
+        if len(termination_buffer) > 0:
+            for key in termination_buffer[0].keys():
+                terminations = torch.stack([termination[key] for termination in termination_buffer])
+                mean_termination[key] = terminations.to(torch.float).mean().item()
+        if len(reward_terms_buffer) > 0:
+            for key in reward_terms_buffer[0].keys():
+                reward_terms = torch.stack(
+                    [reward_term[key] for reward_term in reward_terms_buffer]
+                )
+                mean_reward_terms[key] = reward_terms.mean().item()
+        if len(info_buffer) > 0:
+            for key in info_buffer[0].keys():
+                infos = torch.tensor([info[key] for info in info_buffer])
+                mean_info[key] = infos.mean().item()
         return {
             "mean_reward": mean_reward,
             "mean_ep_len": mean_ep_len,
+            "termination": mean_termination,
+            "reward_terms": mean_reward_terms,
+            "info": mean_info,
         }
 
     def _train_one_batch(self, mini_batch: dict[BCBufferKey, torch.Tensor]) -> dict[str, Any]:
@@ -225,7 +253,7 @@ class BC(BaseAlgo):
                 "mean_length": rollout_infos["mean_ep_len"],
             },
             "train": {
-                "loss": statistics.mean([metrics["loss"] for metrics in train_metrics_list]),
+                "imitation_loss": statistics.mean([metrics["loss"] for metrics in train_metrics_list]),
             },
             "speed": {
                 "rollout_time": rollouts_time,
@@ -233,6 +261,9 @@ class BC(BaseAlgo):
                 "train_time": train_time,
                 "rollout_step": self._num_steps * self._num_envs,
             },
+            "termination": rollout_infos["termination"],
+            "reward_terms": rollout_infos["reward_terms"],
+            "info": rollout_infos["info"],
         }
         return iteration_infos
 
