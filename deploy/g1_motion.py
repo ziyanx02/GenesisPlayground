@@ -120,17 +120,19 @@ def main(
         while not env.robot.Start:
             time.sleep(0.1)
 
-    # Get link names and tracking link names for Redis client
-    link_names: list[str] = []
-    if hasattr(env, "robot"):
-        link_names = getattr(env.robot, "link_names", [])
-    tracking_link_names = getattr(env_args, "tracking_link_names", [])
+    # Define tracking links in order from registry.py (pelvis is the base, not tracked)
+    tracking_link_names = [
+        "left_ankle_roll_link",
+        "right_ankle_roll_link",
+        "left_wrist_yaw_link",
+        "right_wrist_yaw_link",
+        "torso_link",
+    ]
+    num_tracking_links = len(tracking_link_names)
+    
+    # Initialize Redis client with tracking links
     redis_client = RedisClient(
-        url=redis_url,
-        key=redis_key,
-        device=device,
-        link_names=link_names,
-        tracking_link_names=tracking_link_names,
+        url=redis_url, key=redis_key, device=device, num_tracking_links=num_tracking_links
     )
 
     if view and sim:
@@ -151,14 +153,14 @@ def main(
     def view_loop() -> None:
         """View motion reference data from Redis."""
 
-        nonlocal env, redis_client
+        nonlocal env, redis_client, tracking_link_names
         assert sim, "View mode only works in simulation"
         assert hasattr(env, "scene"), "Environment must have scene attribute for view mode"
 
-        link_name_to_idx = {}
-        for link_name in env.scene.objects.keys():  # type: ignore
-            if link_name in link_names:
-                link_name_to_idx[link_name] = link_names.index(link_name)
+        # Build link_name_to_idx mapping: index in tracking_link_names list
+        link_name_to_idx = {
+            link_name: idx for idx, link_name in enumerate(tracking_link_names)
+        }
 
         last_update_time = time.time()
 
@@ -173,7 +175,7 @@ def main(
             redis_client.update()
 
             # Transform link positions from local_yaw to global coordinates
-            env.robot.set_state(
+            env.robot.set_state(  # type: ignore[attr-defined]
                 pos=redis_client.ref_base_pos,
                 quat=redis_client.ref_base_quat,
                 dof_pos=redis_client.ref_dof_pos,
@@ -188,9 +190,9 @@ def main(
             for link_name in env.scene.objects.keys():  # type: ignore
                 if link_name in link_name_to_idx:
                     link_idx = link_name_to_idx[link_name]
-                    if link_idx < redis_client.ref_link_pos_local_yaw.shape[1]:
-                        ref_link_pos = redis_client.ref_link_pos_local_yaw[:, link_idx, :]
-                        ref_link_quat = redis_client.ref_link_quat_local_yaw[:, link_idx, :]
+                    if link_idx < redis_client.link_pos_local_yaw.shape[1]:
+                        ref_link_pos = redis_client.link_pos_local_yaw[:, link_idx, :]
+                        ref_link_quat = redis_client.link_quat_local_yaw[:, link_idx, :]
                         ref_link_pos = quat_apply(ref_quat_yaw, ref_link_pos)
                         ref_link_pos[:, :2] += redis_client.ref_base_pos[:, :2]
                         ref_link_quat = quat_mul(ref_quat_yaw, ref_link_quat)
@@ -199,7 +201,7 @@ def main(
             env.scene.scene.step(refresh_visualizer=False)  # type: ignore
 
     def deploy_loop() -> None:
-        nonlocal env, redis_client
+        nonlocal env, redis_client, tracking_link_names
         # Initialize tracking variables
         last_action_t = torch.zeros(1, env.action_dim, device=device)
         commands_t = torch.zeros(1, 3, device=device)
@@ -207,16 +209,10 @@ def main(
         total_inference_time = 0
         step_id = 0
 
-        if sim:
-            link_name_to_idx = {}
-            for link_name in env.scene.objects.keys():  # type: ignore
-                if link_name in link_names:
-                    link_name_to_idx[link_name] = link_names.index(link_name)
-
-        # Connect to Redis and construct client
-        dof_dim_cfg = len(getattr(env_args.robot_args, "dof_names", []))
-        if dof_dim_cfg <= 0:
-            dof_dim_cfg = int(last_action_t.shape[-1])
+        # Build link_name_to_idx mapping: index in tracking_link_names list
+        link_name_to_idx = {
+            link_name: idx for idx, link_name in enumerate(tracking_link_names)
+        }
 
         redis_client.update()
         redis_client.update_quat(env.base_quat)
@@ -274,16 +270,16 @@ def main(
                 terminated = env.get_terminated()  # type: ignore
                 if terminated[0]:
                     env.reset_idx(torch.IntTensor([0]))  # type: ignore
+                ref_quat_yaw = quat_from_angle_axis(
+                    redis_client.ref_base_euler[:, 2],
+                    torch.tensor([0, 0, 1], device=env.device, dtype=torch.float),
+                )
                 for link_name in env.scene.objects.keys():  # type: ignore
-                    ref_quat_yaw = quat_from_angle_axis(
-                        redis_client.ref_base_euler[:, 2],
-                        torch.tensor([0, 0, 1], device=env.device, dtype=torch.float),
-                    )
                     if link_name in link_name_to_idx:
                         link_idx = link_name_to_idx[link_name]
-                        if link_idx < redis_client.ref_link_pos_local_yaw.shape[1]:
-                            ref_link_pos = redis_client.ref_link_pos_local_yaw[:, link_idx, :]
-                            ref_link_quat = redis_client.ref_link_quat_local_yaw[:, link_idx, :]
+                        if link_idx < redis_client.link_pos_local_yaw.shape[1]:
+                            ref_link_pos = redis_client.link_pos_local_yaw[:, link_idx, :]
+                            ref_link_quat = redis_client.link_quat_local_yaw[:, link_idx, :]
                             ref_link_pos = quat_apply(ref_quat_yaw, ref_link_pos)
                             ref_link_pos[:, :2] += redis_client.ref_base_pos[:, :2]
                             ref_link_quat = quat_mul(ref_quat_yaw, ref_link_quat)

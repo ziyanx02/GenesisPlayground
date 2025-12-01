@@ -44,18 +44,22 @@ def publish_motion(
       - {key}:motion:base_quat [4] (w, x, y, z)
       - {key}:motion:base_lin_vel [3]
       - {key}:motion:base_ang_vel [3]
+      - {key}:motion:base_ang_vel_local [3]
       - {key}:motion:dof_pos [D]
       - {key}:motion:dof_vel [D]
       - {key}:motion:link_pos_local [N*3]
       - {key}:motion:link_quat_local [N*4]
+      - {key}:motion:foot_contact [F]
       - {key}:timestamp:base_pos [1]
       - {key}:timestamp:base_quat [1]
       - {key}:timestamp:base_lin_vel [1]
       - {key}:timestamp:base_ang_vel [1]
+      - {key}:timestamp:base_ang_vel_local [1]
       - {key}:timestamp:dof_pos [1]
       - {key}:timestamp:dof_vel [1]
       - {key}:timestamp:link_pos_local [1]
       - {key}:timestamp:link_quat_local [1]
+      - {key}:timestamp:foot_contact [1]
     """
     r = redis.from_url(redis_url)
 
@@ -112,26 +116,27 @@ def publish_motion(
                 motion_ids=motion_id_t, motion_times=motion_time_t
             )
 
-            _ = foot_contact
-            _ = base_ang_vel_local
-
             # Publish each field as a separate Redis key
             r.set(f"{key}:motion:base_pos", json.dumps(_to_list(base_pos)))
             r.set(f"{key}:motion:base_quat", json.dumps(_to_list(base_quat)))  # (w, x, y, z)
             r.set(f"{key}:motion:base_lin_vel", json.dumps(_to_list(base_lin_vel)))
             r.set(f"{key}:motion:base_ang_vel", json.dumps(_to_list(base_ang_vel)))
+            r.set(f"{key}:motion:base_ang_vel_local", json.dumps(_to_list(base_ang_vel_local)))
             r.set(f"{key}:motion:dof_pos", json.dumps(_to_list(dof_pos)))
             r.set(f"{key}:motion:dof_vel", json.dumps(_to_list(dof_vel)))
             r.set(f"{key}:motion:link_pos_local", json.dumps(_to_list(link_pos_local)))
             r.set(f"{key}:motion:link_quat_local", json.dumps(_to_list(link_quat_local)))
+            r.set(f"{key}:motion:foot_contact", json.dumps(_to_list(foot_contact)))
             r.set(f"{key}:timestamp:base_pos", timestamp)
             r.set(f"{key}:timestamp:base_quat", timestamp)
             r.set(f"{key}:timestamp:base_lin_vel", timestamp)
             r.set(f"{key}:timestamp:base_ang_vel", timestamp)
+            r.set(f"{key}:timestamp:base_ang_vel_local", timestamp)
             r.set(f"{key}:timestamp:dof_pos", timestamp)
             r.set(f"{key}:timestamp:dof_vel", timestamp)
             r.set(f"{key}:timestamp:link_pos_local", timestamp)
             r.set(f"{key}:timestamp:link_quat_local", timestamp)
+            r.set(f"{key}:timestamp:foot_contact", timestamp)
             timestamp += 1
     except KeyboardInterrupt:
         print("\nStopping motion publisher...")
