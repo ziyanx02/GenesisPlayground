@@ -4,6 +4,7 @@ from gymnasium import spaces
 from transforms3d import quaternions
 
 from gs_env.common.bases.base_robot import BaseGymRobot
+from gs_env.common.utils.math_utils import quat_to_euler, quat_to_rotation_6D
 from gs_env.real.unitree.utils.low_state_controller import LowStateCmdHandler
 from gs_env.real.unitree.utils.low_state_handler import LowStateMsgHandler
 from gs_env.sim.envs.config.schema import LeggedRobotEnvArgs
@@ -31,6 +32,7 @@ class UnitreeLeggedEnv(BaseGymRobot):
         self._device = device
         self._action_space = spaces.Box(shape=(self.action_dim,), low=-np.inf, high=np.inf)
         self._action_scale = np.ones((self.action_dim,), dtype=np.float32)
+        self._hard_action_scale = action_scale
         if self._args.robot_args.adaptive_action_scale:
             assert self._args.robot_args.dof_torque_limit is not None, (
                 "Adaptive action scaling requires dof_torque_limit to be set."
@@ -48,8 +50,9 @@ class UnitreeLeggedEnv(BaseGymRobot):
             for i, dof_name in enumerate(self.dof_names):
                 if joint_name in dof_name:
                     self.direct_drive_mask[i] = 0.0
-        self.prev_target_pos = np.array(self.robot.default_dof_pos, dtype=np.float32)
-        self.target_vel_low_pass = np.zeros_like(self.robot.default_dof_pos, dtype=np.float32)
+        if isinstance(self.robot, LowStateCmdHandler):
+            self.prev_target_pos = np.array(self.robot.default_dof_pos, dtype=np.float32)
+            self.target_vel_low_pass = np.zeros_like(self.robot.default_dof_pos, dtype=np.float32)
         self.low_pass_alpha = self._args.robot_args.low_pass_alpha
 
     def reset(self, envs_idx: torch.IntTensor | None = None) -> None:
@@ -57,9 +60,13 @@ class UnitreeLeggedEnv(BaseGymRobot):
         pass
 
     def apply_action(self, action: torch.Tensor) -> None:
+        if not isinstance(self.robot, LowStateCmdHandler):
+            raise RuntimeError("apply_action is only available in interactive mode.")
         action_np = action[0].cpu().numpy()
-        target_pos = self.robot.default_dof_pos + action_np * self._action_scale
-        target_vel = (target_pos - self.prev_target_pos) / self.dt
+        target_pos = (
+            self.robot.default_dof_pos + action_np * self._action_scale * self._hard_action_scale
+        )
+        target_vel = (target_pos - self.prev_target_pos) / self.dt * self._hard_action_scale
         self.target_vel_low_pass += self.low_pass_alpha * (target_vel - self.target_vel_low_pass)
         self.robot.target_pos = target_pos
         self.robot.target_vel = target_vel * self.direct_drive_mask
@@ -73,7 +80,7 @@ class UnitreeLeggedEnv(BaseGymRobot):
         return self.robot.is_emergency_stop
 
     @property
-    def robot(self) -> LowStateCmdHandler:
+    def robot(self) -> LowStateCmdHandler | LowStateMsgHandler:
         return self._robot  # type: ignore
 
     @property
@@ -121,6 +128,14 @@ class UnitreeLeggedEnv(BaseGymRobot):
     @property
     def base_quat(self) -> torch.Tensor:
         return torch.tensor(self.robot.quat, device=self._device, dtype=torch.float32)[None, :]
+
+    @property
+    def base_euler(self) -> torch.Tensor:
+        return quat_to_euler(self.base_quat)
+
+    @property
+    def base_rotation_6D(self) -> torch.Tensor:
+        return quat_to_rotation_6D(self.base_quat)
 
     @property
     def projected_gravity(self) -> torch.Tensor:

@@ -6,6 +6,7 @@ from pathlib import Path
 import fire
 import torch
 from gs_env.common.utils.math_utils import quat_apply, quat_from_angle_axis, quat_mul
+from gs_env.sim.envs.config.registry import EnvArgsRegistry
 from gs_env.sim.envs.config.schema import MotionEnvArgs
 
 # Add examples to path to import utils
@@ -88,8 +89,12 @@ def main(
     """
     device = "cpu" if not torch.cuda.is_available() else device
 
-    # Load checkpoint and env_args
-    policy, env_args = load_checkpoint_and_env_args(exp_name, num_ckpt, device)
+    if view:
+        policy = None
+        env_args = EnvArgsRegistry["g1_motion"]
+    else:
+        # Load checkpoint and env_args
+        policy, env_args = load_checkpoint_and_env_args(exp_name, num_ckpt, device)
 
     if sim:
         print("Running in SIMULATION mode")
@@ -248,6 +253,7 @@ def main(
                     obs_gt = redis_client.compute_motion_obs()
                 else:
                     obs_gt = getattr(env, key) * env_args.obs_scales.get(key, 1.0)
+                    # print(key, obs_gt)
                 obs_components.append(obs_gt)
             obs_t = torch.cat(obs_components, dim=-1)
 
@@ -259,6 +265,7 @@ def main(
                 end_time = time.time()
                 total_inference_time += end_time - start_time
 
+            # print(action_t)
             env.apply_action(action_t)
 
             if sim:
