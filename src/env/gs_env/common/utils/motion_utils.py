@@ -8,10 +8,10 @@ from tqdm import tqdm
 #
 from gs_env.common.utils.math_utils import (
     quat_apply,
-    quat_inv,
     quat_diff,
     quat_from_angle_axis,
     quat_from_euler,
+    quat_inv,
     quat_mul,
     quat_to_angle_axis,
     quat_to_euler,

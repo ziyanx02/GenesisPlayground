@@ -4,7 +4,6 @@ import json
 import sys
 import time
 from pathlib import Path
-from typing import Any
 
 import fire
 import redis
@@ -12,6 +11,7 @@ import torch
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "examples"))
 from gs_env.common.utils.motion_utils import MotionLib
+from gs_env.sim.envs.config.registry import EnvArgsRegistry
 from gs_env.sim.envs.config.schema import MotionEnvArgs
 from utils import yaml_to_config  # type: ignore
 
@@ -29,6 +29,14 @@ def load_motion_file_from_exp(exp_name: str) -> str:
     return env_args.motion_file
 
 
+def load_env_args_from_exp(exp_name: str) -> MotionEnvArgs:
+    deploy_dir = Path(__file__).parent / "logs" / exp_name
+    env_args_path = deploy_dir / "env_args.yaml"
+    if not env_args_path.exists():
+        raise FileNotFoundError(f"env_args.yaml not found: {env_args_path}")
+    return yaml_to_config(env_args_path, MotionEnvArgs)
+
+
 def publish_motion(
     motion_file: str,
     redis_url: str = "redis://localhost:6379/0",
@@ -36,8 +44,9 @@ def publish_motion(
     motion_id: int = 0,
     freq_hz: float = 50.0,
     device: str = "cpu",
+    tracking_link_names: list[str] | None = None,
 ) -> None:
-    f"""Publish reference motion frames to Redis at a fixed rate.
+    """Publish reference motion frames to Redis at a fixed rate.
 
     The publisher writes each field as a separate Redis key:
       - {key}:motion:base_pos [3]
@@ -47,8 +56,8 @@ def publish_motion(
       - {key}:motion:base_ang_vel_local [3]
       - {key}:motion:dof_pos [D]
       - {key}:motion:dof_vel [D]
-      - {key}:motion:link_pos_local [N*3]
-      - {key}:motion:link_quat_local [N*4]
+      - {key}:motion:link_pos_local [N*3] (filtered to tracking links if specified)
+      - {key}:motion:link_quat_local [N*4] (filtered to tracking links if specified)
       - {key}:motion:foot_contact [F]
       - {key}:timestamp:base_pos [1]
       - {key}:timestamp:base_quat [1]
@@ -66,6 +75,23 @@ def publish_motion(
     device_t = torch.device(device if torch.cuda.is_available() and device == "cuda" else "cpu")
     motion_lib = MotionLib(motion_file=motion_file, device=device_t)
 
+    # Pre-compute tracking link indices if names are provided
+    link_indices: list[int] | None = None
+    if tracking_link_names is not None and len(tracking_link_names) > 0:
+        name_to_idx = {name: i for i, name in enumerate(motion_lib.link_names)}
+        link_indices = []
+        missing: list[str] = []
+        for name in tracking_link_names:
+            if name in name_to_idx:
+                link_indices.append(name_to_idx[name])
+            else:
+                missing.append(name)
+        if len(missing) > 0:
+            print(f"[motion_publisher] Warning: tracking links not found in motion_lib: {missing}")
+        if len(link_indices) == 0:
+            print("[motion_publisher] No valid tracking links found; publishing all links instead.")
+            link_indices = None
+
     motion_id_t = torch.tensor([motion_id], dtype=torch.long, device=device_t)
     dt = 1.0 / motion_lib.fps
 
@@ -80,6 +106,9 @@ def publish_motion(
     print(f"Motion file: {motion_file}")
     print(f"Motion id: {motion_id}")
     print(f"Publish rate: {1.0 / publish_dt:.2f} Hz")
+    if link_indices is not None:
+        selected_names = [motion_lib.link_names[i] for i in link_indices]
+        print(f"Publishing {len(selected_names)} tracking links only: {selected_names}")
     print("=" * 80)
 
     timestamp = 0
@@ -112,9 +141,12 @@ def publish_motion(
                 link_pos_local,
                 link_quat_local,
                 foot_contact,
-            ) = motion_lib.get_ref_motion_frame(
-                motion_ids=motion_id_t, motion_times=motion_time_t
-            )
+            ) = motion_lib.get_ref_motion_frame(motion_ids=motion_id_t, motion_times=motion_time_t)
+
+            # Filter link states to tracking links if requested
+            if link_indices is not None:
+                link_pos_local = link_pos_local[0, link_indices]
+                link_quat_local = link_quat_local[0, link_indices]
 
             # Publish each field as a separate Redis key
             r.set(f"{key}:motion:base_pos", json.dumps(_to_list(base_pos)))
@@ -151,10 +183,27 @@ def main(
     freq_hz: float = 50.0,
     device: str = "cpu",
 ) -> None:
+    # Resolve motion_file and tracking_link_names
+    tracking_link_names: list[str] = []
     if motion_file is None:
         if exp_name is None:
             raise ValueError("Either exp_name or motion_file must be provided")
-        motion_file = load_motion_file_from_exp(exp_name)
+        env_args = load_env_args_from_exp(exp_name)
+        motion_file = env_args.motion_file
+        if motion_file is None:
+            raise ValueError("motion_file missing in env_args for provided exp_name")
+        tracking_link_names = getattr(env_args, "tracking_link_names", []) or []
+    else:
+        # No exp given: fall back to registry default for tracking links
+        # Prefer 'g1_motion' config if available; otherwise try 'g1_motion_teacher'
+        default_names: list[str] = []
+        if "g1_motion" in EnvArgsRegistry:
+            default_names = getattr(EnvArgsRegistry["g1_motion"], "tracking_link_names", []) or []
+        elif "g1_motion_teacher" in EnvArgsRegistry:
+            default_names = (
+                getattr(EnvArgsRegistry["g1_motion_teacher"], "tracking_link_names", []) or []
+            )
+        tracking_link_names = default_names
 
     publish_motion(
         motion_file=motion_file,
@@ -163,6 +212,7 @@ def main(
         motion_id=motion_id,
         freq_hz=freq_hz,
         device=device,
+        tracking_link_names=tracking_link_names,
     )
 
 

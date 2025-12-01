@@ -123,7 +123,9 @@ class LeggedRobotEnv(BaseEnv):
             (self.num_envs, self.action_dim), device=self._device
         )
         self.torque = torch.zeros((self.num_envs, self.action_dim), device=self._device)
-        self._target_dof_vel_low_pass = torch.zeros((self.num_envs, self.action_dim), device=self._device)
+        self._target_dof_vel_low_pass = torch.zeros(
+            (self.num_envs, self.action_dim), device=self._device
+        )
         self.low_pass_alpha = self._args.robot_args.low_pass_alpha
 
         self.action_scale = torch.ones((self.action_dim,), device=self._device)
@@ -295,7 +297,7 @@ class LeggedRobotEnv(BaseEnv):
 
     def get_observations(self, obs_args: Any = None) -> tuple[torch.Tensor, torch.Tensor]:
         """Get observations. If obs_args is provided, use it instead of self._args.
-        
+
         Args:
             obs_args: Optional environment args to use for observation computation.
                      If None, uses self._args (student config).
@@ -303,7 +305,7 @@ class LeggedRobotEnv(BaseEnv):
         self.update_buffers()
         # Use provided obs_args if available, otherwise use self._args
         args_to_use = obs_args if obs_args is not None else self._args
-        
+
         obs_components = []
         for key in args_to_use.actor_obs_terms:
             obs_gt = getattr(self, key) * args_to_use.obs_scales.get(key, 1.0)
@@ -361,7 +363,9 @@ class LeggedRobotEnv(BaseEnv):
         target_dof_pos = exec_action * self.action_scale.unsqueeze(0)
         if self._args.robot_args.ctrl_type == CtrlType.DR_JOINT_POSITION_VELOCITY:
             target_dof_vel = (target_dof_pos - self._last_target_dof_pos) / self.dt
-            self._target_dof_vel_low_pass += self.low_pass_alpha * (target_dof_vel - self._target_dof_vel_low_pass)
+            self._target_dof_vel_low_pass += self.low_pass_alpha * (
+                target_dof_vel - self._target_dof_vel_low_pass
+            )
             exec_action = torch.cat([target_dof_pos, self._target_dof_vel_low_pass], dim=-1)
         else:
             exec_action = target_dof_pos

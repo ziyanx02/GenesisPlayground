@@ -256,7 +256,9 @@ def evaluate_policy(
                 motion_id,
             )
             env.hard_sync_motion(torch.IntTensor([0]))
-            obs, _ = wrapped_env.get_observations()  # Unpack actor and critic obs, use actor for policy
+            obs, _ = (
+                wrapped_env.get_observations()
+            )  # Unpack actor and critic obs, use actor for policy
             while env.motion_times[0] < env.motion_lib.get_motion_length(motion_id) - 0.02:
                 # Get action from policy
                 with torch.no_grad():
@@ -270,7 +272,9 @@ def evaluate_policy(
                 env.update_buffers()
                 env.update_history()
                 env.get_reward()
-                obs, _ = wrapped_env.get_observations()  # Unpack actor and critic obs, use actor for policy
+                obs, _ = (
+                    wrapped_env.get_observations()
+                )  # Unpack actor and critic obs, use actor for policy
 
                 ref_quat_yaw = quat_from_angle_axis(
                     env.ref_base_euler[:, 2],

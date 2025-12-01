@@ -131,7 +131,7 @@ def main(
         dof_dim_cfg = len(getattr(env_args.robot_args, "dof_names", []))
         if dof_dim_cfg <= 0:
             dof_dim_cfg = int(last_action_t.shape[-1])
-        
+
         # Get link names and tracking link names for Redis client
         link_names: list[str] = []
         if hasattr(env, "robot"):

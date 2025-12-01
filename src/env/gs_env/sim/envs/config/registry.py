@@ -483,14 +483,26 @@ EnvArgsRegistry["g1_motion"] = MotionEnvArgs(
     motion_file=None,
     observed_steps={
         # "base_pos": [1,],
-        "base_quat": [1,],
-        "base_lin_vel": [1,],
-        "base_ang_vel": [1,],
+        "base_quat": [
+            1,
+        ],
+        "base_lin_vel": [
+            1,
+        ],
+        "base_ang_vel": [
+            1,
+        ],
         # "dof_pos": [1,],
         # "dof_vel": [1,],
-        "link_pos_local": [1,],
-        "link_quat_local": [1,],
-        "foot_contact": [1,],
+        "link_pos_local": [
+            1,
+        ],
+        "link_quat_local": [
+            1,
+        ],
+        "foot_contact": [
+            1,
+        ],
     },
 )
 

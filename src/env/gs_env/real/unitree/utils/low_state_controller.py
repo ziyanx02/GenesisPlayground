@@ -230,7 +230,9 @@ class LowStateCmdHandler(LowStateMsgHandler):
     def set_cmd(self) -> None:
         for i in range(self.num_dof):
             self.low_cmd.motor_cmd[self.dof_index[i]].q = self.target_pos[i]
-            self.low_cmd.motor_cmd[self.dof_index[i]].dq = self.target_vel[i] * self.feed_forward_ratio
+            self.low_cmd.motor_cmd[self.dof_index[i]].dq = (
+                self.target_vel[i] * self.feed_forward_ratio
+            )
             self.low_cmd.motor_cmd[self.dof_index[i]].kp = self.kp[i]
             self.low_cmd.motor_cmd[self.dof_index[i]].kd = self.kd[i]
             self.low_cmd.motor_cmd[self.dof_index[i]].tau = 0

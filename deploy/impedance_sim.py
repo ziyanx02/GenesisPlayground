@@ -1,8 +1,6 @@
 import platform
 import sys
-import time
 from pathlib import Path
-from typing import Any
 
 import fire
 import matplotlib
@@ -12,12 +10,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from gs_env.sim.envs.config.registry import EnvArgsRegistry
-from gs_env.sim.envs.config.schema import LeggedRobotEnvArgs
 from gs_env.sim.envs.locomotion.leggedrobot_env import LeggedRobotEnv
 
 # Add examples to path to import utils
 sys.path.insert(0, str(Path(__file__).parent.parent / "examples"))
-from utils import plot_metric_on_axis, yaml_to_config  # type: ignore
+from utils import plot_metric_on_axis  # type: ignore
 
 
 def get_batched_period(y: np.ndarray) -> np.ndarray:
@@ -71,7 +68,7 @@ def resonate_dof_test(
     env.robot.set_state(dof_pos=dof_pos)
 
     TOTAL_RESET_STEPS = 10
-    for i in range(TOTAL_RESET_STEPS):
+    for _ in range(TOTAL_RESET_STEPS):
         env.apply_action(action)
 
     dof_pos[:, dof_idx] += 0.1
@@ -90,8 +87,12 @@ def resonate_dof_test(
     plot_metric_on_axis(
         axes[0],
         np.arange(dof_pos_history.shape[1]) * dt,
-        [dof_pos_history[0].tolist(),],
-        ["Dof Pos",],
+        [
+            dof_pos_history[0].tolist(),
+        ],
+        [
+            "Dof Pos",
+        ],
         "Dof Pos",
         "Resonance Test",
         yscale="linear",
@@ -100,8 +101,12 @@ def resonate_dof_test(
     plot_metric_on_axis(
         axes[1],
         np.arange(dof_pos_history.shape[1]) * dt,
-        [dof_pos_history[1].tolist(),],
-        ["Dof Pos",],
+        [
+            dof_pos_history[1].tolist(),
+        ],
+        [
+            "Dof Pos",
+        ],
         "Dof Pos",
         "Resonance Test",
         yscale="linear",
@@ -142,10 +147,10 @@ def main(
     env.reset()
 
     extra_impedance = {
-        "knee": 20 * 0.2 ** 2,
-        "hip_yaw": 40 * 0.15 ** 2,
-        "waist_pitch": 10 * 0.2 ** 2,
-        "waist_yaw": 10 * 0.2 ** 2,
+        "knee": 20 * 0.2**2,
+        "hip_yaw": 40 * 0.15**2,
+        "waist_pitch": 10 * 0.2**2,
+        "waist_yaw": 10 * 0.2**2,
     }
 
     def run_pd_test() -> None:
@@ -177,14 +182,18 @@ def main(
 
                 natural_frequency = 1.0 / batched_natural_period * 2 * np.pi
                 nonzero_mask = natural_frequency > 0.0
-                batched_impedance = tmp_dof_kp[:, dof_idx][nonzero_mask] / (natural_frequency[nonzero_mask] ** 2)
+                batched_impedance = tmp_dof_kp[:, dof_idx][nonzero_mask] / (
+                    natural_frequency[nonzero_mask] ** 2
+                )
                 impedance = batched_impedance.mean().item()
-                print(f"{dof_name}: {batched_impedance.mean().item():.2f} ± {batched_impedance.std().item():.2f}")
+                print(
+                    f"{dof_name}: {batched_impedance.mean().item():.2f} ± {batched_impedance.std().item():.2f}"
+                )
 
                 for key, value in extra_impedance.items():
                     if key in dof_name:
                         impedance += value
-                dof_kp[dof_idx] = impedance * FREQ_N ** 2
+                dof_kp[dof_idx] = impedance * FREQ_N**2
                 dof_kd[dof_idx] = 2 * DAMP_RATIO * impedance * FREQ_N
                 print(f"PD Gains: {dof_kp[dof_idx]:.2f}, {dof_kd[dof_idx]:.2f}")
 

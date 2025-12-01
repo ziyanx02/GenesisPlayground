@@ -1,13 +1,13 @@
-import platform
 import os
+import platform
 import sys
 import time
 from pathlib import Path
 from typing import Any
-import yaml
 
 import fire
 import matplotlib
+import yaml
 
 matplotlib.use("Agg")  # Use non-interactive backend to prevent windows from showing
 import matplotlib.pyplot as plt
@@ -23,7 +23,6 @@ from utils import (
     cross_correlation,
     plot_metric_on_axis,
 )  # type: ignore
-
 
 WAIT_FOR_NEXT_CTRL = True
 
@@ -154,7 +153,9 @@ def run_single_dof_diagnosis(
     else:
         low_pass_alpha = env.low_pass_alpha
     fig, axes = plt.subplots(4, 1, figsize=(12, 12))
-    wave_types = ["SIN",]
+    wave_types = [
+        "SIN",
+    ]
     for i, wave_type in enumerate(wave_types):
         log = run_single_dof_wave_diagnosis(
             env,
@@ -262,7 +263,8 @@ def run_single_dof_diagnosis(
                     dof_vel_raw_raw,
                     dof_vel_raw,
                 )
-                * env.dt / env.decimation
+                * env.dt
+                / env.decimation
             )
             print("=" * 40)
             print(f"Low Pass Lag: {low_pass_lag:.4f}")
@@ -320,7 +322,12 @@ def run_single_dof_diagnosis(
         result["dof_vel_raw_SD_decimated"] = dof_vel_raw_SD_decimated
 
     os.makedirs(log_dir / "yaml", exist_ok=True)
-    with open(log_dir / "yaml" / f"{dof_name}_{sim_suffix}_{period * env.dt:.1f}_{kp:.1f}_{kd:.1f}_{feed_forward_ratio:.1f}_{low_pass_alpha:.1f}.yaml", "w") as f:
+    with open(
+        log_dir
+        / "yaml"
+        / f"{dof_name}_{sim_suffix}_{period * env.dt:.1f}_{kp:.1f}_{kd:.1f}_{feed_forward_ratio:.1f}_{low_pass_alpha:.1f}.yaml",
+        "w",
+    ) as f:
         yaml.dump(result, f)
 
     return result
@@ -409,7 +416,9 @@ def main(
         kp = env.robot.kp[dof_idx]
         kd = env.robot.kd[dof_idx]
     # periods = [1, 2, 4]
-    periods = [2,]
+    periods = [
+        2,
+    ]
     pds = [[kp / 2, kd / 2], [kp / 2, kd], [kp, kd], [kp, kd * 2], [kp * 2, kd * 2]]
     # feed_forward_ratios = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
     feed_forward_ratios = [0.0, 0.25, 0.5, 0.75, 1.0]

@@ -5,8 +5,8 @@ from pathlib import Path
 
 import fire
 import torch
-from gs_env.sim.envs.config.schema import MotionEnvArgs
 from gs_env.common.utils.math_utils import quat_apply, quat_from_angle_axis, quat_mul
+from gs_env.sim.envs.config.schema import MotionEnvArgs
 
 # Add examples to path to import utils
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -129,16 +129,18 @@ def main(
         "torso_link",
     ]
     num_tracking_links = len(tracking_link_names)
-    
+
     # Initialize Redis client with tracking links
     redis_client = RedisClient(
         url=redis_url, key=redis_key, device=device, num_tracking_links=num_tracking_links
     )
+    motion_elements = list(getattr(env_args, "observed_steps", {}).keys())
+    redis_client.set_motion_obs_elements(motion_elements)
 
     if view and sim:
         print("=" * 80)
         print("Starting motion visualization")
-        print(f"Mode: SIMULATION (VIEW)")
+        print("Mode: SIMULATION (VIEW)")
         print(f"Device: {device}")
         print(f"Redis URL: {redis_url}")
         print(f"Redis Key: {redis_key}")
@@ -158,9 +160,7 @@ def main(
         assert hasattr(env, "scene"), "Environment must have scene attribute for view mode"
 
         # Build link_name_to_idx mapping: index in tracking_link_names list
-        link_name_to_idx = {
-            link_name: idx for idx, link_name in enumerate(tracking_link_names)
-        }
+        link_name_to_idx = {link_name: idx for idx, link_name in enumerate(tracking_link_names)}
 
         last_update_time = time.time()
 
@@ -210,9 +210,7 @@ def main(
         step_id = 0
 
         # Build link_name_to_idx mapping: index in tracking_link_names list
-        link_name_to_idx = {
-            link_name: idx for idx, link_name in enumerate(tracking_link_names)
-        }
+        link_name_to_idx = {link_name: idx for idx, link_name in enumerate(tracking_link_names)}
 
         redis_client.update()
         redis_client.update_quat(env.base_quat)
@@ -250,7 +248,11 @@ def main(
                 elif key == "commands":
                     obs_gt = commands_t
                 elif key.startswith("ref_"):
-                    obs_gt = (getattr(redis_client, key) * env_args.obs_scales.get(key, 1.0)).reshape(1, -1)
+                    obs_gt = (
+                        getattr(redis_client, key) * env_args.obs_scales.get(key, 1.0)
+                    ).reshape(1, -1)
+                elif key == "motion_obs":
+                    obs_gt = redis_client.compute_motion_obs()
                 else:
                     obs_gt = getattr(env, key) * env_args.obs_scales.get(key, 1.0)
                 obs_components.append(obs_gt)
@@ -284,7 +286,6 @@ def main(
                             ref_link_pos[:, :2] += redis_client.ref_base_pos[:, :2]
                             ref_link_quat = quat_mul(ref_quat_yaw, ref_link_quat)
                             env.scene.set_obj_pose(link_name, pos=ref_link_pos, quat=ref_link_quat)  # type: ignore
-
 
             last_action_t = action_t.clone()
             step_id += 1
