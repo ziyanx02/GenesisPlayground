@@ -17,6 +17,7 @@ import torch
 from gs_agent.algos.config.registry import PPO_TELEOP_MLP, PPOArgs
 from gs_agent.algos.ppo import PPO
 from gs_agent.runners.config.registry import RUNNER_TELEOP_MLP
+from gs_agent.runners.config.schema import RunnerArgs
 from gs_agent.runners.onpolicy_runner import OnPolicyRunner
 from gs_agent.utils.logger import configure as logger_configure
 from gs_agent.utils.policy_loader import load_latest_model
@@ -259,7 +260,10 @@ def evaluate_policy(
             obs, _ = (
                 wrapped_env.get_observations()
             )  # Unpack actor and critic obs, use actor for policy
-            while env.motion_times[0] < env.motion_lib.get_motion_length(motion_id) - 0.02:
+            while (
+                env.motion_times[0]
+                < env.motion_lib.get_motion_length(torch.IntTensor([motion_id])) - 0.02
+            ):
                 # Get action from policy
                 with torch.no_grad():
                     action = inference_policy(obs)  # type: ignore[misc]
@@ -334,6 +338,150 @@ def evaluate_policy(
             env.scene.scene.viewer.run()  # type: ignore
         else:
             evaluate()
+    except KeyboardInterrupt:
+        pass
+
+
+def resume_training(
+    exp_name: str,
+    num_ckpt: int | None = None,
+    show_viewer: bool = False,
+    num_envs: int = 8192,
+    device: str = "cuda",
+    use_wandb: bool = True,
+    use_stored_config: bool = False,
+    env_args: Any = None,
+    algo_cfg: Any = None,
+    runner_args: Any = None,
+) -> None:
+    """Resume training from a checkpoint.
+
+    Args:
+        exp_name: Name of the experiment to resume
+        num_ckpt: Checkpoint number to resume from. If None, uses latest.
+        show_viewer: Whether to show viewer
+        num_envs: Number of parallel environments
+        device: Device to use ("cuda" or "cpu")
+        use_wandb: Whether to use wandb logging
+        use_stored_config: If True, use stored algorithm config (resume original training).
+                          If False, use PPO config (load checkpoint and train like train_policy).
+        env_args: Environment config
+        algo_cfg: Algorithm config
+        runner_args: Runner config
+    """
+
+    print("=" * 80)
+    print("RESUME MODE: Loading checkpoint and continuing training")
+    print("=" * 80)
+
+    # Find the experiment directory
+    log_pattern = f"logs/{exp_name}/*"
+    log_dirs = glob.glob(log_pattern)
+    if not log_dirs:
+        raise FileNotFoundError(f"No experiment directories found matching pattern: {log_pattern}")
+
+    log_dirs.sort(key=lambda x: os.path.getmtime(x), reverse=True)
+    exp_dir = log_dirs[0]
+    print(f"Resuming from experiment: {exp_dir}")
+
+    # Load checkpoint
+    if num_ckpt is not None:
+        ckpt_path = Path(exp_dir) / "checkpoints" / f"checkpoint_{num_ckpt:04d}.pt"
+        if not ckpt_path.exists():
+            raise FileNotFoundError(f"Checkpoint {ckpt_path} not found")
+    else:
+        ckpt_path = load_latest_model(Path(exp_dir))
+        num_ckpt = int(ckpt_path.stem.split("_")[-1])
+
+    print(f"Resuming from checkpoint: {ckpt_path}")
+
+    # Determine algorithm config based on use_stored_config flag
+    if use_stored_config:
+        # Load configs
+        print(f"Loading configs from experiment: {exp_dir}")
+        env_args = yaml_to_config(Path(exp_dir) / "configs" / "env_args.yaml", MotionEnvArgs)
+        runner_args = yaml_to_config(Path(exp_dir) / "configs" / "runner_args.yaml", RunnerArgs)
+        algo_cfg = yaml_to_config(Path(exp_dir) / "configs" / "algo_cfg.yaml", PPOArgs)
+
+    # Create environment
+    env = create_gs_env(
+        show_viewer=show_viewer,
+        num_envs=num_envs,
+        device=device,
+        args=env_args,
+    )
+
+    wrapped_env = GenesisEnvWrapper(env, device=env.device)
+
+    algorithm = PPO(env=wrapped_env, cfg=algo_cfg, device=wrapped_env.device)
+
+    # Load checkpoint
+    try:
+        algorithm.load_full_checkpoint(ckpt_path, load_optimizer=True)
+        start_iteration = algorithm.current_iter
+        print(f"Successfully loaded checkpoint. Resuming from iteration: {start_iteration}")
+    except Exception as e:
+        print(f"Error loading checkpoint: {e}")
+
+    # Update runner args to continue from where we left off
+    if use_stored_config:
+        remaining_iterations = runner_args.total_iterations - algorithm.current_iter
+    else:
+        remaining_iterations = runner_args.total_iterations
+    if remaining_iterations <= 0:
+        print("Training already completed!")
+        return
+
+    print(f"Continuing training for {remaining_iterations} iterations")
+
+    # Create new experiment name for resumed training
+    resume_exp_name = f"{exp_name}_resume"
+    resume_save_path = Path(f"./logs/{resume_exp_name}")
+
+    # Create runner with new save path for resumed training
+    runner = OnPolicyRunner(
+        algorithm=algorithm,
+        runner_args=runner_args.model_copy(
+            update={"save_path": resume_save_path, "total_iterations": remaining_iterations}
+        ),
+        device=wrapped_env.device,
+    )
+
+    # Set up logging for new experiment
+    logger = logger_configure(
+        folder=str(runner.save_dir),
+        format_strings=["stdout", "csv", "wandb"],
+        entity=None,
+        project=None,
+        exp_name=resume_exp_name,
+        mode="online" if use_wandb and (not show_viewer) else "disabled",
+    )
+
+    # Save configuration files to YAML in new experiment directory
+    print("Saving configuration files to YAML...")
+    config_dir = runner.save_dir / "configs"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    config_to_yaml(env_args, config_dir / "env_args.yaml")
+    config_to_yaml(algo_cfg, config_dir / "algo_cfg.yaml")
+    config_to_yaml(runner_args, config_dir / "runner_args.yaml")
+
+    def train() -> None:
+        nonlocal runner, logger
+        train_summary_info = runner.train(metric_logger=logger)
+        print("Training completed successfully!")
+        print(f"Training completed in {train_summary_info['total_time']:.2f} seconds.")
+        print(f"Total iterations: {train_summary_info['total_iterations']}.")
+        print(f"Total steps: {train_summary_info['total_steps']}.")
+        print(f"Final reward: {train_summary_info['final_reward']:.2f}.")
+
+    try:
+        if platform.system() == "Darwin" and show_viewer:
+            import threading
+
+            threading.Thread(target=train).start()
+            env.scene.scene.viewer.run()  # type: ignore
+        else:
+            train()
     except KeyboardInterrupt:
         pass
 
@@ -509,6 +657,8 @@ def main(
     device: str = "cuda",
     eval: bool = False,
     view: bool = False,
+    resume: bool = False,
+    use_stored_config: bool = False,
     exp_name: str | None = None,
     num_ckpt: int | None = None,
     use_wandb: bool = True,
@@ -546,7 +696,23 @@ def main(
         RUNNER_TELEOP_MLP, runner_overrides, prefixes=("cfgs.", "runner.")
     )
 
-    if eval:
+    if resume:
+        # Resume mode
+        assert exp_name is not None, "exp_name is required for resume"
+        resume_training(
+            exp_name=exp_name,
+            num_ckpt=num_ckpt,
+            show_viewer=show_viewer,
+            num_envs=num_envs,
+            device=device,
+            use_wandb=use_wandb,
+            use_stored_config=use_stored_config,
+            env_args=env_args,
+            algo_cfg=algo_cfg,
+            runner_args=runner_args,
+        )
+        return
+    elif eval:
         # Evaluation mode - don't create runner to avoid creating empty log dir
         print("Evaluation mode: Loading trained policy")
         assert exp_name is not None, "exp_name is required for evaluation"

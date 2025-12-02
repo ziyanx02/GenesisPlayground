@@ -11,8 +11,8 @@ from gs_agent.algos.config.schema import DaggerArgs
 from gs_agent.bases.algo import BaseAlgo
 from gs_agent.bases.env_wrapper import BaseEnvWrapper
 from gs_agent.bases.policy import Policy
-from gs_agent.buffers.config.schema import GAEBufferKey
-from gs_agent.buffers.gae_buffer import GAEBuffer
+from gs_agent.buffers.config.schema import DAGGERBufferKey
+from gs_agent.buffers.dagger_buffer import DAGGERBuffer
 from gs_agent.modules.critics import StateValueFunction
 from gs_agent.modules.models import NetworkFactory
 from gs_agent.modules.policies import GaussianPolicy
@@ -140,10 +140,9 @@ class DAgger(BaseAlgo):
 
     def _build_rollouts(self) -> None:
         # Use gae_lambda=0 to compute simple discounted returns (no GAE)
-        self._rollouts = GAEBuffer(
+        self._rollouts = DAGGERBuffer(
             num_envs=self._num_envs,
             max_steps=self._num_steps,
-            actor_obs_size=self._actor_obs_dim,
             critic_obs_size=self._critic_obs_dim,
             action_size=self._action_dim,
             device=self.device,
@@ -181,21 +180,12 @@ class DAgger(BaseAlgo):
 
                 # all tensors are of shape: [num_envs, dim]
                 transition = {
-                    GAEBufferKey.ACTOR_OBS: actor_obs,  # Student observations
-                    GAEBufferKey.CRITIC_OBS: critic_obs,
-                    GAEBufferKey.ACTIONS: teacher_action,  # Teacher actions
-                    GAEBufferKey.REWARDS: reward,
-                    GAEBufferKey.DONES: terminated,
-                    GAEBufferKey.VALUES: self._critic(critic_obs),
-                    GAEBufferKey.ACTION_LOGPROBS: torch.zeros(
-                        self._num_envs, 1, device=self.device
-                    ),  # Not used for imitation learning
-                    GAEBufferKey.MU: torch.zeros(
-                        self._num_envs, self._action_dim, device=self.device
-                    ),  # Not used
-                    GAEBufferKey.SIGMA: torch.zeros(
-                        self._num_envs, self._action_dim, device=self.device
-                    ),  # Not used
+                    DAGGERBufferKey.CRITIC_OBS: critic_obs,
+                    DAGGERBufferKey.TEACHER_ACTIONS: teacher_action,  # Teacher actions
+                    DAGGERBufferKey.STUDENT_ACTIONS: student_actions,  # Student actions
+                    DAGGERBufferKey.REWARDS: reward,
+                    DAGGERBufferKey.DONES: terminated,
+                    DAGGERBufferKey.VALUES: self._critic(critic_obs),
                 }
                 self._rollouts.append(transition)
 
@@ -261,16 +251,14 @@ class DAgger(BaseAlgo):
             "info": mean_info,
         }
 
-    def _train_one_batch(self, mini_batch: dict[GAEBufferKey, torch.Tensor]) -> dict[str, Any]:
+    def _train_one_batch(self, mini_batch: dict[DAGGERBufferKey, torch.Tensor]) -> dict[str, Any]:
         """Train one batch of rollouts."""
-        actor_obs = mini_batch[GAEBufferKey.ACTOR_OBS]
-        critic_obs = mini_batch[GAEBufferKey.CRITIC_OBS]
-        teacher_actions = mini_batch[GAEBufferKey.ACTIONS]
-        returns = mini_batch[GAEBufferKey.RETURNS]
-        target_values = mini_batch[GAEBufferKey.VALUES]
+        critic_obs = mini_batch[DAGGERBufferKey.CRITIC_OBS]
+        teacher_actions = mini_batch[DAGGERBufferKey.TEACHER_ACTIONS]
+        student_actions = mini_batch[DAGGERBufferKey.STUDENT_ACTIONS]
+        target_values = mini_batch[DAGGERBufferKey.VALUES]
+        returns = mini_batch[DAGGERBufferKey.RETURNS]
 
-        # Student policy forward (indeterministic)
-        student_actions, _ = self._actor(actor_obs, deterministic=False)
         # Compute MSE loss for behavior cloning (imitation loss)
         imitation_loss = (teacher_actions - student_actions).pow(2).mean()
 

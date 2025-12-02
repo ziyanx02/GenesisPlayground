@@ -18,6 +18,17 @@ class GAEBufferKey(str, Enum):
     RETURNS = "RETURNS"
 
 
+class DAGGERBufferKey(str, Enum):
+    CRITIC_OBS = "CRITIC_OBS"
+    TEACHER_ACTIONS = "TEACHER_ACTIONS"
+    STUDENT_ACTIONS = "STUDENT_ACTIONS"
+    REWARDS = "REWARDS"
+    DONES = "DONES"
+    VALUES = "VALUES"
+    ADVANTAGES = "ADVANTAGES"
+    RETURNS = "RETURNS"
+
+
 class BCBufferKey(str, Enum):
     OBSERVATIONS = "OBSERVATIONS"
     ACTIONS = "ACTIONS"
