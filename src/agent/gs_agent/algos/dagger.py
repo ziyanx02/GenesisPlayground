@@ -143,6 +143,7 @@ class DAgger(BaseAlgo):
         self._rollouts = DAGGERBuffer(
             num_envs=self._num_envs,
             max_steps=self._num_steps,
+            actor_obs_size=self._actor_obs_dim,
             critic_obs_size=self._critic_obs_dim,
             action_size=self._action_dim,
             device=self.device,
@@ -160,7 +161,7 @@ class DAgger(BaseAlgo):
             # collect rollouts and compute returns & advantages
             for _step in range(num_steps):
                 # Student acts (indeterministic)
-                student_actions, _ = self._actor(actor_obs, deterministic=False)
+                student_actions, _ = self._actor(actor_obs, deterministic=True)
 
                 # Get teacher observations using teacher config
                 teacher_obs, _ = self.env.get_observations(obs_args=self._teacher_env_args)
@@ -180,6 +181,7 @@ class DAgger(BaseAlgo):
 
                 # all tensors are of shape: [num_envs, dim]
                 transition = {
+                    DAGGERBufferKey.ACTOR_OBS: actor_obs,
                     DAGGERBufferKey.CRITIC_OBS: critic_obs,
                     DAGGERBufferKey.TEACHER_ACTIONS: teacher_action,  # Teacher actions
                     DAGGERBufferKey.STUDENT_ACTIONS: student_actions,  # Student actions
@@ -253,13 +255,14 @@ class DAgger(BaseAlgo):
 
     def _train_one_batch(self, mini_batch: dict[DAGGERBufferKey, torch.Tensor]) -> dict[str, Any]:
         """Train one batch of rollouts."""
+        actor_obs = mini_batch[DAGGERBufferKey.ACTOR_OBS]
         critic_obs = mini_batch[DAGGERBufferKey.CRITIC_OBS]
         teacher_actions = mini_batch[DAGGERBufferKey.TEACHER_ACTIONS]
-        student_actions = mini_batch[DAGGERBufferKey.STUDENT_ACTIONS]
         target_values = mini_batch[DAGGERBufferKey.VALUES]
         returns = mini_batch[DAGGERBufferKey.RETURNS]
 
         # Compute MSE loss for behavior cloning (imitation loss)
+        student_actions, _ = self._actor(actor_obs, deterministic=True)
         imitation_loss = (teacher_actions - student_actions).pow(2).mean()
 
         # Calculate value loss

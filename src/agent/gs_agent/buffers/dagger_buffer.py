@@ -20,6 +20,7 @@ class DAGGERBuffer(BaseBuffer):
         self,
         num_envs: int,
         max_steps: int,
+        actor_obs_size: int,
         critic_obs_size: int,
         action_size: int,
         device: torch.device = _DEFAULT_DEVICE,
@@ -30,6 +31,7 @@ class DAGGERBuffer(BaseBuffer):
         Args:
             num_envs (int): Number of parallel environments.
             max_steps (int): Maximum number of steps to store in the buffer.
+            actor_obs_size (int): Dimension of the actor observation space.
             critic_obs_size (int): Dimension of the critic observation space.
             action_size (int): Dimension of the action space.
             device (torch.device): Device to store the buffer on (default: CPU).
@@ -39,6 +41,7 @@ class DAGGERBuffer(BaseBuffer):
         super().__init__()
         self._num_envs = num_envs
         self._max_steps = max_steps
+        self._actor_obs_dim = actor_obs_size
         self._critic_obs_dim = critic_obs_size
         self._action_dim = action_size
         self._device = device
@@ -55,15 +58,15 @@ class DAGGERBuffer(BaseBuffer):
         self._final_value = None
 
         # Initialize buffer
-        self._buffer = self._init_buffers(critic_obs_size, action_size)
+        self._buffer = self._init_buffers(actor_obs_size, critic_obs_size, action_size)
 
-    def _init_buffers(self, critic_obs_dim: int, action_dim: int) -> TensorDict:
+    def _init_buffers(self, actor_obs_dim: int, critic_obs_dim: int, action_dim: int) -> TensorDict:
         max_steps, num_envs = self._max_steps, self._num_envs
         buffer = TensorDict(
             {
+                DAGGERBufferKey.ACTOR_OBS: torch.zeros(max_steps, num_envs, actor_obs_dim),
                 DAGGERBufferKey.CRITIC_OBS: torch.zeros(max_steps, num_envs, critic_obs_dim),
                 DAGGERBufferKey.TEACHER_ACTIONS: torch.zeros(max_steps, num_envs, action_dim),
-                DAGGERBufferKey.STUDENT_ACTIONS: torch.zeros(max_steps, num_envs, action_dim),
                 DAGGERBufferKey.REWARDS: torch.zeros(max_steps, num_envs, 1),
                 DAGGERBufferKey.DONES: torch.zeros(max_steps, num_envs, 1).byte(),
                 DAGGERBufferKey.VALUES: torch.zeros(max_steps, num_envs, 1),
@@ -81,12 +84,10 @@ class DAGGERBuffer(BaseBuffer):
         if self._idx >= self._max_steps:
             raise ValueError(f"Buffer full! Cannot append more than {self._max_steps} steps.")
         idx = self._idx
+        self._buffer[DAGGERBufferKey.ACTOR_OBS][idx] = transition[DAGGERBufferKey.ACTOR_OBS]
         self._buffer[DAGGERBufferKey.CRITIC_OBS][idx] = transition[DAGGERBufferKey.CRITIC_OBS]
         self._buffer[DAGGERBufferKey.TEACHER_ACTIONS][idx] = transition[
             DAGGERBufferKey.TEACHER_ACTIONS
-        ]
-        self._buffer[DAGGERBufferKey.STUDENT_ACTIONS][idx] = transition[
-            DAGGERBufferKey.STUDENT_ACTIONS
         ]
         self._buffer[DAGGERBufferKey.REWARDS][idx] = transition[DAGGERBufferKey.REWARDS]
         self._buffer[DAGGERBufferKey.DONES][idx] = transition[DAGGERBufferKey.DONES]
@@ -145,13 +146,13 @@ class DAGGERBuffer(BaseBuffer):
                 b_idx = bucket % self._num_envs
                 mini_batch_size = bucket.numel()
                 yield {
+                    DAGGERBufferKey.ACTOR_OBS: self._buffer[DAGGERBufferKey.ACTOR_OBS][
+                        t_idx, b_idx
+                    ].reshape(mini_batch_size, -1),
                     DAGGERBufferKey.CRITIC_OBS: self._buffer[DAGGERBufferKey.CRITIC_OBS][
                         t_idx, b_idx
                     ].reshape(mini_batch_size, -1),
                     DAGGERBufferKey.TEACHER_ACTIONS: self._buffer[DAGGERBufferKey.TEACHER_ACTIONS][
-                        t_idx, b_idx
-                    ].reshape(mini_batch_size, -1),
-                    DAGGERBufferKey.STUDENT_ACTIONS: self._buffer[DAGGERBufferKey.STUDENT_ACTIONS][
                         t_idx, b_idx
                     ].reshape(mini_batch_size, -1),
                     DAGGERBufferKey.VALUES: self._buffer[DAGGERBufferKey.VALUES][

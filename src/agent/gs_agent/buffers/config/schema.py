@@ -19,6 +19,7 @@ class GAEBufferKey(str, Enum):
 
 
 class DAGGERBufferKey(str, Enum):
+    ACTOR_OBS = "ACTOR_OBS"
     CRITIC_OBS = "CRITIC_OBS"
     TEACHER_ACTIONS = "TEACHER_ACTIONS"
     STUDENT_ACTIONS = "STUDENT_ACTIONS"
