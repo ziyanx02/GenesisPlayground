@@ -118,11 +118,23 @@ class DaggerArgs(BaseModel):
     # Network architecture
     policy_backbone: NetworkBackboneConfig = MLPConfig()
     teacher_backbone: NetworkBackboneConfig = MLPConfig()
+    critic_backbone: NetworkBackboneConfig = MLPConfig()
 
     # Learning rates
     lr: PositiveFloat = 3e-4
     """Policy learning rate"""
+    value_lr: PositiveFloat | None = None
+    """Value function learning rate. None means use the same learning rate as the policy"""
     max_grad_norm: PositiveFloat = 1.0
+
+    # Discount factor for returns (no GAE)
+    gamma: PositiveFloat = Field(default=0.99, ge=0, le=1)
+
+    # Value function
+    value_loss_coef: PositiveFloat = 1.0
+    use_clipped_value_loss: bool = False
+    clip_ratio: PositiveFloat = 0.2
+    """Clip ratio for clipped value loss"""
 
     # Teacher path and config
     teacher_path: Path
@@ -133,10 +145,8 @@ class DaggerArgs(BaseModel):
 
     # Training
     num_epochs: NonNegativeInt = 10
-    batch_size: NonNegativeInt = 256
+    num_mini_batches: NonNegativeInt = 4
     rollout_length: NonNegativeInt = 1000
-    max_buffer_size: NonNegativeInt = 1_000_000
-    max_num_batches: NonNegativeInt = 4
 
     # Optimizer
     optimizer_type: OptimizerType = OptimizerType.ADAM

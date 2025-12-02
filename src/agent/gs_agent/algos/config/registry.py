@@ -1,6 +1,12 @@
 from pathlib import Path
 
-from gs_agent.algos.config.schema import BCArgs, LearningRateType, OptimizerType, PPOArgs
+from gs_agent.algos.config.schema import (
+    BCArgs,
+    DaggerArgs,
+    LearningRateType,
+    OptimizerType,
+    PPOArgs,
+)
 from gs_agent.modules.config.registry import DEFAULT_MLP
 
 # default PPO config
@@ -144,6 +150,27 @@ BC_MOTION_MLP = BCArgs(
     max_buffer_size=24,
     max_num_batches=4,
     max_grad_norm=1.0,
+    optimizer_type=OptimizerType.ADAM,
+    weight_decay=0.0,
+)
+
+# DAgger motion config (for distilling from g1_motion_teacher to g1_motion with value function)
+DAGGER_MOTION_MLP = DaggerArgs(
+    policy_backbone=DEFAULT_MLP,
+    teacher_backbone=DEFAULT_MLP,
+    critic_backbone=DEFAULT_MLP,
+    lr=3e-4,
+    value_lr=None,
+    gamma=0.99,
+    value_loss_coef=1.0,
+    use_clipped_value_loss=True,
+    clip_ratio=0.2,
+    max_grad_norm=1.0,
+    teacher_path=Path(""),  # Will be set dynamically
+    teacher_config_path=Path(""),  # Will be set dynamically
+    num_epochs=5,
+    num_mini_batches=4,
+    rollout_length=24,
     optimizer_type=OptimizerType.ADAM,
     weight_decay=0.0,
 )
