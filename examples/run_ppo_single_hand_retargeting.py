@@ -22,7 +22,7 @@ import numpy as np
 import torch
 from gs_agent.algos.config.registry import PPO_HAND_IMITATOR_MLP
 from gs_agent.algos.ppo import PPO
-from gs_agent.runners.config.registry import RUNNER_HAND_IMITATOR_MLP
+from gs_agent.runners.config.registry import RUNNER_SINGLE_HAND_RETARGETING_MLP
 from gs_agent.runners.onpolicy_runner import OnPolicyRunner
 from gs_agent.utils.logger import configure as logger_configure
 from gs_agent.utils.policy_loader import load_latest_model
@@ -525,7 +525,7 @@ def main(
     env_args = apply_overrides_generic(env_args, env_overrides, prefixes=("cfgs.", "env."))
     algo_cfg = apply_overrides_generic(PPO_HAND_IMITATOR_MLP, algo_overrides, prefixes=("cfgs.", "algo."))
     runner_args = apply_overrides_generic(
-        RUNNER_HAND_IMITATOR_MLP, runner_overrides, prefixes=("cfgs.", "runner.")
+        RUNNER_SINGLE_HAND_RETARGETING_MLP, runner_overrides, prefixes=("cfgs.", "runner.")
     )
 
     if eval:

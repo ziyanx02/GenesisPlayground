@@ -59,3 +59,10 @@ RUNNER_HAND_IMITATOR_MLP = RunnerArgs(
     save_interval=500,
     save_path=Path("./logs/ppo_hand_imitator"),
 )
+
+RUNNER_SINGLE_HAND_RETARGETING_MLP = RunnerArgs(
+    total_iterations=10001,  # More iterations for trajectory following
+    log_interval=10,
+    save_interval=250,
+    save_path=Path("./logs/ppo_single_hand_retargeting"),
+)
