@@ -881,6 +881,12 @@ EnvArgsRegistry["single_hand_retargeting"] = SingleHandRetargetingEnvArgs(
     img_resolution=(480, 480),
     action_latency=1,
     obs_history_len=1,  # Not using history for now (paper uses single timestep)
+
+    # Tactile sensor configuration
+    use_tactile=True,
+    tactile_grid_path="assets/robot/wujihand-urdf/merged_tactile_grid_fingertips.json",
+    tactile_kn=2000.0,
+
     obs_scales={
         "target_wrist_vel": 10,
         "target_mano_joint_vel": 10,
@@ -898,6 +904,7 @@ EnvArgsRegistry["single_hand_retargeting"] = SingleHandRetargetingEnvArgs(
         "cos_q",
         "sin_q",
         "base_state",
+        "tactile_forces_flat",  # Tactile sensor readings (249 points)
 
         # # Privileged
         # "hand_dof_vel",
@@ -932,6 +939,7 @@ EnvArgsRegistry["single_hand_retargeting"] = SingleHandRetargetingEnvArgs(
         "cos_q",
         "sin_q",
         "base_state",
+        "tactile_forces_flat",  # Tactile sensor readings (249 points)
 
         # Privileged
         "hand_dof_vel",

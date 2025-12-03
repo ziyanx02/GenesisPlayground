@@ -131,3 +131,7 @@ class SingleHandRetargetingEnvArgs(EnvArgs):
     use_residual_learning: bool = False  # Enable residual learning with base policy
     base_policy_path: str | None = None  # Path to pretrained base policy checkpoint
     base_policy_obs_terms: list[str] | None = None  # Observation terms for base policy
+    # Tactile sensor configuration
+    use_tactile: bool = False
+    tactile_grid_path: str | None = None
+    tactile_kn: float = 2000.0

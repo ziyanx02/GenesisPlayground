@@ -52,6 +52,7 @@ critic_obs_key_dims = {
     "cos_q": 20,
     "sin_q": 20,
     "base_state": 10,
+    "tactile_forces_flat": 118,
 
     "hand_dof_vel": 20,
     "object_pos_rel": 3,

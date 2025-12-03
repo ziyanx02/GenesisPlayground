@@ -130,6 +130,18 @@ class SingleHandRetargetingEnv(BaseEnv):
             GUI=False,
         )
 
+        # == setup tactile sensors ==
+        self._use_tactile = args.use_tactile
+        self._tactile_sensors = {}
+        self._tactile_points = {}
+        self._tactile_sensor_configs = {}
+        self._tactile_visualizer = None
+
+        if self._use_tactile:
+            assert "tactile_forces_flat" in args.actor_obs_terms and "tactile_forces_flat" in args.critic_obs_terms, \
+                "tactile_forces_flat must be included in both actor and critic observation terms when use_tactile is True"
+            self._setup_tactile_sensors(args)
+
         # == build the scene ==
         self._scene.build()
 
@@ -786,15 +798,28 @@ class SingleHandRetargetingEnv(BaseEnv):
         # Base policy observation buffer
         self._base_policy_obs = torch.zeros((self.num_envs, self._compute_base_policy_obs_dim()), device=self._device)
 
+        # Tactile buffers (will be initialized after scene is built if tactile is enabled)
+        # Only store z-axis (normal) force component
+        if self._use_tactile:
+            self._total_tactile_points = sum(
+                config['num_points'] for config in self._tactile_sensor_configs.values()
+            )
+            self.tactile_forces_flat = torch.zeros((self.num_envs, self._total_tactile_points), device=self._device)
+            # Note: We'll add tactile_forces_flat to observation terms dynamically in get_observations
+        else:
+            self.tactile_forces_flat = torch.zeros((self.num_envs, 0), device=self._device)
+
         # ===== Build observation spaces =====
         # Following ManipTrans architecture: three observation components
 
-        # 1. Proprioception: q, cos(q), sin(q), base_state (ignore position)
+        # 1. Proprioception: q, cos(q), sin(q), base_state (ignore position), tactile
         prop_dim = (
             self._hand_dof_dim  # q
             + self._hand_dof_dim * 2  # cos(q) + sin(q)
             + 10  # base_state without position (quat + lin_vel + ang_vel)
         )
+        if self._use_tactile:
+            prop_dim += self._total_tactile_points  # tactile_forces_flat
 
         # 2. Privileged: dof_vel, object_state
         priv_dim = (
@@ -1177,6 +1202,28 @@ class SingleHandRetargetingEnv(BaseEnv):
 
         self.mano_fingertip_to_object[:] = self.env_mano_finger_tip_dists[env_indices, future_indices].reshape(self.num_envs, -1)  # (num_envs, K * 5)
 
+        # Update tactile sensor data if enabled (only z-axis / normal force)
+        if self._use_tactile:
+            tactile_forces_list = []
+            for link_name in sorted(self._tactile_sensors.keys()):
+                sensor = self._tactile_sensors[link_name]
+                config = self._tactile_sensor_configs[link_name]
+
+                # Read sensor data (returns num_points * 3 forces)
+                force_field_full = sensor.read()
+                num_points = config['num_points']
+
+                # Reshape to (num_points, 3) to extract z-axis component
+                force_field_3d = force_field_full.reshape(self.num_envs, num_points, 3)
+
+                # Extract only z-axis (normal) force: shape (num_envs, num_points)
+                force_z = force_field_3d[..., 2]
+
+                tactile_forces_list.append(force_z)
+
+            # Concatenate all sensor readings: shape (num_envs, total_tactile_points)
+            self.tactile_forces_flat[:] = torch.cat(tactile_forces_list, dim=-1)
+
         self.dof_force[:] = self._robot.dofs_control_force
 
 
@@ -1445,3 +1492,79 @@ class SingleHandRetargetingEnv(BaseEnv):
     def close(self) -> None:
         """Clean up resources."""
         pass
+
+    def _setup_tactile_sensors(self, args: SingleHandRetargetingEnvArgs) -> None:
+        """Setup tactile sensors from JSON grid file."""
+        import json
+
+        if args.tactile_grid_path is None:
+            raise ValueError("tactile_grid_path must be specified when use_tactile=True")
+
+        tactile_grid_path = Path(args.tactile_grid_path)
+        if not tactile_grid_path.exists():
+            raise FileNotFoundError(f"Tactile grid file not found: {tactile_grid_path}")
+
+        print(f"\n{'='*70}")
+        print(f"Loading tactile grid from: {tactile_grid_path}")
+        print(f"{'='*70}")
+
+        with open(tactile_grid_path, 'r') as f:
+            tactile_data = json.load(f)
+
+        links_data = tactile_data['links']
+        sensor_link_names = list(links_data.keys())
+
+        print(f"Configuring tactile sensors for links: {sensor_link_names}")
+
+        # Validate sensor links and store tactile points
+        for link_name in sensor_link_names:
+            if link_name not in links_data:
+                raise ValueError(f"Link '{link_name}' not found in tactile grid JSON")
+
+            link_data = links_data[link_name]
+            points = link_data.get('points', [])
+
+            if not points:
+                raise ValueError(f"No tactile points found for link '{link_name}'")
+
+            # Store local positions
+            local_positions = np.array(points, dtype=np.float32)
+            self._tactile_points[link_name] = local_positions
+
+            print(f"  {link_name}: {len(local_positions)} tactile points")
+
+        # Add TactileFieldSensors
+        print(f"\n{'='*70}")
+        print(f"Adding TactileFieldSensors")
+        print(f"{'='*70}")
+
+        for link_name in sensor_link_names:
+            link_data = links_data[link_name]
+            link_idx_local = self.robot.get_link(link_name).idx_local
+            assert link_idx_local == link_data['link_idx_local'], f"Link index mismatch for {link_name}: {link_idx_local} vs {link_data['link_idx_local']}"
+            num_points = link_data['num_points']
+            local_positions = self._tactile_points[link_name]
+
+            print(f"\nSensor for {link_name}:")
+            print(f"  Link index (local): {link_idx_local}")
+            print(f"  Tactile points: {num_points}")
+
+            # Create TactileFieldSensor with custom tactile points
+            sensor = self._scene.scene.add_sensor(
+                gs.sensors.TactileField(
+                    entity_idx=self._robot._robot_entity.idx,
+                    link_idx_local=link_idx_local,
+                    indenter_entity_idx=self._object.idx,
+                    indenter_link_idx_local=0,
+                    tactile_points_local=local_positions,
+                    kn=args.tactile_kn,
+                )
+            )
+
+            self._tactile_sensors[link_name] = sensor
+            self._tactile_sensor_configs[link_name] = {
+                'num_points': num_points,
+                'link_idx_local': link_idx_local,
+            }
+
+            print(f"  ✓ TactileFieldSensor added")
