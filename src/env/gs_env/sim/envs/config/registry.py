@@ -745,16 +745,42 @@ EnvArgsRegistry["single_hand_retargeting"] = SingleHandRetargetingEnvArgs(
     objects_args=[],  # Object mesh loaded from trajectory file
     sensors_args=[],
     reward_term="hand_imitator",
+
     # Trajectory configuration
     trajectory_path="output_trajectories_mujoco",  # Directory containing all trajectory .pkl files
     object_id="O02@0032@00001",
     max_episode_length=2500,  # Max steps per episode
     obs_future_length=1,  # Number of future trajectory frames to observe (K in paper)
+
     random_state_init=True,  # Randomize initial timestep in trajectory
     use_augmentation=False,
     aug_translation_range=(-0.5, 0.5),  # XY translation range (meters)
     aug_rotation_z_range=(-math.pi, math.pi),  # Z-axis rotation range (radians)
     aug_scale_range=(1.0, 2.0),  # Uniform scale range for workspace
+
+    # Residual learning configuration
+    use_residual_learning=True,  # Set to True to enable residual learning
+    base_policy_path="logs/ppo_hand_imitator/20251203_130756/checkpoints/checkpoint_3000.pt",  # Path to base policy checkpoint
+    base_policy_obs_terms=[
+        # Proprioception: robot state
+        "hand_dof_pos",  # Raw joint positions (20D), (q)
+        "cos_q",
+        "sin_q",
+        "base_state",
+
+        # Target
+        "delta_wrist_pos",  # 3 * K
+        "target_wrist_vel",  # 3 * K
+        "delta_wrist_vel",  # 3 * K
+        "target_wrist_quat",  # 4 * K
+        "delta_wrist_quat",  # 4 * K
+        "target_wrist_ang_vel",  # 3 * K
+        "delta_wrist_ang_vel",  # 3 * K
+        "delta_finger_link_pos",  # 20 * 3 * K
+        "target_mano_joint_vel",  # 20 * 3 * K
+        "delta_finger_link_vel",  # 20 * 3 * K
+    ],
+
     joint_mapping={
             # Thumb (finger1 in URDF)
             "thumb_proximal": "finger1_link2",

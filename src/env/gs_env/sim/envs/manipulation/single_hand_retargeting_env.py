@@ -38,6 +38,9 @@ from gs_env.common.utils.maniptrans_util import (
 from gs_env.sim.envs.config.schema import SingleHandRetargetingEnvArgs
 from gs_env.sim.robots.manipulators import WUJIHand
 from gs_env.sim.scenes import FlatScene
+from gs_agent.algos.config.registry import PPO_HAND_IMITATOR_MLP
+from gs_agent.modules.models import NetworkFactory
+from gs_agent.modules.policies import GaussianPolicy
 
 _DEFAULT_DEVICE = torch.device("cpu")
 
@@ -165,6 +168,57 @@ class SingleHandRetargetingEnv(BaseEnv):
 
         # Initialize buffers
         self._init()
+
+        # ===== Load base policy for residual learning if enabled =====
+        self._use_residual_learning = args.use_residual_learning
+        self._base_policy = None
+        self._base_policy_obs_terms = None
+
+        if self._use_residual_learning:
+            if args.base_policy_path is None:
+                raise ValueError("base_policy_path must be provided when use_residual_learning=True")
+            if args.base_policy_obs_terms is None:
+                raise ValueError("base_policy_obs_terms must be provided when use_residual_learning=True")
+
+            print(f"\n{'='*80}")
+            print(f"Loading base policy for residual learning from: {args.base_policy_path}")
+            print(f"{'='*80}\n")
+
+            # Store base policy observation terms
+            self._base_policy_obs_terms = args.base_policy_obs_terms
+
+            # Compute base policy observation dimension
+            self._base_policy_obs_dim = self._compute_base_policy_obs_dim()
+            self._base_action_dim = self._hand_dof_dim + self._base_dof_dim  # 26 for free base
+
+            print(f"Base policy observation dimension: {self._base_policy_obs_dim}")
+            print(f"Base policy action dimension: {self._base_action_dim}")
+            
+            # Create policy backbone
+            policy_backbone = NetworkFactory.create_network(
+                network_backbone_args=PPO_HAND_IMITATOR_MLP.policy_backbone,
+                input_dim=self._base_policy_obs_dim,
+                output_dim=self._base_action_dim,
+                device=self._device,
+            )
+
+            # Create base policy
+            self._base_policy = GaussianPolicy(
+                policy_backbone=policy_backbone,
+                action_dim=self._base_action_dim,
+            ).to(self._device)
+
+            # Load checkpoint
+            checkpoint = torch.load(args.base_policy_path, map_location=self._device)
+            self._base_policy.load_state_dict(checkpoint['model_state_dict'])
+
+            # Set to eval mode
+            self._base_policy.eval()
+
+            print(f"Base policy loaded successfully!")
+            print(f"Base policy checkpoint iteration: {checkpoint['iter']}")
+            print(f"{'='*80}\n")
+
         self.reset()
 
     def _load_trajectory_data(self) -> None:
@@ -233,6 +287,22 @@ class SingleHandRetargetingEnv(BaseEnv):
         print(f"  - Max trajectory length: {self._max_traj_length}")
         print(f"  - Trajectory lengths: {self._traj_lengths}")
         print(f"{'='*80}\n")
+
+    def _compute_base_policy_obs_dim(self) -> int:
+        """Compute base policy observation dimension from observation terms.
+
+        This should be called after _init() so all buffers are created.
+        """
+        total_dim = 0
+        for key in self._args.base_policy_obs_terms:
+            obs_buffer = getattr(self, key)
+            if obs_buffer.dim() == 1:
+                # Single environment buffer, dimension is the tensor size
+                total_dim += obs_buffer.shape[0]
+            else:
+                # Multiple environment buffer (num_envs, dim)
+                total_dim += obs_buffer.shape[1]
+        return total_dim
 
     def _pad_and_stack(self, arrays: list[np.ndarray]) -> np.ndarray:
         """Pad arrays to same length and stack them.
@@ -713,6 +783,9 @@ class SingleHandRetargetingEnv(BaseEnv):
         self.camera_lookat = torch.tensor([0.0, 0.0, 0.4], device=self._device)
         self.camera_pos = torch.tensor([0.5, -0.5, 0.5], device=self._device)
 
+        # Base policy observation buffer
+        self._base_policy_obs = torch.zeros((self.num_envs, self._compute_base_policy_obs_dim()), device=self._device)
+
         # ===== Build observation spaces =====
         # Following ManipTrans architecture: three observation components
 
@@ -1128,6 +1201,17 @@ class SingleHandRetargetingEnv(BaseEnv):
             obs_components.append(obs_gt)
         critic_obs = torch.cat(obs_components, dim=-1)
 
+        # Build base policy observation if residual learning is enabled
+        if self._use_residual_learning:
+            obs_components = []
+            for key in self._base_policy_obs_terms:
+                obs_gt = getattr(self, key) * self._args.obs_scales.get(key, 1.0)
+                obs_noise = torch.randn_like(obs_gt) * self._args.obs_noises.get(key, 0.0)
+                if self._eval_mode:
+                    obs_noise *= 0
+                obs_components.append(obs_gt + obs_noise)
+            self._base_policy_obs[:] = torch.cat(obs_components, dim=-1)
+
         return actor_obs, critic_obs
 
     def _pre_step(self) -> None:
@@ -1143,8 +1227,22 @@ class SingleHandRetargetingEnv(BaseEnv):
         - For free base: first 6 DOFs are base (3 pos + 3 rot), rest are fingers
         - Apply different scaling to base and finger actions
         - Target position = current position + scaled delta
+
+        For residual learning:
+        - If enabled, compute base policy action from precomputed base policy observations
+        - Add residual action (from training policy) to base action
+        - Use combined action for control
         """
         action = action.detach().to(self._device)
+
+        # ===== Residual learning: compute base action and add residual =====
+        if self._use_residual_learning:
+            # Get base action from base policy (deterministic, using precomputed observations)
+            with torch.no_grad():
+                base_action, _ = self._base_policy(self._base_policy_obs, deterministic=True)
+
+            # Add residual action to base action
+            action = base_action + action
 
         # Update action history buffer (shift and add new action)
         self._action_buf[:] = torch.cat([self._action_buf[:, :, 1:], action.unsqueeze(-1)], dim=-1)

@@ -127,3 +127,7 @@ class SingleHandRetargetingEnvArgs(EnvArgs):
     aug_translation_range: tuple[float, float] = (-0.1, 0.1)  # XY translation range (meters)
     aug_rotation_z_range: tuple[float, float] = (-np.pi / 4, np.pi / 4)  # Z-axis rotation range (radians)
     aug_scale_range: tuple[float, float] = (0.9, 1.1)  # Uniform scale range for workspace
+    # Residual learning configuration
+    use_residual_learning: bool = False  # Enable residual learning with base policy
+    base_policy_path: str | None = None  # Path to pretrained base policy checkpoint
+    base_policy_obs_terms: list[str] | None = None  # Observation terms for base policy
