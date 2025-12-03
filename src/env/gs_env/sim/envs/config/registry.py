@@ -7,6 +7,7 @@ from gs_env.sim.envs.config.schema import (
     ManipulationEnvArgs,
     MotionEnvArgs,
     WalkingEnvArgs,
+    SingleHandRetargetingEnvArgs
 )
 from gs_env.sim.objects.config.registry import ObjectArgsRegistry
 from gs_env.sim.robots.config.registry import RobotArgsRegistry
@@ -590,7 +591,7 @@ EnvArgsRegistry["wuji_hand_imitator"] = HandImitatorEnvArgs(
         "size": 0.05,
     },
     max_episode_length=2500,  # Max steps per episode
-    obs_future_length=3,  # Number of future trajectory frames to observe (K in paper)
+    obs_future_length=1,  # Number of future trajectory frames to observe (K in paper)
     random_state_init=True,  # Randomize initial timestep in trajectory
     use_augmentation=True,
     aug_translation_range=(-0.5, 0.5),  # XY translation range (meters)
@@ -732,5 +733,210 @@ EnvArgsRegistry["wuji_hand_imitator"] = HandImitatorEnvArgs(
         "delta_finger_link_pos",  # 20 * 3 * K
         "target_mano_joint_vel",  # 20 * 3 * K
         "delta_finger_link_vel",  # 20 * 3 * K
+    ],
+)
+
+
+EnvArgsRegistry["single_hand_retargeting"] = SingleHandRetargetingEnvArgs(
+    env_name="SingleHandRetargetingEnv",
+    gs_init_args=GenesisInitArgsRegistry["default"],
+    scene_args=SceneArgsRegistry["flat_scene_default"],
+    robot_args=RobotArgsRegistry["wuji_hand_free_base"],  # Free base for trajectory following
+    objects_args=[],  # Object mesh loaded from trajectory file
+    sensors_args=[],
+    reward_term="hand_imitator",
+    # Trajectory configuration
+    trajectory_path="output_trajectories_mujoco",  # Directory containing all trajectory .pkl files
+    object_id="O02@0032@00001",
+    max_episode_length=2500,  # Max steps per episode
+    obs_future_length=1,  # Number of future trajectory frames to observe (K in paper)
+    random_state_init=True,  # Randomize initial timestep in trajectory
+    use_augmentation=False,
+    aug_translation_range=(-0.5, 0.5),  # XY translation range (meters)
+    aug_rotation_z_range=(-math.pi, math.pi),  # Z-axis rotation range (radians)
+    aug_scale_range=(1.0, 2.0),  # Uniform scale range for workspace
+    joint_mapping={
+            # Thumb (finger1 in URDF)
+            "thumb_proximal": "finger1_link2",
+            "thumb_intermediate": "finger1_link3",
+            "thumb_distal": "finger1_link4",  # map to both link3 and link4
+            "thumb_tip": "finger1_tip_link",
+            # Index (finger2 in URDF)
+            "index_proximal": "finger2_link2",  # link1 is abduction
+            "index_intermediate": "finger2_link3",
+            "index_distal": "finger2_link4",
+            "index_tip": "finger2_tip_link",
+            # Middle (finger3 in URDF)
+            "middle_proximal": "finger3_link2",
+            "middle_intermediate": "finger3_link3",
+            "middle_distal": "finger3_link4",
+            "middle_tip": "finger3_tip_link",
+            # Ring (finger4 in URDF)
+            "ring_proximal": "finger4_link2",
+            "ring_intermediate": "finger4_link3",
+            "ring_distal": "finger4_link4",
+            "ring_tip": "finger4_tip_link",
+            # Pinky (finger5 in URDF)
+            "pinky_proximal": "finger5_link2",
+            "pinky_intermediate": "finger5_link3",
+            "pinky_distal": "finger5_link4",
+            "pinky_tip": "finger5_tip_link",
+        },
+    reward_args={
+        ### Trajectory Tracking Rewards ###
+        "WristPositionTrackingReward": {
+            "scale": 0.1,
+            "k": 40.0,
+        },
+        "WristRotationTrackingReward": {
+            "scale": 0.6,
+            "k": 1.0,
+        },
+        "WristVelocityTrackingReward": {
+            "scale": 0.1,
+            "k": 1.0,
+        },
+        "WristAngularVelocityTrackingReward": {
+            "scale": 0.05,
+            "k": 1.0,
+        },
+        "FingerJointPositionTrackingReward": {
+            "scale": 1.0,
+            # Per-finger weights
+            "thumb_weight": 0.9,
+            "index_weight": 0.8,
+            "middle_weight": 0.75,
+            "ring_weight": 0.6,
+            "pinky_weight": 0.6,
+            # Level weights
+            "level_1_weight": 0.5,
+            "level_2_weight": 0.3,
+            # Exponential decay rates
+            "thumb_k": 100.0,
+            "index_k": 90.0,
+            "middle_k": 80.0,
+            "ring_k": 60.0,
+            "pinky_k": 60.0,
+            "level_1_k": 50.0,
+            "level_2_k": 40.0,
+        },
+        "JointVelocityTrackingReward": {
+            "scale": 0.1,
+            "k": 1.0,
+        },
+        ### Power Penalties ###
+        "DOFPowerPenalty": {
+            "scale": 0.5,
+            "k": 10.0,
+        },
+        "WristPowerPenalty": {
+            "scale": 0.5,
+            "k": 2.0,
+        },
+        "ObjectPositionTrackingReward": {
+            "scale": 5.0,
+            "k": 80.0,
+        },
+        "ObjectRotationTrackingReward": {
+            "scale": 1.0,
+            "k": 3.0,
+        },
+        "ObjectVelocityTrackingReward": {
+            "scale": 0.1,
+            "k": 1.0,
+        },
+        "ObjectAngularVelocityTrackingReward": {
+            "scale": 0.1,
+            "k": 1.0,
+        },
+
+        # TODO: add penalty for tactile contact force
+    },
+    img_resolution=(480, 480),
+    action_latency=1,
+    obs_history_len=1,  # Not using history for now (paper uses single timestep)
+    obs_scales={
+        "target_wrist_vel": 10,
+        "target_mano_joint_vel": 10,
+        "delta_wrist_vel": 5,
+        "delta_wrist_pos": 10,
+        "delta_finger_link_vel": 5,
+        "delta_finger_link_pos": 10,
+    },
+    obs_noises={
+        # TODO
+    },
+    actor_obs_terms=[
+        # Proprioception: robot state
+        "hand_dof_pos",  # Raw joint positions (20D), (q)
+        "cos_q",
+        "sin_q",
+        "base_state",
+
+        # # Privileged
+        # "hand_dof_vel",
+
+        # Target
+        "delta_wrist_pos",  # 3 * K
+        "target_wrist_vel",  # 3 * K
+        "delta_wrist_vel",  # 3 * K
+        "target_wrist_quat",  # 4 * K
+        "delta_wrist_quat",  # 4 * K
+        "target_wrist_ang_vel",  # 3 * K
+        "delta_wrist_ang_vel",  # 3 * K
+        "delta_finger_link_pos",  # 20 * 3 * K
+        "target_mano_joint_vel",  # 20 * 3 * K
+        "delta_finger_link_vel",  # 20 * 3 * K
+
+        # Target object
+        "delta_object_pos",  # 3 * K
+        "target_object_vel",  # 3 * K
+        "delta_object_vel",  # 3 * K
+        "target_object_quat",  # 4 * K
+        "delta_object_quat",  # 4 * K
+        "target_object_ang_vel",  # 3 * K
+        "delta_object_ang_vel",  # 3 * K
+        "object_to_finger_tips",  # 5
+        "mano_fingertip_to_object",  # 5 * K
+        "bps",  # BPS point cloud of object, 128
+    ],
+    critic_obs_terms=[
+        # Proprioception: robot state
+        "hand_dof_pos",  # Raw joint positions (20D), (q)
+        "cos_q",
+        "sin_q",
+        "base_state",
+
+        # Privileged
+        "hand_dof_vel",
+        "object_pos_rel",
+        "object_quat",
+        "object_lin_vel",
+        "object_ang_vel",
+        "object_com_pos",
+
+        # Target hand
+        "delta_wrist_pos",  # 3 * K
+        "target_wrist_vel",  # 3 * K
+        "delta_wrist_vel",  # 3 * K
+        "target_wrist_quat",  # 4 * K
+        "delta_wrist_quat",  # 4 * K
+        "target_wrist_ang_vel",  # 3 * K
+        "delta_wrist_ang_vel",  # 3 * K
+        "delta_finger_link_pos",  # 20 * 3 * K
+        "target_mano_joint_vel",  # 20 * 3 * K
+        "delta_finger_link_vel",  # 20 * 3 * K
+
+        # Target object
+        "delta_object_pos",  # 3 * K
+        "target_object_vel",  # 3 * K
+        "delta_object_vel",  # 3 * K
+        "target_object_quat",  # 4 * K
+        "delta_object_quat",  # 4 * K
+        "target_object_ang_vel",  # 3 * K
+        "delta_object_ang_vel",  # 3 * K
+        "object_to_finger_tips",  # 5
+        "mano_fingertip_to_object",  # 5 * K
+        "bps",  # BPS point cloud of object, 128
     ],
 )

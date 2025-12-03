@@ -40,6 +40,28 @@ class WristPositionTrackingReward(RewardTerm):
         return torch.exp(-self.k * dist)
 
 
+class ObjectPositionTrackingReward(RewardTerm):
+    """
+    Reward for tracking target object position.
+    Uses exponential reward: exp(-k * position_error)
+
+    Required state keys:
+        object_pos: Current object position (B, 3)
+        target_object_pos: Target object position from trajectory (B, K, 3)
+    """
+
+    required_keys = ("object_pos", "target_object_pos")
+
+    def __init__(self, scale: float = 5.0, k: float = 80.0, name: str | None = None):
+        super().__init__(scale, name)
+        self.k = k
+    
+    def _compute(self, object_pos: torch.Tensor, target_object_pos: torch.Tensor) -> torch.Tensor:  # type: ignore
+        diff = target_object_pos[:, 0] - object_pos
+        dist = torch.norm(diff, dim=-1)
+        return torch.exp(-self.k * dist)
+
+
 class WristRotationTrackingReward(RewardTerm):
     """
     Reward for tracking target wrist rotation.
@@ -69,6 +91,22 @@ class WristRotationTrackingReward(RewardTerm):
         return torch.exp(-self.k * torch.abs(angle))
 
 
+class ObjectRotationTrackingReward(RewardTerm):
+
+    required_keys = ("object_quat", "target_object_quat")
+
+    def __init__(self, scale: float = 1.0, k: float = 3.0, name: str | None = None):
+        super().__init__(scale, name)
+        self.k = k
+
+    def _compute(self, object_quat: torch.Tensor, target_object_quat: torch.Tensor) -> torch.Tensor:  # type: ignore
+        diff_quat = quat_mul(target_object_quat[:, :4], quat_conjugate(object_quat))
+        w = diff_quat[..., 0]
+        angle = 2 * torch.acos(torch.clamp(w, -1.0, 1.0))
+
+        return torch.exp(-self.k * torch.abs(angle))
+
+
 class WristVelocityTrackingReward(RewardTerm):
     """
     Reward for tracking target wrist linear velocity.
@@ -90,6 +128,20 @@ class WristVelocityTrackingReward(RewardTerm):
         return torch.exp(-self.k * error)
 
 
+class ObjectVelocityTrackingReward(RewardTerm):
+
+    required_keys = ("object_lin_vel", "target_object_vel")
+
+    def __init__(self, scale: float = 0.1, k: float = 1.0, name: str | None = None):
+        super().__init__(scale, name)
+        self.k = k
+
+    def _compute(self, object_lin_vel: torch.Tensor, target_object_vel: torch.Tensor) -> torch.Tensor:  # type: ignore
+        diff = target_object_vel[:, :3] - object_lin_vel
+        error = torch.abs(diff).mean(dim=-1)
+        return torch.exp(-self.k * error)
+
+
 class WristAngularVelocityTrackingReward(RewardTerm):
     """
     Reward for tracking target wrist angular velocity.
@@ -107,6 +159,20 @@ class WristAngularVelocityTrackingReward(RewardTerm):
 
     def _compute(self, base_ang_vel: torch.Tensor, target_wrist_ang_vel: torch.Tensor) -> torch.Tensor:  # type: ignore
         diff = target_wrist_ang_vel[..., :3] - base_ang_vel
+        error = torch.abs(diff).mean(dim=-1)
+        return torch.exp(-self.k * error)
+    
+
+class ObjectAngularVelocityTrackingReward(RewardTerm):
+
+    required_keys = ("object_ang_vel", "target_object_ang_vel")
+
+    def __init__(self, scale: float = 0.1, k: float = 1.0, name: str | None = None):
+        super().__init__(scale, name)
+        self.k = k
+
+    def _compute(self, object_ang_vel: torch.Tensor, target_object_ang_vel: torch.Tensor) -> torch.Tensor:  # type: ignore
+        diff = target_object_ang_vel[:, :3] - object_ang_vel
         error = torch.abs(diff).mean(dim=-1)
         return torch.exp(-self.k * error)
 

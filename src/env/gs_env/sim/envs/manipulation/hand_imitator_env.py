@@ -102,12 +102,6 @@ class HandImitatorEnv(BaseEnv):
         self._hand_dof_dim = self._robot._gripper_dof_dim
         self._base_dof_dim = self._robot._arm_dof_dim
 
-        # == setup object (optional, for visualization or contact) ==
-        if args.use_object:
-            self._setup_object(args)
-        else:
-            self._object = None
-
         # == set up camera for rendering ==
         self._floating_camera = self._scene.scene.add_camera(
             res=(480, 480),
@@ -485,34 +479,6 @@ class HandImitatorEnv(BaseEnv):
         }
 
 
-    def _setup_object(self, args: HandImitatorEnvArgs) -> None:
-        """Setup manipulated object (optional)."""
-        if args.object_mesh_path is not None:
-            # Load custom mesh
-            self._object = self._scene.scene.add_entity(
-                gs.morphs.Mesh(
-                    file=str(args.object_mesh_path),
-                    pos=args.object_args["position"],
-                    euler=(90, 0, 0),  # Adjust orientation as needed
-                ),
-                material=gs.materials.Rigid(
-                    rho=100.0,
-                    friction=0.8,
-                ),
-            )
-        else:
-            # Use default box
-            self._object = self._scene.scene.add_entity(
-                gs.morphs.Box(
-                    size=(args.object_args["size"],) * 3,
-                    pos=args.object_args["position"],
-                ),
-                material=gs.materials.Rigid(
-                    rho=100.0,
-                    friction=0.8,
-                ),
-            )
-
     def _init(self) -> None:
         """Initialize observation and action spaces and environment buffers."""
 
@@ -581,8 +547,8 @@ class HandImitatorEnv(BaseEnv):
         # Additional buffers that matches ManipTrans structure
         self.cos_q = torch.zeros((self.num_envs, self._hand_dof_dim), device=self._device)
         self.sin_q = torch.zeros((self.num_envs, self._hand_dof_dim), device=self._device)
-        # Combine into base_state (13D: pos, quat, lin_vel, ang_vel)
-        self.base_state = torch.zeros((self.num_envs, 13), device=self._device)
+        # Combine into base_state (10D: quat, lin_vel, ang_vel)
+        self.base_state = torch.zeros((self.num_envs, 10), device=self._device)
         # Buffer related to target trajectory following
         K = self._obs_future_length
         self.target_wrist_pos = torch.zeros((self.num_envs, K * 3), device=self._device)
@@ -601,19 +567,6 @@ class HandImitatorEnv(BaseEnv):
         self.finger_link_vel = torch.zeros((self.num_envs, 20, 3), device=self._device)
         self.delta_finger_link_pos = torch.zeros((self.num_envs, K * 20 * 3), device=self._device)
         self.delta_finger_link_vel = torch.zeros((self.num_envs, K * 20 * 3), device=self._device)
-
-
-        # Object state buffers (if object exists)
-        if self._object is not None:
-            self.object_pos = torch.zeros((self.num_envs, 3), device=self._device)
-            self.object_quat = torch.zeros((self.num_envs, 4), device=self._device)
-            self.object_lin_vel = torch.zeros((self.num_envs, 3), device=self._device)
-            self.object_ang_vel = torch.zeros((self.num_envs, 3), device=self._device)
-        else:
-            self.object_pos = torch.zeros((self.num_envs, 0), device=self._device)
-            self.object_quat = torch.zeros((self.num_envs, 0), device=self._device)
-            self.object_lin_vel = torch.zeros((self.num_envs, 0), device=self._device)
-            self.object_ang_vel = torch.zeros((self.num_envs, 0), device=self._device)
 
         # Environment state buffers
         self.time_since_reset = torch.zeros(self.num_envs, device=self._device)  # Episode time for warmup checks
@@ -649,15 +602,11 @@ class HandImitatorEnv(BaseEnv):
         prop_dim = (
             self._hand_dof_dim  # q
             + self._hand_dof_dim * 2  # cos(q) + sin(q)
-            + 13  # base_state without position (quat + lin_vel + ang_vel)
+            + 10  # base_state without position (quat + lin_vel + ang_vel)
         )
-        self.obs_proprioception = torch.zeros((self.num_envs, prop_dim), device=self._device)
 
-        # 2. Privileged: dof_vel, object_state (if available)
+        # 2. Privileged: dof_vel
         priv_dim = self._hand_dof_dim  # dof_vel
-        if self._object is not None:
-            priv_dim += 13  # object pos, quat, lin_vel, ang_vel
-        self.obs_privileged = torch.zeros((self.num_envs, priv_dim), device=self._device)
 
         # 3. Target: reference trajectory information for next K timesteps
         # Following ManipTrans: delta_wrist_pos, wrist_vel, delta_wrist_vel, wrist_quat, delta_wrist_quat,
@@ -675,7 +624,6 @@ class HandImitatorEnv(BaseEnv):
             + self._hand_dof_dim * 3 * K  # finger link vel
             + self._hand_dof_dim * 3 * K  # delta finger_link_vel
         )
-        self.obs_target = torch.zeros((self.num_envs, target_dim), device=self._device)
 
         # Build observation spaces
         self._actor_observation_space = gym.spaces.Dict({
@@ -731,6 +679,12 @@ class HandImitatorEnv(BaseEnv):
             )
             self.env_traj_idx[envs_idx] = reset_traj_idx
             self.env_traj_lengths[envs_idx] = reset_traj_lengths
+
+            for key in self._traj_data.keys():
+                self._traj_data[key][envs_idx] = self._traj_data_template[key][reset_traj_idx]
+            # Also update MANO data
+            self.env_mano_joint_poses[envs_idx] = self._mano_joint_poses[reset_traj_idx]
+            self.env_mano_joint_velocities[envs_idx] = self._mano_joint_velocities[reset_traj_idx]
 
         # ===== Apply trajectory augmentation if enabled =====
         if self._args.use_augmentation and not self._eval_mode:
@@ -891,13 +845,13 @@ class HandImitatorEnv(BaseEnv):
         # Scale factor for error thresholds (from ManipTrans, typically 0.7)
         scale_factor = 0.7
         failed_execute = (
-            (diff_thumb_tip > 0.04 / scale_factor)
-            | (diff_index_tip > 0.045 / scale_factor)
-            | (diff_middle_tip > 0.05 / scale_factor)
-            | (diff_ring_tip > 0.06 / scale_factor)
-            | (diff_pinky_tip > 0.06 / scale_factor)
-            | (diff_level_1 > 0.07 / scale_factor)
-            | (diff_level_2 > 0.08 / scale_factor)
+            (diff_thumb_tip > 0.04 / 0.7 * scale_factor)
+            | (diff_index_tip > 0.045 / 0.7 * scale_factor)
+            | (diff_middle_tip > 0.05 / 0.7 * scale_factor)
+            | (diff_ring_tip > 0.06 / 0.7 * scale_factor)
+            | (diff_pinky_tip > 0.06 / 0.7 * scale_factor)
+            | (diff_level_1 > 0.07 / 0.7 * scale_factor)
+            | (diff_level_2 > 0.08 / 0.7 * scale_factor)
         ) & warmup_done
 
         failed_execute = failed_execute | error_buf
@@ -954,9 +908,8 @@ class HandImitatorEnv(BaseEnv):
         # Update ManipTrans-style buffers
         self.cos_q[:] = torch.cos(self.hand_dof_pos)
         self.sin_q[:] = torch.sin(self.hand_dof_pos)
-        # Combine into base_state: [pos, quat, lin_vel, ang_vel]
+        # Combine into base_state: [quat, lin_vel, ang_vel]
         self.base_state[:] = torch.cat([
-            self.base_pos,
             self.base_quat,
             self.base_lin_vel,
             self.base_ang_vel,
@@ -975,6 +928,7 @@ class HandImitatorEnv(BaseEnv):
         # Index trajectory data using environment index and timestep
         env_indices = torch.arange(self.num_envs, device=self._device).unsqueeze(-1).expand(-1, K)  # (num_envs, K)
 
+        # Update wrist target states
         target_wrist_pos = self._traj_data["wrist_pos"][env_indices, future_indices]  # (num_envs, K, 3)
         target_wrist_quat = self._traj_data["wrist_quat"][env_indices, future_indices]  # (num_envs, K, 4)
         target_wrist_vel = self._traj_data["wrist_vel"][env_indices, future_indices]  # (num_envs, K, 3)
@@ -986,8 +940,8 @@ class HandImitatorEnv(BaseEnv):
         self.delta_wrist_vel[:] = (target_wrist_vel - self.base_lin_vel.unsqueeze(1)).reshape(self.num_envs, -1)
         self.target_wrist_quat[:] = target_wrist_quat.reshape(self.num_envs, -1)
         self.delta_wrist_quat[:] = quat_mul(
-            self.base_quat.unsqueeze(1).expand(-1, K, -1),
-            quat_conjugate(target_wrist_quat)
+            target_wrist_quat, 
+            quat_conjugate(self.base_quat.unsqueeze(1).expand(-1, K, -1))
         ).reshape(self.num_envs, -1)
         self.target_wrist_ang_vel[:] = target_wrist_ang_vel.reshape(self.num_envs, -1)
         self.delta_wrist_ang_vel[:] = (target_wrist_ang_vel - self.base_ang_vel.unsqueeze(1)).reshape(self.num_envs, -1)
@@ -1003,12 +957,6 @@ class HandImitatorEnv(BaseEnv):
 
         self.dof_force[:] = self._robot.dofs_control_force
 
-        # Update object state (if object exists)
-        if self._object is not None:
-            self.object_pos[:] = self._object.get_pos()
-            self.object_quat[:] = self._object.get_quat()
-            self.object_lin_vel[:] = self._object.get_vel()
-            self.object_ang_vel[:] = self._object.get_ang()
 
     def get_observations(self) -> tuple[torch.Tensor, torch.Tensor]:
         """Get actor and critic observations."""

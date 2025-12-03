@@ -12,6 +12,8 @@ import genesis as gs
 import gymnasium as gym
 import numpy as np
 import torch
+import trimesh
+from bps_torch.bps import bps_torch
 from PIL import Image
 
 from gs_env.common.bases.base_env import BaseEnv
@@ -33,7 +35,7 @@ from gs_env.common.utils.maniptrans_util import (
     axis_angle_to_rotmat_batch,
     rotmat_to_axis_angle_batch,
 )
-from gs_env.sim.envs.config.schema import HandImitatorEnvArgs
+from gs_env.sim.envs.config.schema import SingleHandRetargetingEnvArgs
 from gs_env.sim.robots.manipulators import WUJIHand
 from gs_env.sim.scenes import FlatScene
 
@@ -41,30 +43,32 @@ _DEFAULT_DEVICE = torch.device("cpu")
 
 
 # TODO:
-# 1, update network architecture to match ManipTrans
-# 2, data scaling / normalization
+# 1, add mano reference finger tip to object distance
+# 2, add tactile sonsor
+# 3, add base model for residual learning
 
 
-class HandImitatorEnv(BaseEnv):
+class SingleHandRetargetingEnv(BaseEnv):
     """
-    Hand trajectory following environment for WUJI dexterous hand.
-    Task: Follow reference hand trajectories from demonstration data.
+    Hand trajectory following environment for WUJI dexterous hand with object manipulation.
+    Task: Follow reference hand trajectories from demonstration data while manipulating objects.
 
     Observations (three components following ManipTrans architecture):
     - Proprioception: hand_dof_pos (cos/sin encoded), base_state (pos, quat, vel, ang_vel)
-    - Privileged: hand_dof_vel, object state (if available)
-    - Target: reference trajectory deltas and targets for future timesteps
+    - Privileged: hand_dof_vel, object state
+    - Target: reference trajectory deltas and targets for future timesteps (both hand and object)
 
     Actions (20D + 6D base): Delta joint positions + base pose control
 
     Rewards:
-        - Trajectory following rewards (position, rotation, velocity matching)
+        - Hand trajectory following rewards (position, rotation, velocity matching)
+        - Object trajectory following rewards (position, rotation, velocity matching)
         - Power penalties
     """
 
     def __init__(
         self,
-        args: HandImitatorEnvArgs,
+        args: SingleHandRetargetingEnvArgs,
         num_envs: int,
         show_viewer: bool = False,
         device: torch.device = _DEFAULT_DEVICE,
@@ -102,11 +106,19 @@ class HandImitatorEnv(BaseEnv):
         self._hand_dof_dim = self._robot._gripper_dof_dim
         self._base_dof_dim = self._robot._arm_dof_dim
 
-        # == setup object (optional, for visualization or contact) ==
-        if args.use_object:
-            self._setup_object(args)
-        else:
-            self._object = None
+        # == setup object ==
+        obj_id = self._args.object_id
+        self._object = self._scene.scene.add_entity(
+            gs.morphs.Mesh(
+                file=f"{self._args.trajectory_path}/{obj_id}_collision.obj",
+                pos=[0.0, 0.0, 0.0],  # random init pose
+                euler=(90, 0, 0),
+            ),
+            material=gs.materials.Rigid(
+                rho=100.0,
+                friction=0.8,
+            ),
+        )
 
         # == set up camera for rendering ==
         self._floating_camera = self._scene.scene.add_camera(
@@ -172,12 +184,16 @@ class HandImitatorEnv(BaseEnv):
         all_wrist_positions = []
         all_wrist_rotations_aa = []
         all_dof_positions = []
+        all_obj_pose_matrices = []
         all_traj_lengths = []
 
         for traj_file in traj_files:
             print(f"Loading: {traj_file.name}")
             with open(traj_file, "rb") as f:
                 data = pickle.load(f)
+            
+            if data["metadata"]["obj_id"] != self._args.object_id:
+                continue  # skip trajectories not matching the specified object_id
 
             all_demo_data.append(data)
             hand_traj = data["hand_trajectory"]
@@ -185,17 +201,22 @@ class HandImitatorEnv(BaseEnv):
             wrist_pos = hand_traj["wrist_positions"]  # (T, 3)
             wrist_rot = hand_traj["wrist_rotations_aa"]  # (T, 3)
             dof_pos = hand_traj["dof_positions"]  # (T, n_dofs)
+            obj_pose_matrix = data["object_trajectory"]["pose_matrices"]  # (T, 4, 4)
 
             all_wrist_positions.append(wrist_pos)
             all_wrist_rotations_aa.append(wrist_rot)
             all_dof_positions.append(dof_pos)
+            all_obj_pose_matrices.append(obj_pose_matrix)
             all_traj_lengths.append(len(wrist_pos))
 
             print(f"  - Length: {len(wrist_pos)} timesteps")
+        
+        if len(all_demo_data) == 0:
+            raise ValueError(f"No trajectories found for object_id: {self._args.object_id}")
 
         # Store raw data and individual trajectory lengths
         self._demo_data_raw = all_demo_data
-        self._num_trajectories = len(traj_files)
+        self._num_trajectories = len(all_demo_data)
         self._traj_lengths = np.array(all_traj_lengths)
         self._max_traj_length = max(all_traj_lengths)
 
@@ -203,6 +224,7 @@ class HandImitatorEnv(BaseEnv):
         self._wrist_positions = self._pad_and_stack(all_wrist_positions)  # (num_traj, max_T, 3)
         self._wrist_rotations_aa = self._pad_and_stack(all_wrist_rotations_aa)  # (num_traj, max_T, 3)
         self._dof_positions = self._pad_and_stack(all_dof_positions)  # (num_traj, max_T, n_dofs)
+        self._obj_pose_matrices = self._pad_and_stack(all_obj_pose_matrices)  # (num_traj, max_T, 4, 4)
 
         print(f"\nCombined trajectory shapes:")
         print(f"  - Wrist positions: {self._wrist_positions.shape}")
@@ -280,6 +302,7 @@ class HandImitatorEnv(BaseEnv):
         # Load finger link's positions and velocities from MANO reference
         all_mano_joint_poses = []
         all_mano_joint_velocities = []
+        all_mano_finger_tip_dists = []
 
         for traj_idx, demo_data in enumerate(self._demo_data_raw):
             mano_joint_poses = []
@@ -296,18 +319,38 @@ class HandImitatorEnv(BaseEnv):
 
             all_mano_joint_poses.append(mano_joint_poses)
             all_mano_joint_velocities.append(mano_joint_velocities)
+            all_mano_finger_tip_dists.append(
+                demo_data["mano_reference"]["fingertip_distances"]  # (T, 5)
+            )
 
         # Pad and stack MANO data
         mano_joint_poses_padded = self._pad_and_stack(all_mano_joint_poses)  # (num_traj, max_T, n_joints, 3)
         mano_joint_velocities_padded = self._pad_and_stack(all_mano_joint_velocities)  # (num_traj, max_T, n_joints, 3)
+        mano_finger_tip_dists_padded = self._pad_and_stack(all_mano_finger_tip_dists)  # (num_traj, max_T, 5)
 
         self._mano_joint_poses = torch.from_numpy(mano_joint_poses_padded).float().to(self._device)
         self._mano_joint_velocities = torch.from_numpy(mano_joint_velocities_padded).float().to(self._device)
+        self._mano_finger_tip_dists = torch.from_numpy(mano_finger_tip_dists_padded).float().to(self._device)
 
         # get the corresponding link idx for hand
         self._finger_link_idxs = []
         for link_name in self._args.joint_mapping.values():
             self._finger_link_idxs.append(self._robot.get_link(link_name).idx_local)
+
+        # process object's pose and rotation
+        obj_pos = torch.from_numpy(self._obj_pose_matrices[:, :, :3, 3]).float().to(self._device)  # (num_traj, max_T, 3)
+        obj_rot_mat = torch.from_numpy(self._obj_pose_matrices[:, :, :3, :3]).float().to(self._device)  # (num_traj, max_T, 3, 3)
+        obj_rot_quat = rotmat_to_quat(obj_rot_mat)  # (num_traj, max_T, 4)
+        obj_rot_aa = quat_to_angle_axis(obj_rot_quat)  # (num_traj, max_T, 3)
+
+        obj_pos_T = obj_pos.transpose(0, 1)  # (max_T, num_traj, 3)
+        obj_rot_aa_T = obj_rot_aa.transpose(0, 1)  # (max_T, num_traj, 3)
+
+        obj_vel_T = compute_velocity(obj_pos_T, time_delta, gaussian_filter=True)  # (max_T, num_traj, 3)
+        obj_ang_vel_T = compute_angular_velocity(obj_rot_aa_T, time_delta, gaussian_filter=True)  # (max_T, num_traj, 3)
+
+        obj_vel = obj_vel_T.transpose(0, 1)  # (num_traj, max_T, 3)
+        obj_ang_vel = obj_ang_vel_T.transpose(0, 1)  # (num_traj, max_T, 3)
 
         # Store ORIGINAL processed trajectory data (per trajectory)
         # This will be used as a template for creating per-environment copies
@@ -319,7 +362,45 @@ class HandImitatorEnv(BaseEnv):
             "wrist_ang_vel": wrist_ang_vel,  # (num_traj, max_T, 3)
             "dof_pos": dof_pos,  # (num_traj, max_T, n_dofs)
             "dof_vel": dof_vel,  # (num_traj, max_T, n_dofs)
+            "obj_pos": obj_pos,  # (num_traj, max_T, 3)
+            "obj_quat": obj_rot_quat,  # (num_traj, max_T, 4)
+            "obj_vel": obj_vel,  # (num_traj, max_T, 3)
+            "obj_ang_vel": obj_ang_vel,  # (num_traj, max_T, 3)
         }
+
+        # ===== Encode object mesh using BPS (Basis Point Set) =====
+        # Following ManipTrans approach: load object mesh and encode to 128-dim BPS feature
+        obj_id = self._args.object_id
+        obj_mesh_path = f"{self._args.trajectory_path}/{obj_id}_collision.obj"
+
+        # Load object mesh
+        mesh = trimesh.load(obj_mesh_path, force='mesh')
+        obj_verts = torch.from_numpy(mesh.vertices).float().to(self._device)  # (N_verts, 3)
+
+        # Initialize BPS layer (same parameters as ManipTrans)
+        self.bps_feat_type = "dists"
+        self.bps_layer = bps_torch(
+            bps_type="grid_sphere",   # Spherical grid of basis points
+            n_bps_points=128,         # 128 basis points
+            radius=0.2,               # 20cm radius sphere
+            randomize=False,          # Fixed basis point locations
+            device=self._device
+        )
+
+        # Encode object vertices to BPS feature
+        # bps_layer.encode returns a dict with "dists" key containing the 128-dim feature
+        obj_bps_single = self.bps_layer.encode(
+            obj_verts.unsqueeze(0),  # Add batch dimension: (1, N_verts, 3)
+            feature_type=self.bps_feat_type
+        )[self.bps_feat_type].squeeze(0)  # (128,)
+
+        # Repeat for all environments since all envs use the same object
+        # This will be initialized properly in _init() after num_envs is known
+        self._obj_bps_template = obj_bps_single  # Store template for later
+
+        print(f"Object BPS encoding:")
+        print(f"  - Mesh vertices: {obj_verts.shape}")
+        print(f"  - BPS feature template: {obj_bps_single.shape}")
 
         print(f"Processed trajectory data:")
         print(f"  - Wrist positions: {wrist_pos.shape}")
@@ -351,6 +432,8 @@ class HandImitatorEnv(BaseEnv):
                 - mano_joint_poses: (num_envs_to_aug, max_T, 20, 3)
                 - mano_joint_velocities: (num_envs_to_aug, max_T, 20, 3)
         """
+        assert False, "Not implemented for object yet!"
+
         num_envs = len(envs_idx)
         device = self.env_traj_idx.device
 
@@ -485,34 +568,6 @@ class HandImitatorEnv(BaseEnv):
         }
 
 
-    def _setup_object(self, args: HandImitatorEnvArgs) -> None:
-        """Setup manipulated object (optional)."""
-        if args.object_mesh_path is not None:
-            # Load custom mesh
-            self._object = self._scene.scene.add_entity(
-                gs.morphs.Mesh(
-                    file=str(args.object_mesh_path),
-                    pos=args.object_args["position"],
-                    euler=(90, 0, 0),  # Adjust orientation as needed
-                ),
-                material=gs.materials.Rigid(
-                    rho=100.0,
-                    friction=0.8,
-                ),
-            )
-        else:
-            # Use default box
-            self._object = self._scene.scene.add_entity(
-                gs.morphs.Box(
-                    size=(args.object_args["size"],) * 3,
-                    pos=args.object_args["position"],
-                ),
-                material=gs.materials.Rigid(
-                    rho=100.0,
-                    friction=0.8,
-                ),
-            )
-
     def _init(self) -> None:
         """Initialize observation and action spaces and environment buffers."""
 
@@ -546,6 +601,10 @@ class HandImitatorEnv(BaseEnv):
             "wrist_ang_vel": torch.zeros((self.num_envs, max_T, 3), device=self._device),
             "dof_pos": torch.zeros((self.num_envs, max_T, self._hand_dof_dim), device=self._device),
             "dof_vel": torch.zeros((self.num_envs, max_T, self._hand_dof_dim), device=self._device),
+            "obj_pos": torch.zeros((self.num_envs, max_T, 3), device=self._device),
+            "obj_quat": torch.zeros((self.num_envs, max_T, 4), device=self._device),
+            "obj_vel": torch.zeros((self.num_envs, max_T, 3), device=self._device),
+            "obj_ang_vel": torch.zeros((self.num_envs, max_T, 3), device=self._device),
         }
 
         # Initialize with template data based on env_traj_idx
@@ -557,12 +616,14 @@ class HandImitatorEnv(BaseEnv):
         # Per-environment MANO joint data
         self.env_mano_joint_poses = torch.zeros((self.num_envs, max_T, 20, 3), device=self._device)
         self.env_mano_joint_velocities = torch.zeros((self.num_envs, max_T, 20, 3), device=self._device)
+        self.env_mano_finger_tip_dists = torch.zeros((self.num_envs, max_T, 5), device=self._device)
 
         # Initialize with original data
         for env_idx in range(self.num_envs):
             traj_idx = self.env_traj_idx[env_idx]
             self.env_mano_joint_poses[env_idx] = self._mano_joint_poses[traj_idx]
             self.env_mano_joint_velocities[env_idx] = self._mano_joint_velocities[traj_idx]
+            self.env_mano_finger_tip_dists[env_idx] = self._mano_finger_tip_dists[traj_idx]
 
         # Trajectory progress tracking
         # progress_buf: current position in trajectory timeline (for indexing trajectory data)
@@ -581,8 +642,8 @@ class HandImitatorEnv(BaseEnv):
         # Additional buffers that matches ManipTrans structure
         self.cos_q = torch.zeros((self.num_envs, self._hand_dof_dim), device=self._device)
         self.sin_q = torch.zeros((self.num_envs, self._hand_dof_dim), device=self._device)
-        # Combine into base_state (13D: pos, quat, lin_vel, ang_vel)
-        self.base_state = torch.zeros((self.num_envs, 13), device=self._device)
+        # Combine into base_state (10D: quat, lin_vel, ang_vel)
+        self.base_state = torch.zeros((self.num_envs, 10), device=self._device)
         # Buffer related to target trajectory following
         K = self._obs_future_length
         self.target_wrist_pos = torch.zeros((self.num_envs, K * 3), device=self._device)
@@ -593,6 +654,16 @@ class HandImitatorEnv(BaseEnv):
         self.delta_wrist_quat = torch.zeros((self.num_envs, K * 4), device=self._device)
         self.target_wrist_ang_vel = torch.zeros((self.num_envs, K * 3), device=self._device)
         self.delta_wrist_ang_vel = torch.zeros((self.num_envs, K * 3), device=self._device)
+        # Buffer related to object target state
+        self.target_object_pos = torch.zeros((self.num_envs, K, 3), device=self._device)
+        self.delta_object_pos = torch.zeros((self.num_envs, K * 3), device=self._device)
+        self.target_object_vel = torch.zeros((self.num_envs, K * 3), device=self._device)
+        self.delta_object_vel = torch.zeros((self.num_envs, K * 3), device=self._device)
+        self.target_object_quat = torch.zeros((self.num_envs, K * 4), device=self._device)
+        self.delta_object_quat = torch.zeros((self.num_envs, K * 4), device=self._device)
+        self.target_object_ang_vel = torch.zeros((self.num_envs, K * 3), device=self._device)
+        self.delta_object_ang_vel = torch.zeros((self.num_envs, K * 3), device=self._device)
+        self.object_to_finger_tips = torch.zeros((self.num_envs, 5), device=self._device)  # 5 finger tips
 
         # Finger link position buffers for reward computation
         self.target_mano_joint_pos = torch.zeros((self.num_envs, K, 20, 3), device=self._device)
@@ -601,19 +672,19 @@ class HandImitatorEnv(BaseEnv):
         self.finger_link_vel = torch.zeros((self.num_envs, 20, 3), device=self._device)
         self.delta_finger_link_pos = torch.zeros((self.num_envs, K * 20 * 3), device=self._device)
         self.delta_finger_link_vel = torch.zeros((self.num_envs, K * 20 * 3), device=self._device)
+        self.mano_fingertip_to_object = torch.zeros((self.num_envs, K * 5), device=self._device)  # 5 finger tips
 
+        # BPS object encoding buffer (repeated for all environments)
+        # Shape: (num_envs, 128) - same BPS feature repeated across all envs
+        self.bps = self._obj_bps_template.unsqueeze(0).repeat(self.num_envs, 1)  # (num_envs, 128)
 
-        # Object state buffers (if object exists)
-        if self._object is not None:
-            self.object_pos = torch.zeros((self.num_envs, 3), device=self._device)
-            self.object_quat = torch.zeros((self.num_envs, 4), device=self._device)
-            self.object_lin_vel = torch.zeros((self.num_envs, 3), device=self._device)
-            self.object_ang_vel = torch.zeros((self.num_envs, 3), device=self._device)
-        else:
-            self.object_pos = torch.zeros((self.num_envs, 0), device=self._device)
-            self.object_quat = torch.zeros((self.num_envs, 0), device=self._device)
-            self.object_lin_vel = torch.zeros((self.num_envs, 0), device=self._device)
-            self.object_ang_vel = torch.zeros((self.num_envs, 0), device=self._device)
+        # Object state buffers
+        self.object_pos = torch.zeros((self.num_envs, 3), device=self._device)
+        self.object_pos_rel = torch.zeros((self.num_envs, 3), device=self._device)  # Relative to wrist base
+        self.object_com_pos = torch.zeros((self.num_envs, 3), device=self._device)  # Center of mass position relative to wrist base
+        self.object_quat = torch.zeros((self.num_envs, 4), device=self._device)
+        self.object_lin_vel = torch.zeros((self.num_envs, 3), device=self._device)
+        self.object_ang_vel = torch.zeros((self.num_envs, 3), device=self._device)
 
         # Environment state buffers
         self.time_since_reset = torch.zeros(self.num_envs, device=self._device)  # Episode time for warmup checks
@@ -649,15 +720,18 @@ class HandImitatorEnv(BaseEnv):
         prop_dim = (
             self._hand_dof_dim  # q
             + self._hand_dof_dim * 2  # cos(q) + sin(q)
-            + 13  # base_state without position (quat + lin_vel + ang_vel)
+            + 10  # base_state without position (quat + lin_vel + ang_vel)
         )
-        self.obs_proprioception = torch.zeros((self.num_envs, prop_dim), device=self._device)
 
-        # 2. Privileged: dof_vel, object_state (if available)
-        priv_dim = self._hand_dof_dim  # dof_vel
-        if self._object is not None:
-            priv_dim += 13  # object pos, quat, lin_vel, ang_vel
-        self.obs_privileged = torch.zeros((self.num_envs, priv_dim), device=self._device)
+        # 2. Privileged: dof_vel, object_state
+        priv_dim = (
+            self._hand_dof_dim  # hand_dof_vel
+            + 3  # object_pos_rel
+            + 4  # object_quat
+            + 3  # object_lin_vel
+            + 3  # object_ang_vel
+            + 3  # object_com_pos
+        )
 
         # 3. Target: reference trajectory information for next K timesteps
         # Following ManipTrans: delta_wrist_pos, wrist_vel, delta_wrist_vel, wrist_quat, delta_wrist_quat,
@@ -674,8 +748,18 @@ class HandImitatorEnv(BaseEnv):
             + self._hand_dof_dim * 3 * K  # delta finger_link_pos
             + self._hand_dof_dim * 3 * K  # finger link vel
             + self._hand_dof_dim * 3 * K  # delta finger_link_vel
+
+            + 3 * K  # delta_object_pos
+            + 3 * K  # target_object_vel
+            + 3 * K  # delta_object_vel
+            + 4 * K  # target_object_quat
+            + 4 * K  # delta_object_quat
+            + 3 * K  # target_object_ang_vel
+            + 3 * K  # delta_object_ang_vel
+            + 5  # object_to_finger_tips
+            + 5 * K  # mano_fingertip_to_object
+            + 128  # BPS object encoding
         )
-        self.obs_target = torch.zeros((self.num_envs, target_dim), device=self._device)
 
         # Build observation spaces
         self._actor_observation_space = gym.spaces.Dict({
@@ -732,8 +816,17 @@ class HandImitatorEnv(BaseEnv):
             self.env_traj_idx[envs_idx] = reset_traj_idx
             self.env_traj_lengths[envs_idx] = reset_traj_lengths
 
+            for key in self._traj_data.keys():
+                self._traj_data[key][envs_idx] = self._traj_data_template[key][reset_traj_idx]
+            # Also update MANO data
+            self.env_mano_joint_poses[envs_idx] = self._mano_joint_poses[reset_traj_idx]
+            self.env_mano_joint_velocities[envs_idx] = self._mano_joint_velocities[reset_traj_idx]
+            self.env_mano_finger_tip_dists[envs_idx] = self._mano_finger_tip_dists[reset_traj_idx]
+
         # ===== Apply trajectory augmentation if enabled =====
         if self._args.use_augmentation and not self._eval_mode:
+            assert False, "Not implemented for object yet!"
+            # TODO: implement trajectory augmentation for object case
             # Only augment trajectories if it has succeeded a certain number of times
             do_augment = self.success_count_buf[envs_idx] >= 100
             envs_to_augment = envs_idx[do_augment.cpu()]
@@ -767,74 +860,16 @@ class HandImitatorEnv(BaseEnv):
             # Always start from beginning
             seq_idx = torch.zeros(num_reset, dtype=torch.long, device=self._device)
 
-        # ===== Initialize DOF positions with noise from default pose =====
-        # Default pose: all joints at pi/36 (5 degrees)
-        default_dof_pos = torch.ones(self._hand_dof_dim, device=self._device) * (np.pi / 36)
+        # Get DOF positions from trajectory at sampled timestep
+        dof_pos = self._traj_data["dof_pos"][envs_idx, seq_idx]  # (num_reset, hand_dof_dim)
+        dof_vel = self._traj_data["dof_vel"][envs_idx, seq_idx]  # (num_reset, hand_dof_dim)
 
-        # Get DOF limits from robot
-        dof_lower_limits = self._robot.dof_pos_limits[6:, 0]
-        dof_upper_limits = self._robot.dof_pos_limits[6:, 1]
-
-        # Add Gaussian noise scaled by joint range / 8
-        noise_dof_pos = (
-            torch.randn(num_reset, self._hand_dof_dim, device=self._device)
-            * ((dof_upper_limits - dof_lower_limits) / 8).unsqueeze(0)
-        )
-
-        dof_pos = torch.clamp(
-            default_dof_pos.unsqueeze(0).repeat(num_reset, 1) + noise_dof_pos,
-            dof_lower_limits.unsqueeze(0),
-            dof_upper_limits.unsqueeze(0),
-        )
-
-        # Initialize DOF velocities with small random noise
-        dof_vel = torch.randn(num_reset, self._hand_dof_dim, device=self._device) * 0.1
-        # Clamp to velocity limits (assuming ±10 rad/s as reasonable limit)
-        dof_vel = torch.clamp(dof_vel, -10.0, 10.0)
-
-        # ===== Initialize wrist pose from trajectory with noise =====
-        # Get wrist position from trajectory at sampled timestep
-        # Index using environment index and timestep: [envs_idx, seq_idx]
         wrist_pos = self._traj_data["wrist_pos"][envs_idx, seq_idx]  # (num_reset, 3)
+        wrist_quat = self._traj_data["wrist_quat"][envs_idx, seq_idx]  # (num_reset, 4)
 
-        # Add position noise (std = 0.01m = 1cm)
-        if not self._eval_mode:
-            wrist_pos = wrist_pos + torch.randn_like(wrist_pos) * 0.01
-
-        # Get wrist rotation from trajectory
-        wrist_rot_aa = self._traj_data["wrist_rot"][envs_idx, seq_idx]  # (num_reset, 3)
-
-        # Convert to rotation matrix for noise application
-        wrist_rot_mat = axis_angle_to_rotmat_batch(wrist_rot_aa.unsqueeze(1)).squeeze(1)  # (num_reset, 3, 3)
-
-        # Add rotation noise (random rotation up to ±10 degrees = ±pi/18 rad)
-        if not self._eval_mode:
-            # Generate random rotation axis
-            noise_axis = torch.randn(num_reset, 3, device=self._device)
-            noise_axis = noise_axis / (torch.norm(noise_axis, dim=-1, keepdim=True) + 1e-8)
-
-            # Generate random rotation angle
-            noise_angle = torch.randn(num_reset, 1, device=self._device) * (np.pi / 18)
-            noise_rot_aa = noise_axis * noise_angle
-
-            # Convert to rotation matrix
-            noise_rot_mat = axis_angle_to_rotmat_batch(noise_rot_aa.unsqueeze(1)).squeeze(1)
-
-            # Apply noise: R_noisy = R_noise @ R_original
-            wrist_rot_mat = noise_rot_mat @ wrist_rot_mat
-
-        # Convert back to quaternion [w, x, y, z] (Genesis format)
-        wrist_quat = rotmat_to_quat(wrist_rot_mat)
-
-        # Get wrist velocities from trajectory with noise
         wrist_vel = self._traj_data["wrist_vel"][envs_idx, seq_idx]  # (num_reset, 3)
         wrist_ang_vel = self._traj_data["wrist_ang_vel"][envs_idx, seq_idx]  # (num_reset, 3)
 
-        if not self._eval_mode:
-            wrist_vel = wrist_vel + torch.randn_like(wrist_vel) * 0.01
-            wrist_ang_vel = wrist_ang_vel + torch.randn_like(wrist_ang_vel) * 0.01
-
-        # ===== Apply state to robot using Genesis API =====
         self._robot.reset_to_pose(
             dof_pos=dof_pos,
             dof_vel=dof_vel,
@@ -842,6 +877,18 @@ class HandImitatorEnv(BaseEnv):
             wrist_quat=wrist_quat,
             base_dof_vel=torch.cat([wrist_vel, wrist_ang_vel], dim=-1),
             envs_idx=envs_idx,
+        )
+
+        object_pos = self._traj_data["obj_pos"][envs_idx, seq_idx]  # (num_reset, 3)
+        object_quat = self._traj_data["obj_quat"][envs_idx, seq_idx]  # (num_reset, 4)
+        object_lin_vel = self._traj_data["obj_vel"][envs_idx, seq_idx]  # (num_reset, 3)
+        object_ang_vel = self._traj_data["obj_ang_vel"][envs_idx, seq_idx]  # (num_reset, 3)
+
+        self._object.set_pos(object_pos, envs_idx=envs_idx)
+        self._object.set_quat(object_quat, envs_idx=envs_idx)
+        self._object.set_dofs_velocity(
+            torch.cat([object_lin_vel, object_ang_vel], dim=-1),
+            envs_idx=envs_idx
         )
 
         # ===== Reset all buffers =====
@@ -870,6 +917,8 @@ class HandImitatorEnv(BaseEnv):
             (torch.norm(self.base_lin_vel, dim=-1) > 100)
             | (torch.norm(self.base_ang_vel, dim=-1) > 200)
             | (torch.abs(self.hand_dof_vel).mean(-1) > 200)
+            | (torch.norm(self.object_lin_vel, dim=-1) > 100)
+            | (torch.norm(self.object_ang_vel, dim=-1) > 200)
         )
 
         # === Failed execution ===
@@ -888,17 +937,36 @@ class HandImitatorEnv(BaseEnv):
         diff_level_1 = diff_joints_pos_dist[:, [0, 4, 8, 12, 16]].mean(dim=-1)
         diff_level_2 = diff_joints_pos_dist[:, [1, 2, 5, 6, 9, 10, 13, 14, 17, 18]].mean(dim=-1)
 
+        diff_obj_pos_dist = torch.norm(
+            self.target_object_pos[:, 0] - self.object_pos,
+            dim=-1
+        )  # (num_envs,)
+        diff_obj_quat = quat_mul(
+            self.target_object_quat[:, :4],
+            quat_conjugate(self.object_quat)
+        )  # (num_envs, 4)
+        diff_obj_angle = 2 * torch.acos(
+            torch.clamp(diff_obj_quat[:, 0], -1.0, 1.0)
+        )
+        diff_obj_angle = torch.abs(diff_obj_angle)
+
         # Scale factor for error thresholds (from ManipTrans, typically 0.7)
-        scale_factor = 0.7
+        scale_factor = 1.0
         failed_execute = (
-            (diff_thumb_tip > 0.04 / scale_factor)
-            | (diff_index_tip > 0.045 / scale_factor)
-            | (diff_middle_tip > 0.05 / scale_factor)
-            | (diff_ring_tip > 0.06 / scale_factor)
-            | (diff_pinky_tip > 0.06 / scale_factor)
-            | (diff_level_1 > 0.07 / scale_factor)
-            | (diff_level_2 > 0.08 / scale_factor)
+            (diff_thumb_tip > 0.04 / 0.7 * scale_factor)
+            | (diff_index_tip > 0.045 / 0.7 * scale_factor)
+            | (diff_middle_tip > 0.05 / 0.7 * scale_factor)
+            | (diff_ring_tip > 0.06 / 0.7 * scale_factor)
+            | (diff_pinky_tip > 0.06 / 0.7 * scale_factor)
+            | (diff_level_1 > 0.07 / 0.7 * scale_factor)
+            | (diff_level_2 > 0.08 / 0.7 * scale_factor)
+            | (diff_obj_pos_dist > 0.02 / 0.343 * scale_factor**3)
+            | (diff_obj_angle / np.pi * 180 > 30 / 0.343 * scale_factor**3)
         ) & warmup_done
+
+        # TODO: add finger tip distance failure condition
+
+        # TODO: add curriculum learning with the scale factor
 
         failed_execute = failed_execute | error_buf
 
@@ -950,13 +1018,21 @@ class HandImitatorEnv(BaseEnv):
         self.base_quat[:] = self._robot.base_quat
         self.base_lin_vel[:] = self._robot.base_lin_vel
         self.base_ang_vel[:] = self._robot.base_ang_vel
+        # Update object state
+        self.object_pos[:] = self._object.get_pos()
+        self.object_pos_rel[:] = self.object_pos - self.base_pos
+        self.object_com_pos[:] = self._object.get_links_pos(
+            links_idx_local=0, ref="link_com"
+        ).squeeze(1) - self.base_pos
+        self.object_quat[:] = self._object.get_quat()
+        self.object_lin_vel[:] = self._object.get_vel()
+        self.object_ang_vel[:] = self._object.get_ang()
 
         # Update ManipTrans-style buffers
         self.cos_q[:] = torch.cos(self.hand_dof_pos)
         self.sin_q[:] = torch.sin(self.hand_dof_pos)
-        # Combine into base_state: [pos, quat, lin_vel, ang_vel]
+        # Combine into base_state: [quat, lin_vel, ang_vel]
         self.base_state[:] = torch.cat([
-            self.base_pos,
             self.base_quat,
             self.base_lin_vel,
             self.base_ang_vel,
@@ -975,6 +1051,7 @@ class HandImitatorEnv(BaseEnv):
         # Index trajectory data using environment index and timestep
         env_indices = torch.arange(self.num_envs, device=self._device).unsqueeze(-1).expand(-1, K)  # (num_envs, K)
 
+        # Update wrist target states
         target_wrist_pos = self._traj_data["wrist_pos"][env_indices, future_indices]  # (num_envs, K, 3)
         target_wrist_quat = self._traj_data["wrist_quat"][env_indices, future_indices]  # (num_envs, K, 4)
         target_wrist_vel = self._traj_data["wrist_vel"][env_indices, future_indices]  # (num_envs, K, 3)
@@ -986,11 +1063,35 @@ class HandImitatorEnv(BaseEnv):
         self.delta_wrist_vel[:] = (target_wrist_vel - self.base_lin_vel.unsqueeze(1)).reshape(self.num_envs, -1)
         self.target_wrist_quat[:] = target_wrist_quat.reshape(self.num_envs, -1)
         self.delta_wrist_quat[:] = quat_mul(
-            self.base_quat.unsqueeze(1).expand(-1, K, -1),
-            quat_conjugate(target_wrist_quat)
+            target_wrist_quat, 
+            quat_conjugate(self.base_quat.unsqueeze(1).expand(-1, K, -1))
         ).reshape(self.num_envs, -1)
         self.target_wrist_ang_vel[:] = target_wrist_ang_vel.reshape(self.num_envs, -1)
         self.delta_wrist_ang_vel[:] = (target_wrist_ang_vel - self.base_ang_vel.unsqueeze(1)).reshape(self.num_envs, -1)
+
+        # Update object target states
+        self.target_object_pos[:] = self._traj_data["obj_pos"][env_indices, future_indices]  # (num_envs, K, 3)
+        target_object_quat = self._traj_data["obj_quat"][env_indices, future_indices]  # (num_envs, K, 4)
+        target_object_vel = self._traj_data["obj_vel"][env_indices, future_indices]  # (num_envs, K, 3)
+        target_object_ang_vel = self._traj_data["obj_ang_vel"][env_indices, future_indices]  # (num_envs, K, 3)
+
+        self.delta_object_pos[:] = (self.target_object_pos - self.object_pos.unsqueeze(1)).reshape(self.num_envs, -1)
+        self.target_object_vel[:] = target_object_vel.reshape(self.num_envs, -1)
+        self.delta_object_vel[:] = (target_object_vel - self.object_lin_vel.unsqueeze(1)).reshape(self.num_envs, -1)
+        self.target_object_quat[:] = target_object_quat.reshape(self.num_envs, -1)
+        self.delta_object_quat[:] = quat_mul(
+            target_object_quat,
+            quat_conjugate(self.object_quat.unsqueeze(1).expand(-1, K, -1))
+        ).reshape(self.num_envs, -1)
+        self.target_object_ang_vel[:] = target_object_ang_vel.reshape(self.num_envs, -1)
+        self.delta_object_ang_vel[:] = (target_object_ang_vel - self.object_ang_vel.unsqueeze(1)).reshape(self.num_envs, -1)
+
+        # Compute object to finger tip distances
+        fingertip_pos = self._robot.fingertip_pos  # (num_envs, 5, 3)
+        self.object_to_finger_tips[:] = torch.norm(
+            self.object_pos.unsqueeze(1) - fingertip_pos,
+            dim=-1
+        )  # (num_envs, 5)
 
         # Update MANO joint poses
         self.target_mano_joint_pos[:] = self.env_mano_joint_poses[env_indices, future_indices]  # (num_envs, K, 20, 3)
@@ -1001,14 +1102,10 @@ class HandImitatorEnv(BaseEnv):
         self.delta_finger_link_vel[:] = (target_mano_joint_vel - self.finger_link_vel.unsqueeze(1)).reshape(self.num_envs, -1)
         self.target_mano_joint_vel[:] = target_mano_joint_vel.reshape(self.num_envs, -1)
 
+        self.mano_fingertip_to_object[:] = self.env_mano_finger_tip_dists[env_indices, future_indices].reshape(self.num_envs, -1)  # (num_envs, K * 5)
+
         self.dof_force[:] = self._robot.dofs_control_force
 
-        # Update object state (if object exists)
-        if self._object is not None:
-            self.object_pos[:] = self._object.get_pos()
-            self.object_quat[:] = self._object.get_quat()
-            self.object_lin_vel[:] = self._object.get_vel()
-            self.object_ang_vel[:] = self._object.get_ang()
 
     def get_observations(self) -> tuple[torch.Tensor, torch.Tensor]:
         """Get actor and critic observations."""
@@ -1088,6 +1185,10 @@ class HandImitatorEnv(BaseEnv):
         # target_base_quat = self._traj_data["wrist_quat"][env_indices, self.progress_buf + 1]
         # self._robot.set_pos(target_base_pos)
         # self._robot.set_quat(target_base_quat)
+        # target_obj_pos = self._traj_data["obj_pos"][env_indices, self.progress_buf + 1]
+        # target_obj_quat = self._traj_data["obj_quat"][env_indices, self.progress_buf + 1]
+        # self._object.set_pos(target_obj_pos)
+        # self._object.set_quat(target_obj_quat)
 
         self.update_buffers()
 

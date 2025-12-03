@@ -631,11 +631,11 @@ WUJI_kd_dict: dict[str, float | list[float]] = {
 
 # Fingertip link names for contact sensing
 WUJI_fingertip_link_names: list[str] = [
-    "finger1_link4",  # Thumb tip
-    "finger2_link4",  # Index tip
-    "finger3_link4",  # Middle tip
-    "finger4_link4",  # Ring tip
-    "finger5_link4",  # Pinky tip
+    "finger1_tip_link",  # Thumb tip
+    "finger2_tip_link",  # Index tip
+    "finger3_tip_link",  # Middle tip
+    "finger4_tip_link",  # Ring tip
+    "finger5_tip_link",  # Pinky tip
 ]
 
 # Register WUJI hand robot configuration (fixed base)

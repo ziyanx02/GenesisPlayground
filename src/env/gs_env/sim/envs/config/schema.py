@@ -105,3 +105,25 @@ class HandImitatorEnvArgs(EnvArgs):
     aug_translation_range: tuple[float, float] = (-0.1, 0.1)  # XY translation range (meters)
     aug_rotation_z_range: tuple[float, float] = (-np.pi / 4, np.pi / 4)  # Z-axis rotation range (radians)
     aug_scale_range: tuple[float, float] = (0.9, 1.1)  # Uniform scale range for workspace
+
+
+class SingleHandRetargetingEnvArgs(EnvArgs):
+    """Configuration for hand trajectory imitation environments."""
+    action_latency: int = 1
+    obs_history_len: int = 1
+    obs_scales: dict[str, float]
+    obs_noises: dict[str, float]
+    actor_obs_terms: list[str]
+    critic_obs_terms: list[str]
+    # Trajectory configuration
+    trajectory_path: str
+    object_id: str
+    max_episode_length: int = 500
+    obs_future_length: int = 5  # Number of future trajectory frames to observe (K)
+    random_state_init: bool = True  # Randomize initial timestep in trajectory
+    joint_mapping: dict[str, str]
+    # Trajectory augmentation configuration
+    use_augmentation: bool = False  # Enable trajectory augmentation on reset
+    aug_translation_range: tuple[float, float] = (-0.1, 0.1)  # XY translation range (meters)
+    aug_rotation_z_range: tuple[float, float] = (-np.pi / 4, np.pi / 4)  # Z-axis rotation range (radians)
+    aug_scale_range: tuple[float, float] = (0.9, 1.1)  # Uniform scale range for workspace

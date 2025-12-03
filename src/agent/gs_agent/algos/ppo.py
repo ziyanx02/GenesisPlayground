@@ -23,14 +23,42 @@ _DEFAULT_DEVICE: Final[torch.device] = torch.device("cpu")
 _DEQUE_MAXLEN: Final[int] = 100
 """Max length of the deque for storing episode statistics."""
 
-K = 3
+K = 1
+
+# hand imitator
+# critic_obs_key_dims = {
+#     "hand_dof_pos": 20,
+#     "cos_q": 20,
+#     "sin_q": 20,
+#     "base_state": 10,
+
+#     "hand_dof_vel": 20,
+
+#     "delta_wrist_pos": 3 * K,
+#     "target_wrist_vel": 3 * K,
+#     "delta_wrist_vel": 3 * K,
+#     "target_wrist_quat": 4 * K,
+#     "delta_wrist_quat": 4 * K,
+#     "target_wrist_ang_vel": 3 * K,
+#     "delta_wrist_ang_vel": 3 * K,
+#     "delta_finger_link_pos": 20 * 3 * K,
+#     "target_mano_joint_vel": 20 * 3 * K,
+#     "delta_finger_link_vel": 20 * 3 * K,
+# }
+
+# full
 critic_obs_key_dims = {
     "hand_dof_pos": 20,
     "cos_q": 20,
     "sin_q": 20,
-    "base_state": 13,
+    "base_state": 10,
 
     "hand_dof_vel": 20,
+    "object_pos_rel": 3,
+    "object_quat": 4,
+    "object_lin_vel": 3,
+    "object_ang_vel": 3,
+    "object_com_pos": 3,
 
     "delta_wrist_pos": 3 * K,
     "target_wrist_vel": 3 * K,
@@ -42,8 +70,18 @@ critic_obs_key_dims = {
     "delta_finger_link_pos": 20 * 3 * K,
     "target_mano_joint_vel": 20 * 3 * K,
     "delta_finger_link_vel": 20 * 3 * K,
-}
 
+    "delta_object_pos": 3 * K,
+    "target_object_vel": 3 * K,
+    "delta_object_vel": 3 * K,
+    "target_object_quat": 4 * K,
+    "delta_object_quat": 4 * K,
+    "target_object_ang_vel": 3 * K,
+    "delta_object_ang_vel": 3 * K,
+    "object_to_finger_tips": 5,
+    "mano_fingertip_to_object": 5 * K,
+    "bps": 128,
+}
 
 class PPO(BaseAlgo):
     """
