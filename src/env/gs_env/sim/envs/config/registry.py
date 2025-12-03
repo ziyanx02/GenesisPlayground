@@ -751,6 +751,7 @@ EnvArgsRegistry["single_hand_retargeting"] = SingleHandRetargetingEnvArgs(
     object_id="O02@0032@00001",
     max_episode_length=2500,  # Max steps per episode
     obs_future_length=1,  # Number of future trajectory frames to observe (K in paper)
+    max_num_trajectories=1,  # Only train on a single trajectory for retargeting
 
     random_state_init=True,  # Randomize initial timestep in trajectory
     use_augmentation=False,

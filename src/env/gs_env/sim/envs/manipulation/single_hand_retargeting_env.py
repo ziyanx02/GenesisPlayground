@@ -276,6 +276,9 @@ class SingleHandRetargetingEnv(BaseEnv):
             all_traj_lengths.append(len(wrist_pos))
 
             print(f"  - Length: {len(wrist_pos)} timesteps")
+
+            if len(all_demo_data) >= self._args.max_num_trajectories:
+                break  # limit to max_num_trajectories
         
         if len(all_demo_data) == 0:
             raise ValueError(f"No trajectories found for object_id: {self._args.object_id}")

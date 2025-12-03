@@ -119,6 +119,7 @@ class SingleHandRetargetingEnvArgs(EnvArgs):
     trajectory_path: str
     object_id: str
     max_episode_length: int = 500
+    max_num_trajectories: int = 1
     obs_future_length: int = 5  # Number of future trajectory frames to observe (K)
     random_state_init: bool = True  # Randomize initial timestep in trajectory
     joint_mapping: dict[str, str]
