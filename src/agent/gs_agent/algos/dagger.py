@@ -104,6 +104,13 @@ class DAgger(BaseAlgo):
         )
         self._teacher.eval()
 
+        # Copy teacher's standard deviation to student's policy
+        with torch.no_grad():
+            self._actor.log_std.data.copy_(self._teacher.log_std.data)
+        print(
+            f"Copied teacher's log_std to student policy. Teacher log_std: {self._teacher.log_std.data}, Student log_std: {self._actor.log_std.data}"
+        )
+
     def _load_teacher_config(self, teacher_config_path: Path) -> None:
         """Load teacher environment config from yaml file."""
         if not teacher_config_path.is_file():

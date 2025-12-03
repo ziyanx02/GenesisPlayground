@@ -362,7 +362,7 @@ EnvArgsRegistry["g1_motion"] = MotionEnvArgs(
         "AnkleTorquePenalty": 0.003,
         "BodyAngVelXYPenalty": 1.0,
         "WaistVelPenalty": 0.5,
-        "G1FeetContactForceLimitPenalty": 2e-4,
+        "G1FeetContactForceLimitPenalty": 1e-4,
         "G1FeetSlidePenalty": 5.0,
     },
     img_resolution=(480, 270),
