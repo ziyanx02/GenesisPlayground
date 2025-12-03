@@ -108,7 +108,7 @@ class DAgger(BaseAlgo):
         with torch.no_grad():
             self._actor.log_std.data.copy_(self._teacher.log_std.data)
         print(
-            f"Copied teacher's log_std to student policy. Teacher log_std: {self._teacher.log_std.data}, Student log_std: {self._actor.log_std.data}"
+            f"Copied teacher's log_std to student policy."
         )
 
     def _load_teacher_config(self, teacher_config_path: Path) -> None:
