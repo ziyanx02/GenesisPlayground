@@ -261,6 +261,10 @@ class SingleHandRetargetingEnv(BaseEnv):
             if data["metadata"]["obj_id"] != self._args.object_id:
                 continue  # skip trajectories not matching the specified object_id
 
+            if self._args.trajectory_id is not None:
+                if self._args.trajectory_id not in traj_file.name:
+                    continue  # skip if trajectory_id is specified and does not match
+
             all_demo_data.append(data)
             hand_traj = data["hand_trajectory"]
 

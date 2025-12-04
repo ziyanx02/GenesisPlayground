@@ -118,6 +118,7 @@ class SingleHandRetargetingEnvArgs(EnvArgs):
     # Trajectory configuration
     trajectory_path: str
     object_id: str
+    trajectory_id: str | None = None  # If None, load all trajectories for the object
     max_episode_length: int = 500
     max_num_trajectories: int = 1
     obs_future_length: int = 5  # Number of future trajectory frames to observe (K)

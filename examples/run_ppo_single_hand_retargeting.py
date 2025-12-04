@@ -533,7 +533,7 @@ def main(
         num_envs = 1
         print("Evaluation mode: Loading trained policy")
         evaluate_policy(
-            exp_name=exp_name,
+            exp_name="ppo_single_hand_retargeting",
             show_viewer=show_viewer,
             num_ckpt=num_ckpt,
             device=device,
