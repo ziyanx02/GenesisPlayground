@@ -30,7 +30,7 @@ class BaseAlgo(ABC):
         self.device: Final[torch.device] = device
 
     @abstractmethod
-    def train_one_iteration(self) -> dict[str, Any]:
+    def train_one_iteration(self, freeze_actor: bool = False, freeze_critic: bool = False) -> dict[str, Any]:
         """
         Train the algorithm for a given iteration.
 

@@ -66,7 +66,9 @@ class OnPolicyRunner(BaseRunner):
 
         for iteration in range(self.args.total_iterations):
             # Training step
-            train_one_iteration_metrics = self.algorithm.train_one_iteration()
+            freeze_actor = iteration <= self.args.freeze_actor_iterations
+            freeze_critic = iteration <= self.args.freeze_critic_iterations
+            train_one_iteration_metrics = self.algorithm.train_one_iteration(freeze_actor=freeze_actor, freeze_critic=freeze_critic)
 
             total_iterations += 1
             total_steps += train_one_iteration_metrics["speed"]["rollout_step"]

@@ -206,7 +206,7 @@ class PPO(BaseAlgo):
             "info": mean_info,
         }
 
-    def _train_one_batch(self, mini_batch: dict[GAEBufferKey, torch.Tensor]) -> dict[str, Any]:
+    def _train_one_batch(self, mini_batch: dict[GAEBufferKey, torch.Tensor], freeze_actor: bool=False, freeze_critic: bool=False) -> dict[str, Any]:
         """Train one batch of rollouts."""
         actor_obs = mini_batch[GAEBufferKey.ACTOR_OBS]
         critic_obs = mini_batch[GAEBufferKey.CRITIC_OBS]
@@ -281,8 +281,10 @@ class PPO(BaseAlgo):
         total_loss.backward()
         nn.utils.clip_grad_norm_(self._actor.parameters(), self.cfg.max_grad_norm)
         nn.utils.clip_grad_norm_(self._critic.parameters(), self.cfg.max_grad_norm)
-        self._critic_optimizer.step()
-        self._actor_optimizer.step()
+        if not freeze_critic:
+            self._critic_optimizer.step()
+        if not freeze_actor:
+            self._actor_optimizer.step()
 
         return {
             "policy_loss": policy_loss.item(),
@@ -294,7 +296,7 @@ class PPO(BaseAlgo):
             "max_std": self._actor.action_std.max().item(),
         }
 
-    def train_one_iteration(self) -> dict[str, Any]:
+    def train_one_iteration(self, freeze_actor: bool=False, freeze_critic: bool=False) -> dict[str, Any]:
         """Train one iteration."""
         # collect rollouts
         t0 = time.time()
@@ -308,14 +310,15 @@ class PPO(BaseAlgo):
             num_mini_batches=self.cfg.num_mini_batches,
             num_epochs=self.cfg.num_epochs,
         ):
-            metrics = self._train_one_batch(mini_batch)
+            metrics = self._train_one_batch(mini_batch, freeze_actor=freeze_actor, freeze_critic=freeze_critic)
             train_metrics_list.append(metrics)
         t2 = time.time()
         train_time = t2 - t1
 
         # Update learning rate adaptively based on KL divergence
         avg_kl_mean = statistics.mean([metrics["kl_mean"] for metrics in train_metrics_list])
-        self._update_learning_rate(avg_kl_mean)
+        if not freeze_actor:
+            self._update_learning_rate(avg_kl_mean)
 
         self._rollouts.reset()
 
