@@ -14,7 +14,7 @@ import matplotlib
 matplotlib.use("Agg")  # Use non-interactive backend to prevent windows from showing
 import gs_env.sim.envs as gs_envs
 import torch
-from gs_agent.algos.config.registry import PPO_TELEOP_MLP, PPOArgs
+from gs_agent.algos.config.registry import PPO_TELEOP_MLP, DaggerArgs, PPOArgs
 from gs_agent.algos.ppo import PPO
 from gs_agent.runners.config.registry import RUNNER_TELEOP_MLP
 from gs_agent.runners.config.schema import RunnerArgs
@@ -121,7 +121,23 @@ def evaluate_policy(
     print(f"Loading configs from experiment: {exp_dir}")
 
     env_args = yaml_to_config(Path(exp_dir) / "configs" / "env_args.yaml", MotionEnvArgs)
-    algo_cfg = yaml_to_config(Path(exp_dir) / "configs" / "algo_cfg.yaml", PPOArgs)
+    algo_cfg = None
+    try:
+        algo_cfg = yaml_to_config(Path(exp_dir) / "configs" / "algo_cfg.yaml", PPOArgs)
+    except Exception:
+        try:
+            dagger_cfg = yaml_to_config(Path(exp_dir) / "configs" / "algo_cfg.yaml", DaggerArgs)
+            print("Detected DAgger algorithm from config, converting to PPOArgs for evaluation")
+
+            # Convert DaggerArgs to PPOArgs
+            # Map common fields from DaggerArgs to PPOArgs
+            algo_cfg = PPOArgs(
+                policy_backbone=dagger_cfg.policy_backbone,
+                critic_backbone=dagger_cfg.critic_backbone,
+            )
+            print("Converted DAgger config to PPO config")
+        except Exception as e:
+            raise ValueError(f"Could not determine algorithm type from config: {e}") from Exception
 
     env_args = apply_overrides_generic(env_args, env_overrides, prefixes=("cfgs.", "env."))
 
@@ -402,6 +418,10 @@ def resume_training(
         env_args = yaml_to_config(Path(exp_dir) / "configs" / "env_args.yaml", MotionEnvArgs)
         runner_args = yaml_to_config(Path(exp_dir) / "configs" / "runner_args.yaml", RunnerArgs)
         algo_cfg = yaml_to_config(Path(exp_dir) / "configs" / "algo_cfg.yaml", PPOArgs)
+
+    env_args = cast(MotionEnvArgs, env_args).model_copy(
+        update={"scene_args": SceneArgsRegistry["flat_scene_legged"]}
+    )
 
     # Create environment
     env = create_gs_env(
