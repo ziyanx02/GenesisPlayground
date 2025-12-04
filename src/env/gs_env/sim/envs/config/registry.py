@@ -895,6 +895,16 @@ EnvArgsRegistry["single_hand_retargeting"] = SingleHandRetargetingEnvArgs(
         "delta_wrist_pos": 10,
         "delta_finger_link_vel": 5,
         "delta_finger_link_pos": 10,
+
+        "target_object_vel": 10,
+        "tactile_forces_flat": 5,
+        "object_to_finger_tips": 10,
+        "object_pos_rel": 5,
+        "object_com_pos": 5,
+        "object_ang_vel": 0.1,
+        "delta_object_ang_vel": 0.1,
+        "mano_fingertip_to_object": 10,
+        "delta_object_pos": 10,
     },
     obs_noises={
         # TODO
