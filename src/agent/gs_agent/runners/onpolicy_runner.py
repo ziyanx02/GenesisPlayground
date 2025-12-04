@@ -64,11 +64,18 @@ class OnPolicyRunner(BaseRunner):
         total_iterations = 0
         reward_list = []
 
+        if self.args.freeze_actor_iterations:
+            self.algorithm.freeze_actor()
+        if self.args.freeze_critic_iterations:
+            self.algorithm.freeze_critic()
+
         for iteration in range(self.args.total_iterations):
             # Training step
-            freeze_actor = iteration <= self.args.freeze_actor_iterations
-            freeze_critic = iteration <= self.args.freeze_critic_iterations
-            train_one_iteration_metrics = self.algorithm.train_one_iteration(freeze_actor=freeze_actor, freeze_critic=freeze_critic)
+            if iteration == self.args.freeze_actor_iterations:
+                self.algorithm.unfreeze_actor()
+            if iteration == self.args.freeze_critic_iterations:
+                self.algorithm.unfreeze_critic()
+            train_one_iteration_metrics = self.algorithm.train_one_iteration()
 
             total_iterations += 1
             total_steps += train_one_iteration_metrics["speed"]["rollout_step"]
