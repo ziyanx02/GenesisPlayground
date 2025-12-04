@@ -15,6 +15,7 @@ from gs_env.common.utils.math_utils import (
     quat_mul,
     quat_to_angle_axis,
     quat_to_euler,
+    quat_to_rotation_6D,
     slerp,
 )
 
@@ -814,3 +815,83 @@ class MotionLib:
     @property
     def fps(self) -> float:
         return self._target_fps
+
+
+def batched_global_to_local(base_quat: torch.Tensor, global_vec: torch.Tensor) -> torch.Tensor:
+    assert base_quat.shape[0] == global_vec.shape[0]
+    global_vec_shape = global_vec.shape
+    global_vec = global_vec.reshape(global_vec_shape[0], -1, global_vec_shape[-1])
+    B, L, D = global_vec.shape
+    global_flat = global_vec.reshape(B * L, D)
+    quat_rep = base_quat[:, None, :].repeat(1, L, 1).reshape(B * L, 4)
+    if D == 3:
+        local_flat = quat_apply(quat_inv(quat_rep), global_flat)
+    elif D == 4:
+        local_flat = quat_mul(quat_inv(quat_rep), global_flat)
+    else:
+        raise ValueError(
+            f"Global vector shape must be (B, L, 3) or (B, L, 4), but got {global_flat.shape}"
+        )
+    return local_flat.reshape(global_vec_shape)
+
+
+def build_motion_obs_from_dict(
+    curr_obs: dict[str, torch.Tensor],
+    future_obs: dict[str, torch.Tensor],
+    envs_idx: torch.Tensor,
+    tracking_link_idx_local: list[int] | None = None,
+    base_quat: torch.Tensor | None = None,
+) -> torch.Tensor:
+    """Transform motion observations into local-yaw space and 6D rotations.
+
+    Returns processed (curr_dict, future_dict), without touching self.ref_ variables.
+    """
+    B = envs_idx.shape[0]
+    motion_obs_list: list[torch.Tensor] = []
+
+    # Compute yaw quaternion from current base quat if available
+    quat_yaw = curr_obs["quat_yaw"]
+
+    if "base_pos" in future_obs:
+        pos_diff = future_obs["base_pos"] - curr_obs["base_pos"][:, None, :]
+        motion_obs_list.append(batched_global_to_local(quat_yaw, pos_diff).reshape(B, -1))
+    if "base_quat" in future_obs:
+        qy = quat_yaw[:, None, :].repeat(1, future_obs["base_quat"].shape[1], 1)
+        base_quat_local = quat_mul(quat_inv(qy), future_obs["base_quat"])
+        if base_quat is None:
+            base_quat = curr_obs["base_quat"][:, None, :]
+        else:
+            base_quat = base_quat[envs_idx, None, :].repeat(1, future_obs["base_quat"].shape[1], 1)
+        base_quat_diff = quat_mul(quat_inv(base_quat), future_obs["base_quat"])
+        motion_obs_list.append(quat_to_rotation_6D(base_quat_local).reshape(B, -1))
+        motion_obs_list.append(
+            quat_to_rotation_6D(quat_diff(base_quat, base_quat_diff)).reshape(B, -1)
+        )
+    if "base_lin_vel" in future_obs:
+        motion_obs_list.append(
+            batched_global_to_local(quat_yaw, future_obs["base_lin_vel"]).reshape(B, -1)
+        )
+    if "base_ang_vel" in future_obs:
+        motion_obs_list.append(
+            batched_global_to_local(quat_yaw, future_obs["base_ang_vel"]).reshape(B, -1)
+        )
+    if "base_ang_vel_local" in future_obs:
+        motion_obs_list.append(future_obs["base_ang_vel_local"].reshape(B, -1))
+    if "dof_pos" in future_obs:
+        motion_obs_list.append(future_obs["dof_pos"].reshape(B, -1))
+    if "dof_vel" in future_obs:
+        motion_obs_list.append(0.1 * future_obs["dof_vel"].reshape(B, -1))
+    if "link_pos_local" in future_obs:
+        motion_obs_list.append(
+            future_obs["link_pos_local"][:, :, tracking_link_idx_local, :].reshape(B, -1)
+        )
+    if "link_quat_local" in future_obs:
+        motion_obs_list.append(
+            quat_to_rotation_6D(
+                future_obs["link_quat_local"][:, :, tracking_link_idx_local, :]
+            ).reshape(B, -1)
+        )
+    if "foot_contact" in future_obs:
+        motion_obs_list.append(future_obs["foot_contact"].reshape(B, -1))
+
+    return torch.cat(motion_obs_list, dim=-1)
