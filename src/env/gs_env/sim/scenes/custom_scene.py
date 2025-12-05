@@ -4,6 +4,7 @@ import genesis as gs
 import torch
 
 from gs_env.common.bases.base_scene import BaseSimScene
+from gs_env.common.utils.math_utils import quat_apply, quat_from_euler, quat_mul
 from gs_env.sim.scenes.config.schema import CustomSceneArgs
 from gs_env.sim.scenes.flat_scene import FlatScene
 
@@ -48,6 +49,7 @@ class CustomScene(FlatScene):
                 gs.morphs.Plane(normal=args.normal),
             )
         self._objects = {}
+        self._objects_offset = {}
         for object in args.objects:
             obj_type: str = object.get("type", "")
             if obj_type.lower() in ["obj", "stl", "ply"]:
@@ -110,6 +112,15 @@ class CustomScene(FlatScene):
             else:
                 raise ValueError(f"Unsupported object type: {obj_type}")
             self._objects[object["name"]] = obj
+            pos_offset = object.get("pos_offset", (0.0, 0.0, 0.0))
+            rot_offset = torch.tensor(
+                object.get("rot_offset", (0.0, 0.0, 0.0)), device=self._device
+            )
+            quat_offset = quat_from_euler(rot_offset)
+            self._objects_offset[object["name"]] = (
+                torch.tensor(pos_offset, device=self._device)[None, :].repeat(num_envs, 1),
+                quat_offset[None, :].repeat(num_envs, 1),
+            )
             print(f"Added object: {object['name']}")
 
         #
@@ -138,10 +149,12 @@ class CustomScene(FlatScene):
                 "Quaternion must be a tensor of shape (num_envs, 4)"
             )
         obj = self._objects[name]
+        pos_offset = quat_apply(quat, self._objects_offset[name][0][envs_idx])
+        quat_offset = quat_mul(quat, self._objects_offset[name][1][envs_idx])
         if pos is not None:
-            obj.set_pos(pos, envs_idx=envs_idx)
+            obj.set_pos(pos + pos_offset, envs_idx=envs_idx)
         if quat is not None:
-            obj.set_quat(quat, envs_idx=envs_idx)
+            obj.set_quat(quat_offset, envs_idx=envs_idx)
 
     @property
     def objects(self) -> dict[str, Any]:
