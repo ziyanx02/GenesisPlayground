@@ -178,6 +178,8 @@ def main(
 
             # Advance motion time and compute reference frame (looping)
             t_val += 0.02
+            if t_val > motion_lib.get_motion_length(motion_id_t):
+                t_val = 0.0
             motion_time_t = torch.tensor([t_val], dtype=torch.float32, device=device_t)
             (
                 ref_base_pos,
@@ -192,8 +194,10 @@ def main(
                 ref_foot_contact,
             ) = motion_lib.get_ref_motion_frame(motion_ids=motion_id_t, motion_times=motion_time_t)
 
+            _ = ref_base_ang_vel_local
             _ = ref_link_pos_local
             _ = ref_link_quat_local
+            _ = ref_foot_contact
 
             # Construct observation (matching training observation structure)
             obs_components = []

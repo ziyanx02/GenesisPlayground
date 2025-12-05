@@ -4,7 +4,6 @@ import redis
 import torch
 from gs_env.common.utils.math_utils import (
     quat_apply,
-    quat_from_angle_axis,
     quat_from_euler,
     quat_inv,
     quat_mul,
@@ -309,105 +308,6 @@ class RedisClient:
             )
         return local_flat.reshape(global_vec_shape)
 
-    def compute_motion_obs(self) -> torch.Tensor:
-        """Compute motion observation with 1 future step.
-
-        Builds a subset of motion_obs similar to MotionEnv._build_motion_obs_from_dict.
-        Uses current ref_ values as the future frame and last_base_* as current.
-        Included elements are controlled via set_motion_obs_elements(); default: none.
-
-        Returns:
-            Motion observation tensor of shape (1, M).
-        """
-        # If no elements selected, return empty observation
-        if not self._motion_obs_elements:
-            return torch.zeros(1, 0, device=self._device)
-
-        # Compute yaw quaternion from last_base_quat
-        quat_yaw = quat_from_angle_axis(
-            quat_to_euler(self.last_base_quat)[:, 2],
-            torch.tensor([0, 0, 1], device=self._device, dtype=torch.float32),
-        )
-
-        motion_obs_list: list[torch.Tensor] = []
-
-        # base_pos difference (future - current) in local-yaw frame
-        if "base_pos" in self._motion_obs_elements:
-            motion_obs_list.append(
-                self._batched_global_to_local(
-                    quat_yaw, (self.ref_base_pos.unsqueeze(1) - self.last_base_pos[:, None, :])
-                ).reshape(1, -1)
-            )
-
-        # base_quat in local-yaw frame and difference from current base_quat
-        if "base_quat" in self._motion_obs_elements:
-            qy = quat_yaw[:, None, :].repeat(1, 1, 1)
-            future_base_quat = self.ref_base_quat.unsqueeze(1)
-            motion_obs_list.append(
-                quat_to_rotation_6D(quat_mul(quat_inv(qy), future_base_quat)).reshape(1, -1)
-            )
-            motion_obs_list.append(
-                quat_to_rotation_6D(
-                    quat_mul(
-                        quat_inv(self.last_base_quat[:, None, :].repeat(1, 1, 1)), future_base_quat
-                    )
-                ).reshape(1, -1)
-            )
-
-        # base_lin_vel in local-yaw frame
-        if "base_lin_vel" in self._motion_obs_elements:
-            motion_obs_list.append(
-                self._batched_global_to_local(
-                    quat_yaw,
-                    quat_apply(self.ref_base_quat, self.ref_base_lin_vel_local).unsqueeze(1),
-                ).reshape(1, -1)
-            )
-
-        # base_ang_vel in local-yaw frame
-        if "base_ang_vel" in self._motion_obs_elements:
-            motion_obs_list.append(
-                self._batched_global_to_local(
-                    quat_yaw,
-                    quat_apply(self.ref_base_quat, self.ref_base_ang_vel_local).unsqueeze(1),
-                ).reshape(1, -1)
-            )
-
-        # base_ang_vel_local (already local)
-        if "base_ang_vel_local" in self._motion_obs_elements:
-            motion_obs_list.append(self.ref_base_ang_vel_local.unsqueeze(1).reshape(1, -1))
-
-        # dof_pos
-        if "dof_pos" in self._motion_obs_elements:
-            motion_obs_list.append(self.ref_dof_pos.unsqueeze(1).reshape(1, -1))
-
-        # dof_vel (scaled by 0.1)
-        if "dof_vel" in self._motion_obs_elements:
-            motion_obs_list.append((0.1 * self.ref_dof_vel.unsqueeze(1)).reshape(1, -1))
-
-        # link_pos_local (tracking links only)
-        if (
-            "link_pos_local" in self._motion_obs_elements
-            and self.num_tracking_links > 0
-            and self.link_pos_local_yaw.shape[1] > 0
-        ):
-            motion_obs_list.append(self.link_pos_local_yaw.unsqueeze(1).reshape(1, -1))
-
-        # link_quat_local (tracking links only, converted to 6D rotation)
-        if (
-            "link_quat_local" in self._motion_obs_elements
-            and self.num_tracking_links > 0
-            and self.link_quat_local_yaw.shape[1] > 0
-        ):
-            motion_obs_list.append(
-                quat_to_rotation_6D(self.link_quat_local_yaw.unsqueeze(1)).reshape(1, -1)
-            )
-
-        # foot_contact
-        if "foot_contact" in self._motion_obs_elements and self.foot_contact.shape[1] > 0:
-            motion_obs_list.append(self.foot_contact.unsqueeze(1).reshape(1, -1))
-
-        return torch.cat(motion_obs_list, dim=-1)
-
     def update_quat(self, quat: torch.Tensor) -> None:
         """Compute and store yaw difference from input quaternion.
         The stored yaw difference will be applied to all subsequent updates.
@@ -467,3 +367,42 @@ class RedisClient:
             return
         filtered = [e for e in elements if e in valid]
         self._motion_obs_elements = set(filtered)
+
+    def get_future_dict(self, motion_obs_elements: list[str]) -> dict[str, torch.Tensor]:
+        """Build and filter future_dict from current Redis data based on motion_obs_elements.
+
+        Args:
+            motion_obs_elements: List of motion observation element names to include.
+
+        Returns:
+            Dictionary with keys from motion_obs_elements and corresponding tensor values.
+            Each tensor is shaped as (1, 1, ...) to represent a single future step.
+        """
+        future_dict: dict[str, torch.Tensor] = {}
+
+        # Mapping from motion obs element names to RedisClient attributes
+        # Note: We use ref_* attributes where available, as they're already transformed
+        for key in motion_obs_elements:
+            if key == "base_pos":
+                future_dict[key] = self.ref_base_pos.unsqueeze(1)
+            elif key == "base_quat":
+                future_dict[key] = self.ref_base_quat.unsqueeze(1)
+            elif key == "base_lin_vel":
+                future_dict[key] = self.ref_base_lin_vel_local.unsqueeze(1)
+            elif key == "base_ang_vel":
+                base_ang_vel_global = quat_apply(self.ref_base_quat, self.ref_base_ang_vel_local)
+                future_dict[key] = base_ang_vel_global.unsqueeze(1)
+            elif key == "base_ang_vel_local":
+                future_dict[key] = self.ref_base_ang_vel_local.unsqueeze(1)
+            elif key == "dof_pos":
+                future_dict[key] = self.ref_dof_pos.unsqueeze(1)
+            elif key == "dof_vel":
+                future_dict[key] = self.ref_dof_vel.unsqueeze(1)
+            elif key == "link_pos_local":
+                future_dict[key] = self.link_pos_local_yaw.unsqueeze(1)
+            elif key == "link_quat_local":
+                future_dict[key] = self.link_quat_local_yaw.unsqueeze(1)
+            elif key == "foot_contact":
+                future_dict[key] = self.ref_foot_contact.unsqueeze(1)
+
+        return future_dict

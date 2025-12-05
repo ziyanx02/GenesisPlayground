@@ -740,10 +740,6 @@ class MotionLib:
         for key in observed_steps.keys():
             tensor = getattr(self, f"_motion_{key}")
             curr_obs[key] = tensor[curr_idx]
-        curr_obs["quat_yaw"] = quat_from_angle_axis(
-            quat_to_euler(curr_obs["base_quat"])[:, -1],
-            torch.tensor([0, 0, 1], device=self._device, dtype=torch.float),
-        )  # (B, 4)
 
         def gather(term: str) -> torch.Tensor:
             steps_tensor = observed_steps[term]
@@ -850,7 +846,10 @@ def build_motion_obs_from_dict(
     motion_obs_list: list[torch.Tensor] = []
 
     # Compute yaw quaternion from current base quat if available
-    quat_yaw = curr_obs["quat_yaw"]
+    quat_yaw = quat_from_angle_axis(
+        quat_to_euler(curr_obs["base_quat"])[:, -1],
+        torch.tensor([0, 0, 1], device=curr_obs["base_quat"].device, dtype=torch.float),
+    )
 
     if "base_pos" in future_obs:
         pos_diff = future_obs["base_pos"] - curr_obs["base_pos"][:, None, :]
@@ -880,15 +879,23 @@ def build_motion_obs_from_dict(
     if "dof_vel" in future_obs:
         motion_obs_list.append(0.1 * future_obs["dof_vel"].reshape(B, -1))
     if "link_pos_local" in future_obs:
-        motion_obs_list.append(
-            future_obs["link_pos_local"][:, :, tracking_link_idx_local, :].reshape(B, -1)
-        )
+        if tracking_link_idx_local is not None:
+            motion_obs_list.append(
+                future_obs["link_pos_local"][:, :, tracking_link_idx_local, :].reshape(B, -1)
+            )
+        else:
+            motion_obs_list.append(future_obs["link_pos_local"].reshape(B, -1))
     if "link_quat_local" in future_obs:
-        motion_obs_list.append(
-            quat_to_rotation_6D(
-                future_obs["link_quat_local"][:, :, tracking_link_idx_local, :]
-            ).reshape(B, -1)
-        )
+        if tracking_link_idx_local is not None:
+            motion_obs_list.append(
+                quat_to_rotation_6D(
+                    future_obs["link_quat_local"][:, :, tracking_link_idx_local, :]
+                ).reshape(B, -1)
+            )
+        else:
+            motion_obs_list.append(
+                quat_to_rotation_6D(future_obs["link_quat_local"]).reshape(B, -1)
+            )
     if "foot_contact" in future_obs:
         motion_obs_list.append(future_obs["foot_contact"].reshape(B, -1))
 

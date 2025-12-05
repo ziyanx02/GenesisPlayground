@@ -6,6 +6,7 @@ from pathlib import Path
 import fire
 import torch
 from gs_env.common.utils.math_utils import quat_apply, quat_from_angle_axis, quat_mul
+from gs_env.common.utils.motion_utils import build_motion_obs_from_dict
 from gs_env.sim.envs.config.registry import EnvArgsRegistry
 from gs_env.sim.envs.config.schema import MotionEnvArgs
 
@@ -209,6 +210,7 @@ def main(
 
         # Build link_name_to_idx mapping: index in tracking_link_names list
         link_name_to_idx = {link_name: idx for idx, link_name in enumerate(tracking_link_names)}
+        motion_obs_elements = list(getattr(env_args, "observed_steps", {}).keys())
 
         redis_client.update()
         redis_client.update_quat(env.base_quat)
@@ -250,7 +252,18 @@ def main(
                         getattr(redis_client, key) * env_args.obs_scales.get(key, 1.0)
                     ).reshape(1, -1)
                 elif key == "motion_obs":
-                    obs_gt = redis_client.compute_motion_obs()
+                    curr_dict = {
+                        "base_pos": redis_client.last_base_pos,
+                        "base_quat": redis_client.last_base_quat,
+                    }
+                    future_dict = redis_client.get_future_dict(motion_obs_elements)
+
+                    obs_gt = build_motion_obs_from_dict(
+                        curr_dict,
+                        future_dict,
+                        torch.tensor([0], dtype=torch.long, device=device),
+                        base_quat=env.base_quat,
+                    )
                 else:
                     obs_gt = getattr(env, key) * env_args.obs_scales.get(key, 1.0)
                     # print(key, obs_gt)
