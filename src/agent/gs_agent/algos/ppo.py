@@ -365,7 +365,8 @@ class PPO(BaseAlgo):
     def save(self, path: Path) -> None:
         """Save the algorithm to a file."""
         saved_dict = {
-            "model_state_dict": self._actor.state_dict(),
+            "actor_state_dict": self._actor.state_dict(),
+            "critic_state_dict": self._critic.state_dict(),
             "actor_optimizer_state_dict": self._actor_optimizer.state_dict(),
             "critic_optimizer_state_dict": self._critic_optimizer.state_dict(),
             "iter": self.current_iter,
@@ -375,16 +376,7 @@ class PPO(BaseAlgo):
     def load(self, path: Path, load_optimizer: bool = True) -> None:
         """Load the algorithm from a file."""
         checkpoint = torch.load(path, map_location=self.device)
-        self._actor.load_state_dict(checkpoint["model_state_dict"])
-        if load_optimizer:
-            self._actor_optimizer.load_state_dict(checkpoint["actor_optimizer_state_dict"])
-            self._critic_optimizer.load_state_dict(checkpoint["critic_optimizer_state_dict"])
-        self.current_iter = checkpoint["iter"]
-
-    def load_full_checkpoint(self, path: Path, load_optimizer: bool = True) -> None:
-        """Load the full checkpoint from a file."""
-        checkpoint = torch.load(path, map_location=self.device)
-        self._actor.load_state_dict(checkpoint["model_state_dict"])
+        self._actor.load_state_dict(checkpoint["actor_state_dict"])
         self._critic.load_state_dict(checkpoint["critic_state_dict"])
         if load_optimizer:
             self._actor_optimizer.load_state_dict(checkpoint["actor_optimizer_state_dict"])

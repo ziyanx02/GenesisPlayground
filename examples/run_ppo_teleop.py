@@ -437,7 +437,7 @@ def resume_training(
 
     # Load checkpoint
     try:
-        algorithm.load_full_checkpoint(ckpt_path, load_optimizer=True)
+        algorithm.load(ckpt_path, load_optimizer=True)
         start_iteration = algorithm.current_iter
         print(f"Successfully loaded checkpoint. Resuming from iteration: {start_iteration}")
     except Exception as e:

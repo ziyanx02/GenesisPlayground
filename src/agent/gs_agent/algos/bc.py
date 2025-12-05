@@ -116,7 +116,7 @@ class BC(BaseAlgo):
             action_dim=self._action_dim,
         ).to(self.device)
         self._teacher.load_state_dict(
-            torch.load(teacher_path, map_location=self.device)["model_state_dict"]
+            torch.load(teacher_path, map_location=self.device)["actor_state_dict"]
         )
         self._teacher.eval()
 
@@ -271,7 +271,7 @@ class BC(BaseAlgo):
 
     def save(self, path: Path, infos: dict[str, Any] | None = None) -> None:
         saved_dict = {
-            "model_state_dict": self._actor.state_dict(),
+            "actor_state_dict": self._actor.state_dict(),
             "optimizer_state_dict": self._actor_optimizer.state_dict(),
             "iter": self.current_iter,
         }
@@ -281,7 +281,7 @@ class BC(BaseAlgo):
 
     def load(self, path: Path, load_optimizer: bool = True) -> None:
         checkpoint = torch.load(path, map_location=self.device)
-        self._actor.load_state_dict(checkpoint["model_state_dict"])
+        self._actor.load_state_dict(checkpoint["actor_state_dict"])
         if load_optimizer:
             self._actor_optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         self.current_iter = checkpoint["iter"]
