@@ -470,9 +470,11 @@ class PPO(BaseAlgo):
         """Save the algorithm to a file."""
         saved_dict = {
             "model_state_dict": self._actor.state_dict(),
+            "critic_state_dict": self._critic.state_dict(),
             "actor_optimizer_state_dict": self._actor_optimizer.state_dict(),
             "critic_optimizer_state_dict": self._critic_optimizer.state_dict(),
             "iter": self.current_iter,
+            "current_lr": self._current_lr,
         }
         torch.save(saved_dict, path)
 
@@ -480,10 +482,21 @@ class PPO(BaseAlgo):
         """Load the algorithm from a file."""
         checkpoint = torch.load(path, map_location=self.device)
         self._actor.load_state_dict(checkpoint["model_state_dict"])
+
+        # Load critic if saved (backward compatibility)
+        if "critic_state_dict" in checkpoint:
+            self._critic.load_state_dict(checkpoint["critic_state_dict"])
+
         if load_optimizer:
             self._actor_optimizer.load_state_dict(checkpoint["actor_optimizer_state_dict"])
             self._critic_optimizer.load_state_dict(checkpoint["critic_optimizer_state_dict"])
+
         self.current_iter = checkpoint["iter"]
+
+        # Restore learning rate if saved (backward compatibility)
+        if "current_lr" in checkpoint:
+            self._current_lr = checkpoint["current_lr"]
+            print(f"Restored learning rate: {self._current_lr}")
 
     def train_mode(self) -> None:
         """Set the algorithm to train mode."""

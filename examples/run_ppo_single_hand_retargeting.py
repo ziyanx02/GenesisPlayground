@@ -412,8 +412,13 @@ def train_policy(
     algo_cfg: Any = None,
     runner_args: Any = None,
     video_log_freq: int | None = None,
+    resume_checkpoint: str | None = None,
 ) -> None:
-    """Train the policy using PPO."""
+    """Train the policy using PPO.
+
+    Args:
+        resume_checkpoint: Path to checkpoint file to resume training from, or 'latest' to auto-find
+    """
 
     # Create environment
     env = create_gs_env(
@@ -435,12 +440,56 @@ def train_policy(
     if video_log_freq is not None:
         runner.algorithm.set_video_log_freq(video_log_freq, fps=20)
 
+    # Load checkpoint if resuming training
+    start_iteration = 0
+    resume_from_dir = None
+    if resume_checkpoint is not None:
+        if resume_checkpoint == "latest":
+            # Find latest checkpoint from experiment
+            if exp_name is None:
+                raise ValueError("exp_name must be specified when using resume_checkpoint='latest'")
+            log_pattern = f"logs/{exp_name}/*"
+            log_dirs = glob.glob(log_pattern)
+            if not log_dirs:
+                raise FileNotFoundError(f"No experiment directories found matching pattern: {log_pattern}")
+            log_dirs.sort(key=lambda x: os.path.getmtime(x), reverse=True)
+            exp_dir = log_dirs[0]
+            ckpt_path = load_latest_model(Path(exp_dir))
+            print(f"Resuming from latest checkpoint: {ckpt_path}")
+        else:
+            # Use specified checkpoint path
+            ckpt_path = Path(resume_checkpoint)
+            if not ckpt_path.exists():
+                raise FileNotFoundError(f"Checkpoint not found: {ckpt_path}")
+            print(f"Resuming from checkpoint: {ckpt_path}")
+
+        # Load the checkpoint
+        runner.load_checkpoint(ckpt_path)
+
+        # Use the iteration counter from the checkpoint itself (already incremented)
+        start_iteration = runner.algorithm.current_iter
+        print(f"Resuming training from iteration {start_iteration}")
+
+        # When resuming, use the same directory as the checkpoint
+        resume_from_dir = ckpt_path.parent.parent  # Go up from checkpoints/ to experiment dir
+        print(f"Resuming will continue in directory: {resume_from_dir}")
+
+        # Update the runner's checkpoint directory to use the resumed location
+        runner.save_dir = resume_from_dir
+        runner.checkpoint_dir = resume_from_dir / "checkpoints"
+        print(f"Checkpoints will be saved to: {runner.checkpoint_dir}")
+
     # Set up logging with proper configuration
     if exp_name is not None:
         save_path = Path(f"./logs/{exp_name}")
     else:
         save_path = runner_args.save_path
-    logger_folder = save_path / datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    # Use existing directory when resuming, or create new timestamped one for fresh training
+    if resume_checkpoint is not None:
+        logger_folder = resume_from_dir
+    else:
+        logger_folder = save_path / datetime.now().strftime("%Y%m%d_%H%M%S")
     logger = logger_configure(
         folder=str(logger_folder),
         format_strings=["stdout", "csv", "wandb"],
@@ -462,8 +511,8 @@ def train_policy(
     print("Starting training...")
 
     def train() -> None:
-        nonlocal runner, logger
-        train_summary_info = runner.train(metric_logger=logger)
+        nonlocal runner, logger, start_iteration
+        train_summary_info = runner.train(metric_logger=logger, start_iteration=start_iteration)
         print("Training completed successfully!")
         print(f"Training completed in {train_summary_info['total_time']:.2f} seconds.")
         print(f"Total iterations: {train_summary_info['total_iterations']}.")
@@ -492,6 +541,7 @@ def main(
     use_wandb: bool = True,
     env_name: str = "single_hand_retargeting",
     video_log_freq: int | None = 100,
+    resume_checkpoint: str | None = None,
     **cfg_overrides: Any,
 ) -> None:
     """Entry point.
@@ -504,6 +554,8 @@ def main(
     --algo.lr=1e-3
     --runner.total_iterations=5000
     --video_log_freq=100  # Log video every 100 iterations (set to None to disable)
+    --resume_checkpoint=latest  # Resume from latest checkpoint in exp_name
+    --resume_checkpoint=path/to/checkpoint.pt  # Resume from specific checkpoint
     """
     # Bucket overrides into env / algo / runner
     env_overrides: dict[str, Any] = {}
@@ -553,6 +605,7 @@ def main(
             algo_cfg=algo_cfg,
             runner_args=runner_args,
             video_log_freq=video_log_freq,
+            resume_checkpoint=resume_checkpoint,
         )
 
 

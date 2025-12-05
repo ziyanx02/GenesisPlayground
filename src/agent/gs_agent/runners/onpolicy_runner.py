@@ -39,32 +39,36 @@ class OnPolicyRunner(BaseRunner):
         self.device: Final[torch.device] = device
 
         # Create save directory
-        self.save_dir: Final[Path] = self.args.save_path / datetime.datetime.now().strftime(
+        self.save_dir: Path = self.args.save_path / datetime.datetime.now().strftime(
             "%Y%m%d_%H%M%S"
         )
         # self.save_dir.mkdir(parents=True, exist_ok=True)
-        self.checkpoint_dir: Final[Path] = self.save_dir / "checkpoints"
+        self.checkpoint_dir: Path = self.save_dir / "checkpoints"
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
         print(f"OnPolicyRunner initialized with save path: {self.args.save_path}")
 
-    def train(self, metric_logger: Any) -> dict[str, int | float | str]:
+    def train(self, metric_logger: Any, start_iteration: int = 0) -> dict[str, int | float | str]:
         """Train the algorithm for a specified number of episodes.
 
         Args:
             metric_logger: Metric logger to log metrics to
+            start_iteration: Iteration number to start from (for resuming training)
 
         Returns:
             Dictionary containing training results and final metrics
         """
-        print(f"Starting training for {self.args.total_iterations} iterations")
+        if start_iteration > 0:
+            print(f"Resuming training from iteration {start_iteration} to {self.args.total_iterations}")
+        else:
+            print(f"Starting training for {self.args.total_iterations} iterations")
 
         start_time = time.time()
         total_steps = 0
         total_iterations = 0
         reward_list = []
 
-        for iteration in range(self.args.total_iterations):
+        for iteration in range(start_iteration, self.args.total_iterations):
             # Training step
             train_one_iteration_metrics = self.algorithm.train_one_iteration()
 
