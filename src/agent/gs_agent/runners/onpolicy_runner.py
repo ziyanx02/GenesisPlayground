@@ -65,8 +65,10 @@ class OnPolicyRunner(BaseRunner):
         reward_list = []
 
         if self.args.freeze_actor_iterations:
+            print(f"Freezing actor for {self.args.freeze_actor_iterations} iterations")
             self.algorithm.freeze_actor()
         if self.args.freeze_critic_iterations:
+            print(f"Freezing critic for {self.args.freeze_critic_iterations} iterations")
             self.algorithm.freeze_critic()
 
         for iteration in range(self.args.total_iterations):

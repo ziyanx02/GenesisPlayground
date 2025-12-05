@@ -369,6 +369,9 @@ def resume_training(
     env_args: Any = None,
     algo_cfg: Any = None,
     runner_args: Any = None,
+    env_overrides: dict[str, Any] | None = None,
+    algo_overrides: dict[str, Any] | None = None,
+    runner_overrides: dict[str, Any] | None = None,
 ) -> None:
     """Resume training from a checkpoint.
 
@@ -416,8 +419,18 @@ def resume_training(
         # Load configs
         print(f"Loading configs from experiment: {exp_dir}")
         env_args = yaml_to_config(Path(exp_dir) / "configs" / "env_args.yaml", MotionEnvArgs)
-        runner_args = yaml_to_config(Path(exp_dir) / "configs" / "runner_args.yaml", RunnerArgs)
         algo_cfg = yaml_to_config(Path(exp_dir) / "configs" / "algo_cfg.yaml", PPOArgs)
+        runner_args = yaml_to_config(Path(exp_dir) / "configs" / "runner_args.yaml", RunnerArgs)
+        if env_overrides is not None:
+            env_args = apply_overrides_generic(env_args, env_overrides, prefixes=("cfgs.", "env."))
+        if algo_overrides is not None:
+            algo_cfg = apply_overrides_generic(
+                algo_cfg, algo_overrides, prefixes=("cfgs.", "algo.")
+            )
+        if runner_overrides is not None:
+            runner_args = apply_overrides_generic(
+                runner_args, runner_overrides, prefixes=("cfgs.", "runner.")
+            )
 
     env_args = cast(MotionEnvArgs, env_args).model_copy(
         update={"scene_args": SceneArgsRegistry["flat_scene_legged"]}
@@ -730,6 +743,9 @@ def main(
             env_args=env_args,
             algo_cfg=algo_cfg,
             runner_args=runner_args,
+            env_overrides=env_overrides,
+            algo_overrides=algo_overrides,
+            runner_overrides=runner_overrides,
         )
         return
     elif eval:
