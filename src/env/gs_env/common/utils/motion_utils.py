@@ -861,12 +861,10 @@ def build_motion_obs_from_dict(
         if base_quat is None:
             base_quat = curr_obs["base_quat"][:, None, :]
         else:
-            base_quat = base_quat[envs_idx, None, :].repeat(1, future_obs["base_quat"].shape[1], 1)
+            base_quat = base_quat[:, None, :].repeat(1, future_obs["base_quat"].shape[1], 1)
         base_quat_diff = quat_mul(quat_inv(base_quat), future_obs["base_quat"])
         motion_obs_list.append(quat_to_rotation_6D(base_quat_local).reshape(B, -1))
-        motion_obs_list.append(
-            quat_to_rotation_6D(quat_diff(base_quat, base_quat_diff)).reshape(B, -1)
-        )
+        motion_obs_list.append(quat_to_rotation_6D(base_quat_diff).reshape(B, -1))
     if "base_lin_vel" in future_obs:
         motion_obs_list.append(
             batched_global_to_local(quat_yaw, future_obs["base_lin_vel"]).reshape(B, -1)

@@ -293,7 +293,8 @@ class MotionEnv(LeggedRobotEnv):
         super()._init()
 
         # initialize once
-        self.reset_idx(torch.IntTensor(range(self.num_envs)))
+        envs_idx = torch.arange(self.num_envs, device=self._device, dtype=torch.long)
+        self.reset_idx(envs_idx)
 
     def _reset_buffers(self, envs_idx: torch.IntTensor) -> None:
         super()._reset_buffers(envs_idx=envs_idx)
