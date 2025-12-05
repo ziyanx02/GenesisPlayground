@@ -36,6 +36,7 @@ from gs_env.common.utils.maniptrans_util import (
     rotmat_to_axis_angle_batch,
 )
 from gs_env.sim.envs.config.schema import SingleHandRetargetingEnvArgs
+from gs_env.sim.envs.manipulation.tactile_visualizer import TactileVisualizer
 from gs_env.sim.robots.manipulators import WUJIHand
 from gs_env.sim.scenes import FlatScene
 from gs_agent.algos.config.registry import PPO_HAND_IMITATOR_MLP
@@ -147,6 +148,18 @@ class SingleHandRetargetingEnv(BaseEnv):
 
         # == initialize robot limits after scene is built ==
         self._robot.post_build_init(eval_mode=eval_mode)
+
+        # == setup tactile visualization if enabled ==
+        if self._use_tactile and show_viewer and eval_mode and False:
+            print(f"\n{'='*70}")
+            print(f"Initializing tactile visualization...")
+            print(f"{'='*70}")
+            self._tactile_visualizer = TactileVisualizer(
+                tactile_sensors=self._tactile_sensors,
+                tactile_points=self._tactile_points,
+                tactile_sensor_configs=self._tactile_sensor_configs,
+            )
+            print(f"✓ Tactile visualization ready")
 
         # == Process trajectory data for RL training ==
         self._process_trajectory_data()
@@ -871,6 +884,9 @@ class SingleHandRetargetingEnv(BaseEnv):
             "proprioception": gym.spaces.Box(
                 low=-np.inf, high=np.inf, shape=(prop_dim,), dtype=np.float32
             ),
+            "privileged": gym.spaces.Box(
+                low=-np.inf, high=np.inf, shape=(priv_dim,), dtype=np.float32
+            ),
             "target": gym.spaces.Box(
                 low=-np.inf, high=np.inf, shape=(target_dim,), dtype=np.float32
             ),
@@ -1231,6 +1247,10 @@ class SingleHandRetargetingEnv(BaseEnv):
             # Concatenate all sensor readings: shape (num_envs, total_tactile_points)
             self.tactile_forces_flat[:] = torch.cat(tactile_forces_list, dim=-1)
 
+            # Update visualization if enabled
+            if self._tactile_visualizer is not None:
+                self._tactile_visualizer.update()
+
         self.dof_force[:] = self._robot.dofs_control_force
 
 
@@ -1498,7 +1518,9 @@ class SingleHandRetargetingEnv(BaseEnv):
 
     def close(self) -> None:
         """Clean up resources."""
-        pass
+        if self._tactile_visualizer is not None:
+            self._tactile_visualizer.close()
+            self._tactile_visualizer = None
 
     def _setup_tactile_sensors(self, args: SingleHandRetargetingEnvArgs) -> None:
         """Setup tactile sensors from JSON grid file."""

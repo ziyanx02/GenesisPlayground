@@ -918,7 +918,12 @@ EnvArgsRegistry["single_hand_retargeting"] = SingleHandRetargetingEnvArgs(
         "tactile_forces_flat",  # Tactile sensor readings (249 points)
 
         # # Privileged
-        # "hand_dof_vel",
+        "hand_dof_vel",
+        "object_pos_rel",
+        "object_quat",
+        "object_lin_vel",
+        "object_ang_vel",
+        "object_com_pos",
 
         # Target
         "delta_wrist_pos",  # 3 * K

@@ -311,14 +311,14 @@ def main():
         ),
     )
     
-    joint_markers = {}
-    for joint_name in mano_reference["finger_joints"].keys():
-        joint_markers[joint_name] = scene.add_entity(
-            gs.morphs.Sphere(
-                radius=0.005,
-                pos=mano_reference["finger_joints"][joint_name][0],
-            )
-    )
+    # joint_markers = {}
+    # for joint_name in mano_reference["finger_joints"].keys():
+    #     joint_markers[joint_name] = scene.add_entity(
+    #         gs.morphs.Sphere(
+    #             radius=0.005,
+    #             pos=mano_reference["finger_joints"][joint_name][0],
+    #         )
+    # )
     link_markers = {}
     link_names = [
         # "finger1_link1", "finger2_link1", "finger3_link1", "finger4_link1", "finger5_link1",
@@ -418,9 +418,9 @@ def main():
                 obj.set_qpos(np.concatenate([obj_pos, obj_quat]))
 
                 # Update joint marker positions
-                for joint_name, marker in joint_markers.items():
-                    marker_pose = mano_reference["finger_joints"][joint_name][t]
-                    marker.set_pos(marker_pose)
+                # for joint_name, marker in joint_markers.items():
+                #     marker_pose = mano_reference["finger_joints"][joint_name][t]
+                #     marker.set_pos(marker_pose)
                 # Update link marker positions
                 # for name, marker in link_markers.items():
                 #     link_pos = shadow_hand.get_links_pos(links_idx_local=links_idx_local[name])
