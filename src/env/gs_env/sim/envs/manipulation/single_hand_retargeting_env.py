@@ -794,6 +794,9 @@ class SingleHandRetargetingEnv(BaseEnv):
         self.time_out_buf = torch.zeros(self.num_envs, dtype=torch.bool, device=self._device)
         self.success_count_buf = torch.zeros(self.num_envs, dtype=torch.long, device=self._device)
 
+        # Training step counter for curriculum learning
+        self.training_step = 0
+
         # Action scale
         self._action_scale = self._args.robot_args.action_scale
 
@@ -972,15 +975,37 @@ class SingleHandRetargetingEnv(BaseEnv):
 
         # Sample initial timestep from trajectory
         # Following ManipTrans: random init or start from beginning
+        # With curriculum learning: gradually increase proportion starting from beginning
         random_state_init = getattr(self._args, 'random_state_init', False)
         if random_state_init and not self._eval_mode:
-            # Random timestep initialization (up to 99% of trajectory length)
-            # Use per-environment trajectory lengths
+            # Curriculum learning parameters
+            curriculum_start_step = getattr(self._args, 'curriculum_start_step', 500)
+            curriculum_end_step = getattr(self._args, 'curriculum_end_step', 2000)
+            curriculum_max_ratio = getattr(self._args, 'curriculum_max_ratio', 0.5)
+
+            # Compute curriculum ratio (proportion of envs starting from beginning)
+            if self.training_step < curriculum_start_step:
+                curriculum_ratio = 0.0  # No curriculum, all random
+            elif self.training_step >= curriculum_end_step:
+                curriculum_ratio = curriculum_max_ratio  # Full curriculum
+            else:
+                # Linear interpolation from 0 to curriculum_max_ratio
+                progress = (self.training_step - curriculum_start_step) / (curriculum_end_step - curriculum_start_step)
+                curriculum_ratio = curriculum_max_ratio * progress
+
+            # Determine which environments start from beginning vs random
+            num_from_beginning = int(num_reset * curriculum_ratio)
+
+            # Initialize all with random indices
             seq_idx = torch.floor(
                 reset_traj_lengths.float() * 0.99 * torch.rand(num_reset, device=self._device)
             ).long()
+
+            # Set first num_from_beginning environments to start from beginning
+            if num_from_beginning > 0:
+                seq_idx[:num_from_beginning] = 0
         else:
-            # Always start from beginning
+            # Always start from beginning (eval mode or random_state_init=False)
             seq_idx = torch.zeros(num_reset, dtype=torch.long, device=self._device)
 
         # Get DOF positions from trajectory at sampled timestep
@@ -1087,7 +1112,7 @@ class SingleHandRetargetingEnv(BaseEnv):
             | (diff_level_2 > 0.08 / 0.7 * scale_factor)
             | (diff_obj_pos_dist > 0.02 / 0.343 * scale_factor**3)
             | (diff_obj_angle / np.pi * 180 > 30 / 0.343 * scale_factor**3)
-            # | torch.any((mano_fingertip_to_object < 0.005) & (self.fingertip_max_force <= 0.0), dim=-1)
+            | torch.any((mano_fingertip_to_object < 0.005) & (self.fingertip_max_force <= 0.0), dim=-1)
         ) & warmup_done
 
         # TODO: add finger tip distance failure condition
@@ -1130,6 +1155,10 @@ class SingleHandRetargetingEnv(BaseEnv):
         # We do progress update here
         # Because there will be a wrapper calling this env, and it will not call step() to update progress
         self.progress_buf += 1
+
+        # Increment training step counter for curriculum learning
+        if not self._eval_mode:
+            self.training_step += 1
 
         return time_out_buf
 
