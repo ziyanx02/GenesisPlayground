@@ -3,6 +3,7 @@ import pickle
 import time
 from pathlib import Path
 from typing import Any, cast
+import argparse
 
 import gs_env.sim.envs as gs_envs
 import torch
@@ -151,13 +152,14 @@ def twist_to_motion_data(
 if __name__ == "__main__":
     show_viewer = False
 
-    csv_files = [
-        "/Users/xiongziyan/Python/GenesisPlayground/assets/motion/cmu/01_01.pkl",
-        "/Users/xiongziyan/Python/GenesisPlayground/assets/motion/kit/squat04.pkl",
-    ]
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--src_folder", type=str, required=True, help="Folder of .pkl motions")
+    parser.add_argument("--tgt_folder", type=str, required=False, help="Output folder")
+    args = parser.parse_args()
 
-    log_dir = Path("./assets/motion/amass")
-    os.makedirs(log_dir, exist_ok=True)
+    src = Path(args.src_folder)
+    tgt = Path(args.tgt_folder) if args.tgt_folder else Path("./assets/motion_out")
+    tgt.mkdir(parents=True, exist_ok=True)
 
     env_args = cast(MotionEnvArgs, EnvArgsRegistry["g1_motion"]).model_copy(
         update={"scene_args": SceneArgsRegistry["flat_scene_legged"]}
@@ -171,14 +173,21 @@ if __name__ == "__main__":
     )
     env.reset()
 
-    for csv_file in csv_files:
-        with open(csv_file, "rb") as f:
+    for pkl_file in src.rglob("*.pkl"):
+        print(f"Processing {pkl_file}")
+        with open(pkl_file, "rb") as f:
             data = pickle.load(f)
-        motion_name = os.path.basename(csv_file).split(".")[0]
-        motion_dir = os.path.dirname(csv_file).split("/")[-1]
-        motion_path = log_dir / motion_dir / (motion_name + ".pkl")
-        motion_data = twist_to_motion_data(env=env, data=data, show_viewer=show_viewer)
-        if motion_data is not None:
-            print(f"Saving motion data to {motion_path}")
-            with open(motion_path, "wb") as f:
+
+        motion_data = twist_to_motion_data(env, data, show_viewer=show_viewer)
+        if motion_data:
+            # path of this file relative to src root
+            rel_path = pkl_file.relative_to(src)      # e.g. Subject_1_F_MoSh/seq1.pkl
+
+            # same structure under target root
+            out_path = tgt / rel_path                 # BMLmovi_retarget/Subject_1_F_MoSh/seq1.pkl
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+
+            with open(out_path, "wb") as f:
                 pickle.dump(motion_data, f)
+            print(f"Saved -> {out_path}")
+
