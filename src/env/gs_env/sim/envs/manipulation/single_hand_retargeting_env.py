@@ -1087,7 +1087,7 @@ class SingleHandRetargetingEnv(BaseEnv):
             | (diff_level_2 > 0.08 / 0.7 * scale_factor)
             | (diff_obj_pos_dist > 0.02 / 0.343 * scale_factor**3)
             | (diff_obj_angle / np.pi * 180 > 30 / 0.343 * scale_factor**3)
-            | torch.any((mano_fingertip_to_object < 0.005) & (self.fingertip_max_force <= 0.0), dim=-1)
+            # | torch.any((mano_fingertip_to_object < 0.005) & (self.fingertip_max_force <= 0.0), dim=-1)
         ) & warmup_done
 
         # TODO: add finger tip distance failure condition
