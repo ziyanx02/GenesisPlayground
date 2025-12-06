@@ -343,3 +343,28 @@ class WristPowerPenalty(RewardTerm):
 
         total_power = linear_power + angular_power
         return torch.exp(-self.k * total_power)
+
+
+class FingertipForceReward(RewardTerm):
+
+    required_keys = ("fingertip_max_force", "mano_fingertip_to_object")
+
+    def __init__(self, scale: float = 1.0, k: float = 1.0, range_min: float = 0.02, range_max: float = 0.03, name: str | None = None):
+        super().__init__(scale, name)
+        self.k = k
+        self.range_min = range_min
+        self.range_max = range_max
+
+    def _compute(self, fingertip_max_force: torch.Tensor, mano_fingertip_to_object: torch.Tensor) -> torch.Tensor:  # type: ignore
+        # fingertip_max_force: (B, 5), mano_fingertip_to_object: (B, K * 5)
+        dist_to_object = mano_fingertip_to_object[:, :5]  # (B, 5)
+        
+        fingertip_weight = torch.clamp(
+            (self.range_max - dist_to_object) / (self.range_max - self.range_min),
+            min=0.0, max=1.0
+        )  # (B, 5)
+
+        force_masked = fingertip_max_force * fingertip_weight  # (B, 5)
+        force_sum = force_masked.sum(dim=-1)  # (B,)
+
+        return torch.exp(-self.k * (1 / (force_sum + 1e-5)))  # Avoid division by zero

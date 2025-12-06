@@ -826,8 +826,10 @@ class SingleHandRetargetingEnv(BaseEnv):
             )
             self.tactile_forces_flat = torch.zeros((self.num_envs, self._total_tactile_points), device=self._device)
             # Note: We'll add tactile_forces_flat to observation terms dynamically in get_observations
+            self.fingertip_max_force = torch.zeros((self.num_envs, 5), device=self._device)  # 5 finger tips
         else:
             self.tactile_forces_flat = torch.zeros((self.num_envs, 0), device=self._device)
+            self.fingertip_max_force = torch.ones((self.num_envs, 5), device=self._device) * 1e-5
 
         # ===== Build observation spaces =====
         # Following ManipTrans architecture: three observation components
@@ -1071,6 +1073,8 @@ class SingleHandRetargetingEnv(BaseEnv):
         )
         diff_obj_angle = torch.abs(diff_obj_angle)
 
+        mano_fingertip_to_object = self.mano_fingertip_to_object[:, :5]  # (num_envs, 5)
+
         # Scale factor for error thresholds (from ManipTrans, typically 0.7)
         scale_factor = 1.0
         failed_execute = (
@@ -1083,6 +1087,7 @@ class SingleHandRetargetingEnv(BaseEnv):
             | (diff_level_2 > 0.08 / 0.7 * scale_factor)
             | (diff_obj_pos_dist > 0.02 / 0.343 * scale_factor**3)
             | (diff_obj_angle / np.pi * 180 > 30 / 0.343 * scale_factor**3)
+            | torch.any((mano_fingertip_to_object < 0.005) & (self.fingertip_max_force <= 0.0), dim=-1)
         ) & warmup_done
 
         # TODO: add finger tip distance failure condition
@@ -1228,6 +1233,7 @@ class SingleHandRetargetingEnv(BaseEnv):
         # Update tactile sensor data if enabled (only z-axis / normal force)
         if self._use_tactile:
             tactile_forces_list = []
+            fingertip_max_force = []
             for link_name in sorted(self._tactile_sensors.keys()):
                 sensor = self._tactile_sensors[link_name]
                 config = self._tactile_sensor_configs[link_name]
@@ -1243,9 +1249,11 @@ class SingleHandRetargetingEnv(BaseEnv):
                 force_z = force_field_3d[..., 2]
 
                 tactile_forces_list.append(force_z)
+                fingertip_max_force.append(torch.max(force_z, dim=-1).values.unsqueeze(-1))  # (num_envs, 1)
 
             # Concatenate all sensor readings: shape (num_envs, total_tactile_points)
             self.tactile_forces_flat[:] = torch.cat(tactile_forces_list, dim=-1)
+            self.fingertip_max_force[:] = torch.cat(fingertip_max_force, dim=-1)  # (num_envs, 5)
 
             # Update visualization if enabled
             if self._tactile_visualizer is not None:

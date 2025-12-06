@@ -876,6 +876,12 @@ EnvArgsRegistry["single_hand_retargeting"] = SingleHandRetargetingEnvArgs(
             "scale": 0.1,
             "k": 1.0,
         },
+        "FingertipForceReward": {
+            "scale": 1.0,
+            "k": 1.0,
+            "range_min": 0.02,
+            "range_max": 0.03,
+        },
 
         # TODO: add penalty for tactile contact force
     },
