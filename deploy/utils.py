@@ -146,7 +146,7 @@ class RedisClient:
             new_timestamp = self._get_timestamp("base_pos")
             if new_timestamp != self.base_pos_timestamp:
                 # Store previous value before updating
-                self.last_base_pos.copy_(self.base_pos)
+                self.last_base_pos.copy_(self.ref_base_pos)
                 base_pos = torch.tensor(
                     self._get_field("base_pos", [0.0, 0.0, 0.0]),
                     dtype=torch.float32,
@@ -160,7 +160,7 @@ class RedisClient:
             new_timestamp = self._get_timestamp("base_quat")
             if new_timestamp != self.base_quat_timestamp:
                 # Store previous value before updating
-                self.last_base_quat.copy_(self.base_quat)
+                self.last_base_quat.copy_(self.ref_base_quat)
                 base_quat = torch.tensor(
                     self._get_field("base_quat", [1.0, 0.0, 0.0, 0.0]),
                     dtype=torch.float32,

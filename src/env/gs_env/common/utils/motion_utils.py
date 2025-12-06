@@ -735,7 +735,7 @@ class MotionLib:
         max_steps = self._motion_num_frames[motion_ids] - 1
 
         # current frame (step = 0)
-        curr_idx = frame_start_idx + steps + 1
+        curr_idx = frame_start_idx + steps
         curr_obs: dict[str, torch.Tensor] = {}
         for key in observed_steps.keys():
             tensor = getattr(self, f"_motion_{key}")
