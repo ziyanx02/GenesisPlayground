@@ -585,8 +585,11 @@ class MotionLib:
         if motion_file.endswith(".yaml"):
             all_files: list[str] = []
             all_weights: list[float] = []
-            with open(motion_file) as f:
-                motion_config = yaml.load(f, Loader=yaml.SafeLoader)
+            try:
+                with open(motion_file) as f:
+                    motion_config = yaml.load(f, Loader=yaml.SafeLoader)
+            except Exception:
+                return [], []
             motion_base_path = motion_config["root_path"]
             motion_list = motion_config["motions"]
             for motion_entry in motion_list:
