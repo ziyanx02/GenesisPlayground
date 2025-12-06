@@ -753,7 +753,7 @@ EnvArgsRegistry["single_hand_retargeting"] = SingleHandRetargetingEnvArgs(
     obs_future_length=1,  # Number of future trajectory frames to observe (K in paper)
     max_num_trajectories=1,  # Only train on a single trajectory for retargeting
 
-    random_state_init=True,  # Randomize initial timestep in trajectory
+    random_state_init=False,  # Randomize initial timestep in trajectory
     use_augmentation=False,
     aug_translation_range=(-0.5, 0.5),  # XY translation range (meters)
     aug_rotation_z_range=(-math.pi, math.pi),  # Z-axis rotation range (radians)
