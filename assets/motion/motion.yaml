@@ -1,6 +1,8 @@
 motions:
-  - file: amass/kit/squat04.pkl
+  - file: AMASS/AMASS.yaml
     weight: 1.0
   - file: lafan/lafan.yaml
+    weight: 10.0
+  - file: hub/hub.yaml
     weight: 1.0
 root_path: assets/motion
